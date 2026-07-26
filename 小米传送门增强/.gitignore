@@ -1,0 +1,21 @@
+## Android build
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Logs
+*.log
+
+## Large binaries (keep apk for reference but ignore duplicates)
+*.apk
+
+## Large binaries (GitHub limit 100MB)
+decompile/jadx.zip
+

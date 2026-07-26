@@ -1,0 +1,238 @@
+.class Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1$1;
+.super Ljava/lang/Object;
+.source "TaplusSplashFloatView.java"
+
+# interfaces
+.implements Landroid/animation/ValueAnimator$AnimatorUpdateListener;
+
+
+# annotations
+.annotation system Ldalvik/annotation/EnclosingMethod;
+    value = Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;->onAnimationEnd(Landroid/animation/Animator;)V
+.end annotation
+
+.annotation system Ldalvik/annotation/InnerClass;
+    accessFlags = 0x0
+    name = null
+.end annotation
+
+
+# instance fields
+.field private isFirst:Z
+
+.field final synthetic this$2:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;
+
+
+# direct methods
+.method constructor <init>(Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;)V
+    .registers 2
+
+    .line 708
+    iput-object p1, p0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1$1;->this$2:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;
+
+    invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+
+    const/4 p1, 0x1
+
+    .line 709
+    iput-boolean p1, p0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1$1;->isFirst:Z
+
+    return-void
+.end method
+
+
+# virtual methods
+.method public onAnimationUpdate(Landroid/animation/ValueAnimator;)V
+    .registers 7
+
+    .line 713
+    invoke-virtual {p1}, Landroid/animation/ValueAnimator;->getAnimatedValue()Ljava/lang/Object;
+
+    move-result-object v0
+
+    instance-of v0, v0, Ljava/lang/Float;
+
+    if-eqz v0, :cond_ad
+
+    .line 714
+    invoke-virtual {p1}, Landroid/animation/ValueAnimator;->getAnimatedValue()Ljava/lang/Object;
+
+    move-result-object p1
+
+    check-cast p1, Ljava/lang/Float;
+
+    invoke-virtual {p1}, Ljava/lang/Float;->floatValue()F
+
+    move-result p1
+
+    float-to-double v0, p1
+
+    const-wide/high16 v2, 0x3fe0000000000000L    # 0.5
+
+    cmpl-double p1, v0, v2
+
+    if-lez p1, :cond_ad
+
+    .line 715
+    iget-boolean p1, p0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1$1;->isFirst:Z
+
+    if-nez p1, :cond_1e
+
+    return-void
+
+    :cond_1e
+    const/4 p1, 0x0
+
+    .line 719
+    iput-boolean p1, p0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1$1;->isFirst:Z
+
+    .line 721
+    iget-object p1, p0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1$1;->this$2:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;
+
+    iget-object p1, p1, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;->this$1:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;
+
+    iget-object p1, p1, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;->val$firstCard:Lcom/miui/contentextension/text/cardview/TaplusRecommendShrinkCard;
+
+    invoke-virtual {p1}, Lcom/miui/contentextension/text/cardview/TaplusRecommendShrinkCard;->getShrinkTextGroup()Landroid/view/View;
+
+    move-result-object p1
+
+    invoke-virtual {p1}, Landroid/view/View;->animate()Landroid/view/ViewPropertyAnimator;
+
+    move-result-object p1
+
+    const/high16 v0, 0x3f800000    # 1.0f
+
+    invoke-virtual {p1, v0}, Landroid/view/ViewPropertyAnimator;->alpha(F)Landroid/view/ViewPropertyAnimator;
+
+    move-result-object p1
+
+    sget-object v0, Lcom/miui/contentextension/utils/FloatViewAnimUtil;->FLOAT_IN_INTERPOLATOR:Landroid/animation/TimeInterpolator;
+
+    .line 722
+    invoke-virtual {p1, v0}, Landroid/view/ViewPropertyAnimator;->setInterpolator(Landroid/animation/TimeInterpolator;)Landroid/view/ViewPropertyAnimator;
+
+    move-result-object p1
+
+    const-wide/16 v1, 0x15e
+
+    .line 723
+    invoke-virtual {p1, v1, v2}, Landroid/view/ViewPropertyAnimator;->setDuration(J)Landroid/view/ViewPropertyAnimator;
+
+    move-result-object p1
+
+    .line 724
+    invoke-virtual {p1}, Landroid/view/ViewPropertyAnimator;->start()V
+
+    .line 725
+    iget-object p1, p0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1$1;->this$2:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;
+
+    iget-object p1, p1, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;->this$1:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;
+
+    iget-object p1, p1, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;->this$0:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView;
+
+    invoke-static {p1}, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView;->-$$Nest$fgetmPeddingAnimator(Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView;)Ljava/util/List;
+
+    move-result-object p1
+
+    iget-object v3, p0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1$1;->this$2:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;
+
+    iget-object v3, v3, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;->this$1:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;
+
+    iget-object v3, v3, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;->val$firstCard:Lcom/miui/contentextension/text/cardview/TaplusRecommendShrinkCard;
+
+    invoke-virtual {v3}, Lcom/miui/contentextension/text/cardview/TaplusRecommendShrinkCard;->getShrinkTextGroup()Landroid/view/View;
+
+    move-result-object v3
+
+    invoke-virtual {v3}, Landroid/view/View;->animate()Landroid/view/ViewPropertyAnimator;
+
+    move-result-object v3
+
+    invoke-interface {p1, v3}, Ljava/util/List;->add(Ljava/lang/Object;)Z
+
+    .line 727
+    iget-object p1, p0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1$1;->this$2:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;
+
+    iget-object p1, p1, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;->this$1:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;
+
+    iget-object p1, p1, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;->val$firstCard:Lcom/miui/contentextension/text/cardview/TaplusRecommendShrinkCard;
+
+    invoke-virtual {p1}, Landroid/widget/RelativeLayout;->animate()Landroid/view/ViewPropertyAnimator;
+
+    move-result-object p1
+
+    iget-object v3, p0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1$1;->this$2:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;
+
+    iget-object v3, v3, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;->this$1:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;
+
+    iget-object v3, v3, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;->this$0:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView;
+
+    iget-object v3, v3, Lcom/miui/contentextension/text/floatview/BaseFloatView;->mContext:Landroid/content/Context;
+
+    invoke-virtual {v3}, Landroid/content/Context;->getResources()Landroid/content/res/Resources;
+
+    move-result-object v3
+
+    const v4, 0x7f0700c6
+
+    invoke-virtual {v3, v4}, Landroid/content/res/Resources;->getDimensionPixelSize(I)I
+
+    move-result v3
+
+    neg-int v3, v3
+
+    int-to-float v3, v3
+
+    invoke-virtual {p1, v3}, Landroid/view/ViewPropertyAnimator;->translationX(F)Landroid/view/ViewPropertyAnimator;
+
+    move-result-object p1
+
+    .line 728
+    invoke-virtual {p1, v0}, Landroid/view/ViewPropertyAnimator;->setInterpolator(Landroid/animation/TimeInterpolator;)Landroid/view/ViewPropertyAnimator;
+
+    move-result-object p1
+
+    .line 729
+    invoke-virtual {p1, v1, v2}, Landroid/view/ViewPropertyAnimator;->setDuration(J)Landroid/view/ViewPropertyAnimator;
+
+    move-result-object p1
+
+    .line 730
+    invoke-virtual {p1}, Landroid/view/ViewPropertyAnimator;->start()V
+
+    .line 731
+    iget-object p1, p0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1$1;->this$2:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;
+
+    iget-object p1, p1, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;->this$1:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;
+
+    iget-object p1, p1, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;->this$0:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView;
+
+    invoke-static {p1}, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView;->-$$Nest$fgetmPeddingAnimator(Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView;)Ljava/util/List;
+
+    move-result-object p1
+
+    iget-object v0, p0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1$1;->this$2:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;
+
+    iget-object v0, v0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;->this$1:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;
+
+    iget-object v0, v0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;->val$firstCard:Lcom/miui/contentextension/text/cardview/TaplusRecommendShrinkCard;
+
+    invoke-virtual {v0}, Landroid/widget/RelativeLayout;->animate()Landroid/view/ViewPropertyAnimator;
+
+    move-result-object v0
+
+    invoke-interface {p1, v0}, Ljava/util/List;->add(Ljava/lang/Object;)Z
+
+    .line 733
+    iget-object p1, p0, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1$1;->this$2:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;
+
+    iget-object p1, p1, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8$1;->this$1:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;
+
+    iget-object p1, p1, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView$8;->this$0:Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView;
+
+    invoke-static {p1}, Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView;->-$$Nest$mshowOtherRecommends(Lcom/miui/contentextension/text/floatview/TaplusSplashFloatView;)V
+
+    :cond_ad
+    return-void
+.end method

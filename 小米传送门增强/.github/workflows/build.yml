@@ -1,0 +1,60 @@
+name: 构建 TaplusFix LSPosed 模块
+
+on:
+  push:
+    branches: ["*"]
+  workflow_dispatch:
+
+env:
+  MODULE_DIR: LSPosed模块
+
+jobs:
+  build:
+    name: 编译 APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: 设置 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 设置 Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: 生成 Gradle Wrapper
+        working-directory: ${{ env.MODULE_DIR }}
+        run: |
+          gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+
+      # 使用仓库内提交的 taplusfix.jks 签名 — 每次构建签名一致
+      - name: 编译 APK（taplusfix.jks 确定性签名）
+        working-directory: ${{ env.MODULE_DIR }}
+        run: ./gradlew assembleRelease
+
+      - name: 获取版本号
+        id: version
+        working-directory: ${{ env.MODULE_DIR }}
+        run: echo "VERSION=$(grep "versionName" app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')" >> $GITHUB_OUTPUT
+
+      - name: 重命名 APK
+        run: |
+          mkdir -p artifacts
+          cp "${{ env.MODULE_DIR }}/app/build/outputs/apk/release/"*.apk \
+             "artifacts/mi-portal-enhanced-v${{ steps.version.outputs.VERSION }}.apk"
+          echo "✅ 构建产物: artifacts/mi-portal-enhanced-v${{ steps.version.outputs.VERSION }}.apk"
+          ls -lh artifacts/
+
+      - name: 上传 APK 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: mi-portal-enhanced-v${{ steps.version.outputs.VERSION }}
+          path: artifacts/mi-portal-enhanced-v*.apk

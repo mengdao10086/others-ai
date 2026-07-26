@@ -1,0 +1,75 @@
+until [ -f "${0%/*}/mvt.sh" ]; do
+	rm -f "${0%/*}/mode"
+	sed -i 's/\[.*\]/\[ 文件mvt.sh丢失，请重新安装模块重启 \]/g' "${0%/*}/module.prop"
+	sleep 5
+done
+sleep 5
+MODDIR=${0%/*}
+chmod 0755 "$MODDIR/up"
+chmod 0755 "$MODDIR/mvt.sh"
+chmod 0755 "$MODDIR/upmvt.sh"
+chmod 0755 "$MODDIR/testing.sh"
+chmod 0644 "$MODDIR/config.conf"
+echo "touch \"$MODDIR/on_bypass\"" > "$MODDIR/开启MIUI旁路供电.sh"
+echo "rm -f \"$MODDIR/on_bypass\"" > "$MODDIR/关闭MIUI旁路供电.sh"
+chmod 0755 "$MODDIR/开启MIUI旁路供电.sh"
+chmod 0755 "$MODDIR/关闭MIUI旁路供电.sh"
+mv "$MODDIR/pay.jpg" "$MODDIR/.投币捐赠.jpg" > /dev/null 2>&1
+echo "#执行该脚本，跳转微信网页给作者投币捐赠" > "$MODDIR/.投币捐赠.sh"
+echo "am start -n com.tencent.mm/.plugin.webview.ui.tools.WebViewUI -d https://payapp.weixin.qq.com/qrpay/order/home2?key=idc_CHNDVI_dHFNbTNZIWMto44dgjR3CA-- > /dev/null 2>&1" >> "$MODDIR/.投币捐赠.sh"
+echo "echo \"\"" >> "$MODDIR/.投币捐赠.sh"
+echo "echo \"正在跳转MIUI动态温控捐赠页面，请稍等。。。\"" >> "$MODDIR/.投币捐赠.sh"
+chmod 0755 "$MODDIR/.投币捐赠.sh"
+if [ -f "$MODDIR/t_module" -a "$(cat "$MODDIR/module.prop" | egrep '^# ##' | sed -n '$p')" != '# ##' ]; then
+	cp "$MODDIR/t_module" "$MODDIR/module.prop"
+	chmod 0644 "$MODDIR/module.prop"
+fi
+rm -f "$MODDIR/thermal_list"
+until [ -f "$MODDIR/thermal_list" ]; do
+	find /system/vendor/etc -type f -iname "thermal*.conf" | sed -n 's/\/system\/vendor\/etc\///g;p' | egrep -v '\/' > "$MODDIR/thermal_list"
+	sleep 1
+done
+thermal_normal="$(cat "$MODDIR/thermal_list")"
+thermal_normal_n="$(echo "$thermal_normal" | egrep -i 'thermal\-' | egrep -i '\-map' | egrep -i -v '\-region\-map' | wc -l)"
+if [ "$thermal_normal_n" = "0" ]; then
+	rm -f "$MODDIR/mode"
+	sed -i 's/\[.*\]/\[ 机型或系统不支持，无法使用 \]/g' "$MODDIR/module.prop"
+	exit 0
+fi
+map_c="$(cat '/system/vendor/etc/thermal-map.conf' | wc -c)"
+normal_c="$(cat '/system/vendor/etc/thermal-normal.conf' | wc -c)"
+devices_c="$(cat '/system/vendor/etc/thermald-devices.conf' | wc -c)"
+if [ "$map_c" -lt "20" -o "$normal_c" -lt "20" -o "$devices_c" -lt "20" ]; then
+	thermal_normal_n="$(echo "$thermal_normal" | egrep -i 'thermal')"
+	for i in $thermal_normal_n ; do
+		thermal_normal_c="$(cat "/system/vendor/etc/$i" | wc -c)"
+		if [ -f "/system/vendor/etc/$i" -a "$thermal_normal_c" -lt "20" ]; then
+			rm -f "$MODDIR/mode"
+			sed -i 's/\[.*\]/\[ 系统温控文件被屏蔽了，请排查恢复系统温控后再使用 \]/g' "$MODDIR/module.prop"
+			exit 0
+		fi
+	done
+fi
+delete_conf() {
+	chattr -R -i -a '/data/vendor/thermal'
+	rm -rf /data/vendor/thermal/config/*
+}
+rm -f "$MODDIR/mode"
+rm -f "$MODDIR/max_c"
+rm -f "$MODDIR/stop_level"
+rm -f "$MODDIR/now_c"
+rm -f "$MODDIR/time_log"
+sed -i 's/\[.*\]/\[ 当前温控：-未知- \]/g' "$MODDIR/module.prop"
+delete_conf
+# 更新检查：~1分钟后首次运行，之后每~6小时自动检查一次
+_up=1
+while true ; do
+	if [ "$_up" = "20" -o "$_up" = "7200" ]; then
+		"$MODDIR/up" > /dev/null 2>&1 &
+	fi
+	# 到达 7200 后重置到 21，保持循环可持续
+	[ "$_up" -ge "7200" ] && _up=21
+	sleep 3
+	"$MODDIR/mvt.sh" > /dev/null 2>&1
+	_up="$(( _up + 1 ))"
+done

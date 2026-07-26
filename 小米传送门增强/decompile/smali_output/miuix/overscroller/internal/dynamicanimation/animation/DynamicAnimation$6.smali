@@ -1,0 +1,73 @@
+.class Lmiuix/overscroller/internal/dynamicanimation/animation/DynamicAnimation$6;
+.super Lmiuix/overscroller/internal/dynamicanimation/animation/DynamicAnimation$ViewProperty;
+.source "DynamicAnimation.java"
+
+
+# annotations
+.annotation system Ldalvik/annotation/EnclosingClass;
+    value = Lmiuix/overscroller/internal/dynamicanimation/animation/DynamicAnimation;
+.end annotation
+
+.annotation system Ldalvik/annotation/InnerClass;
+    accessFlags = 0x0
+    name = null
+.end annotation
+
+
+# direct methods
+.method constructor <init>(Ljava/lang/String;)V
+    .registers 3
+
+    const/4 v0, 0x0
+
+    .line 129
+    invoke-direct {p0, p1, v0}, Lmiuix/overscroller/internal/dynamicanimation/animation/DynamicAnimation$ViewProperty;-><init>(Ljava/lang/String;Lmiuix/overscroller/internal/dynamicanimation/animation/DynamicAnimation$1;)V
+
+    return-void
+.end method
+
+
+# virtual methods
+.method public getValue(Landroid/view/View;)F
+    .registers 2
+
+    .line 137
+    invoke-virtual {p1}, Landroid/view/View;->getRotation()F
+
+    move-result p1
+
+    return p1
+.end method
+
+.method public bridge synthetic getValue(Ljava/lang/Object;)F
+    .registers 2
+
+    .line 129
+    check-cast p1, Landroid/view/View;
+
+    invoke-virtual {p0, p1}, Lmiuix/overscroller/internal/dynamicanimation/animation/DynamicAnimation$6;->getValue(Landroid/view/View;)F
+
+    move-result p1
+
+    return p1
+.end method
+
+.method public setValue(Landroid/view/View;F)V
+    .registers 3
+
+    .line 132
+    invoke-virtual {p1, p2}, Landroid/view/View;->setRotation(F)V
+
+    return-void
+.end method
+
+.method public bridge synthetic setValue(Ljava/lang/Object;F)V
+    .registers 3
+
+    .line 129
+    check-cast p1, Landroid/view/View;
+
+    invoke-virtual {p0, p1, p2}, Lmiuix/overscroller/internal/dynamicanimation/animation/DynamicAnimation$6;->setValue(Landroid/view/View;F)V
+
+    return-void
+.end method

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="Taplus 传送门增强"
+        android:icon="@android:mipmap/sym_def_app_icon"
+        android:allowBackup="false"
+        android:hasCode="true">
+
+        <!-- LSPosed / Xposed 模块声明 — 必须在 <application> 内，LSPosed
+             框架从 application 的 meta-data 扫描模块 -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+
+        <meta-data
+            android:name="xposeddescription"
+            android:value="小米传送门增强：保存格式 PNG→JPEG + 修复保存竞态 Bug" />
+
+        <meta-data
+            android:name="xposedminversion"
+            android:value="82" />
+
+        <!-- LSPosed 推荐 scope（可选，也可在 LSPosed Manager 手动勾选） -->
+        <meta-data
+            android:name="xposedscope"
+            android:resource="@array/xposed_scope" />
+
+    </application>
+</manifest>

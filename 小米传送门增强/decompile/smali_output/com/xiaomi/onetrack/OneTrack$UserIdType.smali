@@ -1,0 +1,194 @@
+.class public final enum Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+.super Ljava/lang/Enum;
+
+
+# annotations
+.annotation system Ldalvik/annotation/EnclosingClass;
+    value = Lcom/xiaomi/onetrack/OneTrack;
+.end annotation
+
+.annotation system Ldalvik/annotation/InnerClass;
+    accessFlags = 0x4019
+    name = "UserIdType"
+.end annotation
+
+.annotation system Ldalvik/annotation/Signature;
+    value = {
+        "Ljava/lang/Enum<",
+        "Lcom/xiaomi/onetrack/OneTrack$UserIdType;",
+        ">;"
+    }
+.end annotation
+
+
+# static fields
+.field public static final enum OTHER:Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+.field public static final enum PHONE_NUMBER:Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+.field public static final enum QQ:Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+.field public static final enum WEIBO:Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+.field public static final enum WEIXIN:Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+.field public static final enum XIAOMI:Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+.field private static final synthetic b:[Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+
+# instance fields
+.field private a:Ljava/lang/String;
+
+
+# direct methods
+.method static constructor <clinit>()V
+    .registers 9
+
+    .line 48
+    new-instance v0, Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    const/4 v1, 0x0
+
+    const-string v2, "xiaomi"
+
+    const-string v3, "XIAOMI"
+
+    invoke-direct {v0, v3, v1, v2}, Lcom/xiaomi/onetrack/OneTrack$UserIdType;-><init>(Ljava/lang/String;ILjava/lang/String;)V
+
+    sput-object v0, Lcom/xiaomi/onetrack/OneTrack$UserIdType;->XIAOMI:Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    .line 49
+    new-instance v1, Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    const/4 v2, 0x1
+
+    const-string v3, "phone_number"
+
+    const-string v4, "PHONE_NUMBER"
+
+    invoke-direct {v1, v4, v2, v3}, Lcom/xiaomi/onetrack/OneTrack$UserIdType;-><init>(Ljava/lang/String;ILjava/lang/String;)V
+
+    sput-object v1, Lcom/xiaomi/onetrack/OneTrack$UserIdType;->PHONE_NUMBER:Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    .line 50
+    new-instance v2, Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    const/4 v3, 0x2
+
+    const-string v4, "weixin"
+
+    const-string v5, "WEIXIN"
+
+    invoke-direct {v2, v5, v3, v4}, Lcom/xiaomi/onetrack/OneTrack$UserIdType;-><init>(Ljava/lang/String;ILjava/lang/String;)V
+
+    sput-object v2, Lcom/xiaomi/onetrack/OneTrack$UserIdType;->WEIXIN:Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    .line 51
+    new-instance v3, Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    const/4 v4, 0x3
+
+    const-string v5, "weibo"
+
+    const-string v6, "WEIBO"
+
+    invoke-direct {v3, v6, v4, v5}, Lcom/xiaomi/onetrack/OneTrack$UserIdType;-><init>(Ljava/lang/String;ILjava/lang/String;)V
+
+    sput-object v3, Lcom/xiaomi/onetrack/OneTrack$UserIdType;->WEIBO:Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    .line 52
+    new-instance v4, Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    const/4 v5, 0x4
+
+    const-string v6, "qq"
+
+    const-string v7, "QQ"
+
+    invoke-direct {v4, v7, v5, v6}, Lcom/xiaomi/onetrack/OneTrack$UserIdType;-><init>(Ljava/lang/String;ILjava/lang/String;)V
+
+    sput-object v4, Lcom/xiaomi/onetrack/OneTrack$UserIdType;->QQ:Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    .line 53
+    new-instance v5, Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    const/4 v6, 0x5
+
+    const-string v7, "other"
+
+    const-string v8, "OTHER"
+
+    invoke-direct {v5, v8, v6, v7}, Lcom/xiaomi/onetrack/OneTrack$UserIdType;-><init>(Ljava/lang/String;ILjava/lang/String;)V
+
+    sput-object v5, Lcom/xiaomi/onetrack/OneTrack$UserIdType;->OTHER:Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    .line 47
+    filled-new-array/range {v0 .. v5}, [Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    move-result-object v0
+
+    sput-object v0, Lcom/xiaomi/onetrack/OneTrack$UserIdType;->b:[Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    return-void
+.end method
+
+.method private constructor <init>(Ljava/lang/String;ILjava/lang/String;)V
+    .registers 4
+    .annotation system Ldalvik/annotation/Signature;
+        value = {
+            "(",
+            "Ljava/lang/String;",
+            ")V"
+        }
+    .end annotation
+
+    .line 57
+    invoke-direct {p0, p1, p2}, Ljava/lang/Enum;-><init>(Ljava/lang/String;I)V
+
+    .line 58
+    iput-object p3, p0, Lcom/xiaomi/onetrack/OneTrack$UserIdType;->a:Ljava/lang/String;
+
+    return-void
+.end method
+
+.method public static valueOf(Ljava/lang/String;)Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+    .registers 2
+
+    .line 47
+    const-class v0, Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    invoke-static {v0, p0}, Ljava/lang/Enum;->valueOf(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;
+
+    move-result-object p0
+
+    check-cast p0, Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    return-object p0
+.end method
+
+.method public static values()[Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+    .registers 1
+
+    .line 47
+    sget-object v0, Lcom/xiaomi/onetrack/OneTrack$UserIdType;->b:[Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    invoke-virtual {v0}, [Lcom/xiaomi/onetrack/OneTrack$UserIdType;->clone()Ljava/lang/Object;
+
+    move-result-object v0
+
+    check-cast v0, [Lcom/xiaomi/onetrack/OneTrack$UserIdType;
+
+    return-object v0
+.end method
+
+
+# virtual methods
+.method public getUserIdType()Ljava/lang/String;
+    .registers 2
+
+    .line 62
+    iget-object v0, p0, Lcom/xiaomi/onetrack/OneTrack$UserIdType;->a:Ljava/lang/String;
+
+    return-object v0
+.end method

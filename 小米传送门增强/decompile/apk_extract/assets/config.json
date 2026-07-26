@@ -1,0 +1,1181 @@
+[
+  {
+    "packageName": "com.miui.whitenoise",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.youdao.translator",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.youdao.translator.activity.MainActivity",
+        "validArea": [
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.tencent.mm",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.tencent.mm.ui.LauncherUI",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 93,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.tencent.mm.plugin.webview.ui.tools.WebViewUI",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 93,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.tencent.mm.plugin.sns.ui.SnsGalleryUI",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 93,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.tencent.mm.plugin.location_soso.SoSoProxyUI",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.tencent.mm.ui.conversation.BizConversationUI",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 93,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.tencent.mm.ui.chatting.ChattingUI",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 93,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.changba",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "comchangba.activity.CommonFragmentActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.changba.message.activity.ChatActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.tencent.mobileqq",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.tencent.biz.pubaccount.readinjoy.activity.ReadInJoyArticleDetailActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.tencent.mobileqq.activity.QQBrowserActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.tencent.mobileqq.activity.PublicTransFragmentActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.miui.player",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.android.fileexplorer",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.qiyi.video",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "org.qiyi.android.video.ui.phone.download.PhoneDownloadVideoActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.andriod.camera",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.miui.calculator",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.android.contacts",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.imibaby.client",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.android.deskclock",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.miui.voiceassist",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.miui.contentextension",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.miui.securitycenter",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.miui.antivirus.activity.MainActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.duokan.reader",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.duokan.reader.DkMainActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.android.updater",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "tv.danmaku.bili",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "tv.danmaku.bili.MainActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "tv.danmaku.bili.ui.videodownload.VideoDownloadListActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "pl.solidexplorer2",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.duokan.phone.remotecontroller",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.xiaomi.mitv.phone.remotecontroller.ir.activity.MatchIRActivityV52",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.baidu.robot",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.baidu.duersdk.activity.BaseWebViewActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.baidu.duersdk.ChatActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.miui.gallery",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.miui.gallery.activity.HomePageActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.miui.gallery.search.resultpage.SearchResultActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.miui.gallery.activity.facebaby.FacePageActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.miui.gallery.activity.PeoplePageActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.miui.gallery.activity.RecentDiscoveryActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.miui.gallery.activity.AlbumDetailActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.android.incall",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.UCMobile",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.uc.browser.InnerUCMobile",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.p1.mobile.putong",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.p1.mobile.putong.ui.messages.MessagesAct",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.xiaomi.channel",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.android.email",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.kingsoft.email2.ui.MailActivityEmail",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.eg.android.AlipayGphone",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.alipay.mobile.chatapp.ui.PersonalChatMsgActivity_",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 93,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.alipay.android.phone.voiceassistant.ui.VoiceAssistantActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.mfashiongallery.emag",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.kuwo.player",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.miui.notes",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.miui.notes.ui.NotesListActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.miui.home",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.miui.newhome.business.ui.channel.ChannelActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.android.systemui",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.android.systemui.recents.RecentsActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.xiaomi.gamecenter",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.xiaomi.gamecenter.ui.downloadtask.DownloadManagerTabActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.taobao.taobao",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.taobao.wangxin.activity.ChatActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.kugou.android",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.alibaba.android.rimet",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.alibaba.android.dingtalkim.activities.ChatMsgActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.alibaba.android.dingtalkim.activities.FilesHelperActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.android.browser",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "android.view.ViewGroup",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.android.browser.BrowserActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.android.browser.bookmark.BookmarkAndHistoryActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.cootek.smartdialer",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.miui.video",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.miui.video.feature.mine.history.HistoryPlayActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.miui.video.feature.mine.offline.MyOfflineActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.miui.video.feature.mine.favor.FavorActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.miui.video.feature.mine.localvideo.LocalVideoActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.xiaomi.smarthome",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.ss.android.article.news",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.ss.android.article.news.activity.MainActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.ss.android.detail.feature.detail2.view.NewDetailActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.tencent.qqmusic",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.taobao.idlefish",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.taobao.fleamarket.message.activity.NewChatActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 10
+          },
+          {
+            "validAreaTop": 90,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.android.mms",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.android.mms.ui.MmsTabActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.miui.personalassistant",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.miui.personalassistant.ui.CardSettingsActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.miui.personalassistant.ui.LaunchActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      },
+      {
+        "activityName": "com.miui.personalassistant.favorite.ui.FavoriteMainActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.miui.fm",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.miui.fmradio.FmStationListActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.android.thememanager",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.android.thememanager.activity.ThemeTab.Activity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.sdu.didi.psnger",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.android.incallui",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.xtc.watch",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.xiaomi.pass",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.xiaomi.pass.PassTabActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.android.settings",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.baidu.netdisk",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  },
+  {
+    "packageName": "com.jingdong.app.mall",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.jingdong.app.mall.MainFrameActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.miui.yellowpage",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 2,
+    "configList": [
+      {
+        "activityName": "com.miui.yellowpage.activity.ExpressInquiryActivity",
+        "validArea": [
+          {
+            "validAreaTop": 0,
+            "validAreaBottom": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "packageName": "com.android.soundrecorder",
+    "trigger": [
+      "singlePickMode",
+      "doublePickMode"
+    ],
+    "type": 1,
+    "configRange": 1
+  }
+]
