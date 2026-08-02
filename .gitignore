@@ -1,2 +1,6 @@
 .gitnexus/
 .claude/
+
+# 反编译/二进制产物（移出 git 追踪，磁盘保留，不索引）
+小米传送门增强/decompile/
+pid_charge_analysis/lib/mithermal_change
