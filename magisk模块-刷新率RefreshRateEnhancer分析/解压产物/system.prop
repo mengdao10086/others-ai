@@ -1,0 +1,2 @@
+persist.sys.smartpower.limit.normal.max.refresh.rate.enable=false
+persist.sys.smartpower.display.enable=false

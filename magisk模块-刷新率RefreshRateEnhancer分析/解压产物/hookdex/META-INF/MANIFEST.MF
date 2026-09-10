@@ -1,0 +1,20 @@
+Manifest-Version: 1.0
+
+Name: AndroidManifest.xml
+SHA-256-Digest: a1LgjrTiaulN3S5FtZEORJnrkJpdWBkKVV54e3yRu+U=
+
+Name: assets/xposed_init
+SHA-256-Digest: BuFxSGwDkNb6SbnACBnykJ4GVvK6pDRXBufelGgxuPY=
+
+Name: assets/xposed_scope
+SHA-256-Digest: defGGB504w2hN3YYv5DQQ10//oG8BP9CgC7D2MBB9B8=
+
+Name: classes.dex
+SHA-256-Digest: 0v6z6VxVikibMkCwTfwOgK2K44h58l6JrURh6DY5+ME=
+
+Name: res/mipmap-xxhdpi-v4/ic_launcher.png
+SHA-256-Digest: BezokyeaOIq6Scw0i94gHkbmj4iD7CopFDDcbZeRdPk=
+
+Name: resources.arsc
+SHA-256-Digest: 5SQMVSTGo5BLylQavWA3uAhfk0d8WlSLKuq/fFLrNPs=
+
