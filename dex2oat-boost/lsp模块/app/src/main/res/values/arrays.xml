@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LSPosed 推荐作用域：只勾 MIUI 安装器（com.miui.packageinstaller） -->
+    <string-array name="xposed_scope">
+        <item>com.miui.packageinstaller</item>
+    </string-array>
+</resources>

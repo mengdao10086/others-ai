@@ -1,0 +1,6 @@
+id=dex2oat-boost
+name=dex2oat Boost（纯 root）
+version=v1.0
+versionCode=1
+author=灵,deepseek
+description=纯 root、不依赖 LSPosed。① 开机把 pm.dexopt.install 降为 verify（装得快）；② 常驻轮询 /data/app，把新装/覆盖更新的包重编译为 speed（用得爽）。

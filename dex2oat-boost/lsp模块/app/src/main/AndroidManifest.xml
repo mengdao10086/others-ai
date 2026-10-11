@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="dex2oat boost"
+        android:icon="@android:drawable/ic_menu_manage"
+        android:allowBackup="false"
+        android:supportsRtl="true">
+
+        <!-- ========== LSPosed 模块元数据（无界面、无桌面快捷方式） ========== -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="93" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="MIUI 安装器专用：安装期把会话降档为 verify（装得快），装完立即以安装器身份重编译为 speed（用得爽），零 root 优先、失败自动降级" />
+
+        <!-- 作用域只勾 MIUI 安装器 -->
+        <meta-data
+            android:name="xposedscope"
+            android:resource="@array/xposed_scope" />
+
+        <!-- 无 Activity：模块仅由 LSPosed 管理器识别，不产生桌面快捷方式 -->
+
+    </application>
+
+    <!-- 本模块不需要任何权限：hook 逻辑在安装器进程内运行，降级通道走 su -->
+</manifest>

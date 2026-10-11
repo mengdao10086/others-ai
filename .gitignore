@@ -4,3 +4,18 @@
 # 反编译/二进制产物（移出 git 追踪，磁盘保留，不索引）
 小米传送门增强/decompile/
 pid_charge_analysis/lib/mithermal_change
+
+# ── dex2oat-boost ──
+# 反编译产物与临时件（磁盘保留，不追踪、不索引）
+dex2oat-boost/反编译/
+dex2oat-boost/_scratch/
+# Android 构建产物与工程临时件（模块内另有 lsp模块/.gitignore，此处按仓库既有类型兜底）
+dex2oat-boost/**/build/
+dex2oat-boost/**/.gradle/
+dex2oat-boost/**/local.properties
+dex2oat-boost/**/*.apk
+dex2oat-boost/**/*.zip
+dex2oat-boost/**/*.dex
+dex2oat-boost/**/*.so
+dex2oat-boost/**/*.log
+dex2oat-boost/**/*.tmp
