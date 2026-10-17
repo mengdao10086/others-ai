@@ -7,7 +7,7 @@
 | 方案 | 目录 | 原理一句话 | 适用场景 | 产物 |
 |---|---|---|---|---|
 | **A · LSPosed 模块** | `lsp模块/` | 注入 MIUI 安装器（`com.miui.packageinstaller`）进程：安装期降档 + 装完以安装器身份重编译；失败自动降级 root | 已装 LSPosed（Zygisk 系），愿意给**安装器**授权 root | `app-release.apk`（29,095 B；Edge 落地名 `dex2oat-boost-v1.0.apk`） |
-| **C · 纯 root / Magisk 模块** | `magisk模块/` | 开机全局把 `pm.dexopt.install` 置为 `verify` + 常驻守护每 5 秒轮询 `/data/app`，把新装/更新的包重编译为 `speed` | 有 KernelSU / Magisk、不装或不想用 LSPosed | `dex2oat-boost-magisk.zip`（md5 `e6dd57708995c1ef8a7c59f24effcee6`） |
+| **C · 纯 root / Magisk 模块** | `magisk模块/` | 逻辑取自 Scene Install Boost：7 个 `pm.dexopt.*` 置为 `skip` + 轮询 `/data/app`，新装后倒计时 3 周期再编译为 `speed`，并按 CPU 负载动态并行 | 有 KernelSU / Magisk、不装或不想用 LSPosed | `产物/dex2oat-boost-magisk.zip` |
 
 - **两者完全独立**：不共享任何文件 / 状态 / 配置，可各自单独使用，互不依赖、互不修改。
 - **同时启用**：同一次安装会被**重复编译一次**（结果幂等，**无害但浪费 CPU/IO**）。**建议二选一**。
@@ -25,7 +25,7 @@
 | 路径 | 说明 |
 |---|---|
 | `lsp模块/` | **方案 A 工程**（Gradle / AGP 8.2.0，Java）。源码、构建脚本、签名 keystore 均在此 |
-| `magisk模块/` | **方案 C 工程**（纯 shell 的 Magisk / KernelSU 模块）。含 `build.sh`（打包）、`config.prop`（配置） |
+| `magisk模块/` | **方案 C 工程**（纯 shell 的 Magisk / KernelSU 模块）。分 `源码/`（模块文件）、`构建/`（`build.sh`）、`产物/`（zip）、`测试/` 四层 |
 | `上机指南.md` | 两条路各自的分步上机清单（**操作类信息的唯一出处**，含方案 A 常见卡点速查） |
 | `真机验证清单.md` | 旧方案 A 清单，**内容已并入 `上机指南.md`**；仅保留为外部旧链接的跳转落点 |
 | `dex2oat-boost测试.sh` | 方案 A 真机诊断脚本（设备端 su 终端内运行，输出 `dex2oat-boost结果.log`） |

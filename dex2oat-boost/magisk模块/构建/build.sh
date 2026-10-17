@@ -1,16 +1,18 @@
 #!/bin/sh
 # 构建可刷入的 dex2oat-boost 模块 zip（纯 root 版）。
-# 用法：sh build.sh [输出zip路径]
+# 用法：sh 构建/build.sh [输出zip路径]
+# 源目录：../源码/    默认产物：../产物/dex2oat-boost-magisk.zip
 # 依赖本机 python3/python（仅用于打包，控制权限位）。
 set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-OUT="${1:-$HERE/dex2oat-boost-magisk.zip}"
+SRC="$HERE/../源码"
+OUT="${1:-$HERE/../产物/dex2oat-boost-magisk.zip}"
 
 PY="$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)"
 [ -n "$PY" ] || { echo "错误：需要 python3（或 python）来打包"; exit 1; }
 
-"$PY" - "$HERE" "$OUT" <<'PYEOF'
+"$PY" - "$SRC" "$OUT" <<'PYEOF'
 import sys, os, zipfile, stat
 
 src, out = sys.argv[1], sys.argv[2]

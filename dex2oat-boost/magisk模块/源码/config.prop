@@ -1,0 +1,40 @@
+# dex2oat-boost 模块配置（纯 root）
+# 改完重启生效。字段含义见模块 README.md。
+# 测试用 D2O_ 前缀环境变量可临时覆盖。
+
+# ---- 基本 ----
+POLL_INTERVAL=5
+APP_ROOT=/data/app
+WORKDIR=/data/adb/dex2oat-boost
+
+# ---- ① 安装期降档（Scene Install Boost 的做法）----
+# 7 个安装期 reason 全部置为 INSTALL_FILTER=skip（连 vdex 都不生成）
+DOWNGRADE_ENABLE=1
+INSTALL_FILTER=skip
+DOWNGRADE_REASONS="install install-fast install-bulk install-bulk-downgraded install-bulk-secondary install-bulk-secondary-downgraded install-create-dm"
+
+# ---- ② 装后补编译 ----
+RECOMPILE_FILTER=speed
+# 1=加 -f 强制重编译（即使已是同档或更高档）；0=让系统自行判断
+RECOMPILE_FORCE=0
+# 检测到新装后等待几个周期再编译；期间再来新装会重置倒计时
+START_DELAY_CYCLES=3
+
+# ---- ③ 动态并行 ----
+# 已有编译任务在跑、且队列还有包时，CPU 使用率低于阈值就再起一个
+MAX_PARALLEL=3
+CPU_CORE_SET=4-7
+CPU_LOAD_THRESHOLD=50
+
+# ---- ④ 就绪 / 重试 ----
+# 编译前用 pm path 确认代码路径已切到新目录（覆盖安装防编到旧版本）
+READY_CHECK=1
+COMPILE_RETRY_MAX=3
+PENDING_MAX_CYCLES=120
+
+# ---- 日志 ----
+MAX_LOG_BYTES=262144
+LOG_KEEP_LINES=400
+
+# 1=只记录不执行（离线自测）
+DRY_RUN=0

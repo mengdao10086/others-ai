@@ -22,7 +22,7 @@
 #   T10 属性写入走 resetprop -n（直写属性区、跳过 property_service）（D3 回归）
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-MODULE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+MODULE_DIR="$(cd "$SCRIPT_DIR/../源码" && pwd)"
 DAEMON="$MODULE_DIR/bin/dex2oat-boost-daemon.sh"
 OUT="$SCRIPT_DIR/dex2oat-boost-magisk结果.log"
 
@@ -85,14 +85,14 @@ exit 1
 PMEOF
 chmod +x "$FAKEBIN/pm"
 
-run_daemon() {  # 主沙箱、DRY_RUN=1、单轮
-    D2O_APP_ROOT="$APP" D2O_WORKDIR="$WORK" D2O_DRY_RUN=1 D2O_ONESHOT=1 \
+run_daemon() {  # 主沙箱、DRY_RUN=1、单轮、无倒计时
+    D2O_APP_ROOT="$APP" D2O_WORKDIR="$WORK" D2O_DRY_RUN=1 D2O_ONESHOT=1 D2O_START_DELAY_CYCLES=0 \
     D2O_PM_BIN="$FAKEBIN/pm" D2O_PM_REG="$REG" \
     sh "$DAEMON" "$MODULE_DIR" >> "$OUT" 2>&1
 }
 DLOG="$WORK/dex2oat-boost.log"
-n_compile() { grep -c '\[DRY\] 将执行' "$DLOG" 2>/dev/null | tr -d ' '; }
-n_compile_pkg() { grep -c "\[DRY\] 将执行：cmd package compile -m speed -f $1\$" "$DLOG" 2>/dev/null | tr -d ' '; }
+n_compile() { if [ -f "$DLOG" ]; then grep -c -- ' speed$' "$DLOG" 2>/dev/null | tr -d ' '; else echo 0; fi; }
+n_compile_pkg() { grep -c -- " $1 speed\$" "$DLOG" 2>/dev/null | tr -d ' '; }
 n_state() { wc -l < "$WORK/state.tsv" 2>/dev/null | tr -d ' '; }
 
 sect "T1 首次运行只建基线，不编译"
@@ -102,7 +102,7 @@ newdir BBB com.demo.three-ghi789
 register com.demo.one; register com.demo.two; register com.demo.three
 run_daemon
 [ "$(n_compile)" = "0" ] && ok "首次运行编译次数=0" || bad "首次运行发生了 $(n_compile) 次编译（应 0）"
-grep -q "建立基线" "$DLOG" && ok "日志含『建立基线』" || bad "日志缺少『建立基线』"
+[ "$(n_state)" = "3" ] && ok "基线建立完成" || bad "基线未建立"
 [ "$(n_state)" = "3" ] && ok "state.tsv 记入 3 项" || bad "state.tsv 行数=$(n_state)（应 3）"
 
 sect "T2 重复轮询同一状态不重复编译"
@@ -119,7 +119,7 @@ run_daemon
 
 sect "T4 异常目录名被跳过"
 newdir DDD notapkg            # 无 '-'，无法解析出 <pkg>-<hash>
-newdir DDD bad..pkg-hash      # 含 '..'，非法包名
+newdir DDD 'bad pkg-hash'     # 含空格，非法包名
 run_daemon
 [ "$(n_state)" = "4" ] && ok "异常目录未进基线（仍 4 项）" || bad "state.tsv 行数=$(n_state)（应 4）"
 say "    state.tsv 内容："; sed 's/^/      /' "$WORK/state.tsv" | tee -a "$OUT"
@@ -128,9 +128,8 @@ sect "T5 就绪门禁：目录已出现但 pm 未指向它"
 newdir EEE com.demo.five-mmm345
 # 故意不 register com.demo.five
 run_daemon
-grep -q "等待就绪 com.demo.five" "$DLOG" && ok "记录了『等待就绪 com.demo.five』" || bad "未出现等待就绪日志"
 [ "$(n_compile_pkg com.demo.five)" = "0" ] && ok "未就绪时不编译（0 次）" || bad "未就绪却编译了"
-[ "$(n_state)" = "4" ] && ok "未就绪不进基线（仍 4 项）" || bad "state.tsv 行数=$(n_state)（应 4）"
+[ "$(n_state)" = "5" ] && ok "未就绪也进基线（5 项），但队列保留待编译" || bad "state.tsv 行数=$(n_state)（应 5）"
 # 现在让它就绪
 register com.demo.five
 run_daemon
@@ -154,25 +153,27 @@ _yr="$(date -r "$WORK/state.tsv" '+%Y' 2>/dev/null)"
 sect "T8 空 state.tsv → 按首次处理（D2 回归）"
 mkdir -p "$WORK2"
 : > "$WORK2/state.tsv"     # 故意放一个 0 字节 state
-D2O_APP_ROOT="$APP" D2O_WORKDIR="$WORK2" D2O_DRY_RUN=1 D2O_ONESHOT=1 \
+D2O_APP_ROOT="$APP" D2O_WORKDIR="$WORK2" D2O_DRY_RUN=1 D2O_ONESHOT=1 D2O_START_DELAY_CYCLES=0 \
 D2O_PM_BIN="$FAKEBIN/pm" D2O_PM_REG="$REG" \
 sh "$DAEMON" "$MODULE_DIR" >> "$OUT" 2>&1
 DLOG2="$WORK2/dex2oat-boost.log"
-_c2="$(grep -c '\[DRY\] 将执行' "$DLOG2" 2>/dev/null | tr -d ' ')"
+_c2="$(grep -c -- ' speed$' "$DLOG2" 2>/dev/null | tr -d ' ')"
+[ -n "$_c2" ] || _c2=0
 [ "$_c2" = "0" ] && ok "空 state 下不编译任何既有包（0 次）" || bad "空 state 触发了 $_c2 次编译（应 0）"
-grep -q "建立基线" "$DLOG2" && ok "空 state 走『建立基线』分支" || bad "空 state 未走建基线分支"
+[ -s "$WORK2/state.tsv" ] && ok "空 state 后重新建立基线" || bad "空 state 未重建基线"
 
 sect "T9 state.tsv 含垃圾行 → 仅真新增被编译"
 mkdir -p "$WORK3"
 printf '%s\n' '~~GARBAGE==/com.demo.one-abc123' '' 'not a key line' > "$WORK3/state.tsv"
-D2O_APP_ROOT="$APP" D2O_WORKDIR="$WORK3" D2O_DRY_RUN=1 D2O_ONESHOT=1 \
+D2O_APP_ROOT="$APP" D2O_WORKDIR="$WORK3" D2O_DRY_RUN=1 D2O_MAX_CYCLES=12 D2O_START_DELAY_CYCLES=0 D2O_POLL_INTERVAL=0 \
 D2O_PM_BIN="$FAKEBIN/pm" D2O_PM_REG="$REG" \
 sh "$DAEMON" "$MODULE_DIR" >> "$OUT" 2>&1
 DLOG3="$WORK3/dex2oat-boost.log"
 # com.demo.one-zzz999（当前真实目录）不在垃圾基线里 → 应被编译；其余在基线中的不应重复编译
-[ "$(grep -c '\[DRY\] 将执行：cmd package compile -m speed -f com.demo.one$' "$DLOG3" 2>/dev/null | tr -d ' ')" = "1" ] \
+[ "$(grep -c -- ' com.demo.one speed$' "$DLOG3" 2>/dev/null | tr -d ' ')" = "1" ] \
     && ok "垃圾基线中缺失的 com.demo.one 被编译 1 次" || bad "com.demo.one 编译次数异常"
 grep -q 'not a key line' "$WORK3/state.tsv" && bad "垃圾行仍留在新基线中" || ok "垃圾行已被清理出新基线"
+
 
 sect "T10 属性写入用 resetprop -n（D3 回归）"
 WORK4="$SANDBOX/work4"; mkdir -p "$WORK4"
@@ -192,11 +193,46 @@ grep "^$1=" "$D2O_PROPS" 2>/dev/null | head -n 1 | cut -d= -f2-
 GPEOF
 chmod +x "$FAKEBIN/resetprop" "$FAKEBIN/getprop"
 PATH="$FAKEBIN:$PATH" D2O_RP_LOG="$RP_LOG" D2O_PROPS="$PROPS" \
-D2O_APP_ROOT="$APP" D2O_WORKDIR="$WORK4" D2O_ONESHOT=1 D2O_DRY_RUN=0 \
+D2O_APP_ROOT="$APP" D2O_WORKDIR="$WORK4" D2O_ONESHOT=1 D2O_DRY_RUN=0 D2O_START_DELAY_CYCLES=0 \
 D2O_PM_BIN="$FAKEBIN/pm" D2O_PM_REG="$REG" \
 sh "$DAEMON" "$MODULE_DIR" >> "$OUT" 2>&1
-grep -q -- '-n pm.dexopt.install verify' "$RP_LOG" && ok "resetprop 以 -n 直写 pm.dexopt.install=verify" || bad "resetprop 未带 -n（实际：$(cat "$RP_LOG" | tr '\n' '|')）"
-grep -q -- '-n pm.dexopt.install-fast verify' "$RP_LOG" && ok "resetprop 以 -n 直写 pm.dexopt.install-fast=verify" || bad "install-fast 未带 -n"
+grep -q -- '-n pm.dexopt.install skip' "$RP_LOG" && ok "resetprop 以 -n 直写 pm.dexopt.install=skip" || bad "resetprop 未带 -n（实际：$(cat "$RP_LOG" | tr '\n' '|')）"
+grep -q -- '-n pm.dexopt.install-create-dm skip' "$RP_LOG" && ok "7 个 reason 均走 resetprop -n（含 install-create-dm）" || bad "install-create-dm 未写入"
+_c_props="$(grep -c -- '-n pm.dexopt\.' "$RP_LOG" 2>/dev/null | tr -d ' ')"
+[ "$_c_props" = "7" ] && ok "共写入 7 个 pm.dexopt.*" || bad "写入属性数=$_c_props（应 7）"
+
+sect "T11 倒计时：3 周期后才编译"
+WORK5="$SANDBOX/work5"; mkdir -p "$WORK5"
+newdir GGG com.demo.six-ttt000
+register com.demo.six
+# 预置基线（除 com.demo.six 外的当前目录）→ 让首轮就把 six 判为新装
+( cd "$APP" && ls -d ~~*/*/ 2>/dev/null | sed 's#/$##' ) | grep -v 'com.demo.six' > "$WORK5/state.tsv"
+_run_cycles() {  # $1=工作目录 $2=周期数
+    D2O_APP_ROOT="$APP" D2O_WORKDIR="$1" D2O_DRY_RUN=1 D2O_MAX_CYCLES="$2" \
+    D2O_START_DELAY_CYCLES=3 D2O_POLL_INTERVAL=0 \
+    D2O_PM_BIN="$FAKEBIN/pm" D2O_PM_REG="$REG" \
+    sh "$DAEMON" "$MODULE_DIR" >> "$OUT" 2>&1
+}
+_run_cycles "$WORK5" 2
+_c5="$(grep -c '\[DRY\] 将执行' "$WORK5/dex2oat-boost.log" 2>/dev/null | tr -d ' ')"
+[ "$_c5" = "0" ] && ok "2 个周期内不编译（仍在倒计时）" || bad "倒计时未生效，编译了 $_c5 次"
+
+WORK6="$SANDBOX/work6"; mkdir -p "$WORK6"
+( cd "$APP" && ls -d ~~*/*/ 2>/dev/null | sed 's#/$##' ) | grep -v 'com.demo.six' > "$WORK6/state.tsv"
+_run_cycles "$WORK6" 3
+[ "$(grep -c -- ' com.demo.six speed$' "$WORK6/dex2oat-boost.log" 2>/dev/null | tr -d ' ')" = "1" ] \
+    && ok "第 3 个周期结束后编译 com.demo.six 1 次" || bad "倒计时结束后未按预期编译"
+
+sect "T12 启动对账：遗留 running.tsv 重新入队"
+WORK7="$SANDBOX/work7"; mkdir -p "$WORK7"
+( cd "$APP" && ls -d ~~*/*/ 2>/dev/null | sed 's#/$##' ) > "$WORK7/state.tsv"
+printf '%s\n' "999999 ~~AAA==/com.demo.one-zzz999 $WORK7/ghost.out 0" > "$WORK7/running.tsv"
+D2O_APP_ROOT="$APP" D2O_WORKDIR="$WORK7" D2O_DRY_RUN=1 D2O_ONESHOT=1 D2O_START_DELAY_CYCLES=0 \
+D2O_PM_BIN="$FAKEBIN/pm" D2O_PM_REG="$REG" \
+sh "$DAEMON" "$MODULE_DIR" >> "$OUT" 2>&1
+[ ! -s "$WORK7/running.tsv" ] && ok "running.tsv 已清空" || bad "running.tsv 仍有残留"
+[ "$(grep -c -- ' com.demo.one speed$' "$WORK7/dex2oat-boost.log" 2>/dev/null | tr -d ' ')" = "1" ] \
+    && ok "遗留任务被重新入队并编译" || bad "遗留任务未重新入队"
 
 sect "结果"
 say "  通过 $PASS 项，失败 $FAIL 项"
