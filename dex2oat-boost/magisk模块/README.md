@@ -38,7 +38,7 @@ sh 构建/build.sh
 1. 把 `产物/dex2oat-boost-magisk.zip` 用 **Magisk / KernelSU 管理器**（模块 → 从本地安装）刷入。
 2. **重启设备**（属性设置与守护进程都在开机后生效）。
 3. **降档属性是运行期的**，重启后自动回归系统默认；停用模块后重启即恢复原状。
-4. 卸载：管理器里卸载，或运行 `uninstall.sh`（停进程 + 还原本次开机的属性原值 + 删 `/data/adb/dex2oat-boost/`）。
+4. 卸载：管理器里卸载，或运行 `uninstall.sh`（停进程 + 从日志还原本次开机的属性原值 + 删 `/cache/dex2oat-boost.log`）。
 
 ## 四、工作流程
 
@@ -126,8 +126,11 @@ sh 构建/build.sh
 
 ### 6.6 状态与异常自愈
 
-- `state.tsv`（基线）、`queue.tsv`（待编译）、`running.tsv`（在跑的任务）、`counters.tsv`（wait / fail 计数）都在 `/data/adb/dex2oat-boost/`，**跨重启有效**。
-- 启动时把 `running.tsv` 里遗留的 key 重新入队并清空该表——上次退出时未完成的编译不会永久占用并行槽位。
+- **持久状态只有两个文件**，放在模块 `bin/` 下：`state.tsv`（基线）、`queue.tsv`（待编译，每行 `键 等待轮数 失败次数`）。
+- 运行中任务只在内存里；**队列条目在编译成功前不删除**，进程重启后会自动继续，不需要额外的对账文件。
+- **临时文件在 `bin/.tmp/`**（每次启动清空）：`job.N.rc` 存编译退出码与结束时刻，`q` 是改写队列的中转文件。
+- **唯一的日志在 `/cache/dex2oat-boost.log`**，守护与看门狗共用，看门狗行带 `service.sh：` 前缀。行首时间为 `日 时:分:秒`。
+- 原属性值写进日志的 `orig <键>=<值>` 行；卸载脚本从日志里取每个键**第一次**出现的值来还原。
 - 守护主循环单轮内任何非致命错误只记日志、不退出；`service.sh` 是看门狗，进程退出 5 秒后重启。
 - 日志按体积轮转。
 
@@ -142,8 +145,8 @@ su -c 'getprop pm.dexopt.install-create-dm'
 su -c 'ps -A | grep dex2oat-boost-daemon'
 
 # 3) 装一个 APK，看日志
-su -c 'tail -f /data/adb/dex2oat-boost/dex2oat-boost.log'
-#   期望：<时间> <包名> skip   →  约 15 秒后  <时间> <包名> speed
+su -c 'tail -f /cache/dex2oat-boost.log'
+#   期望：<时间> <包名> dex2oat   →  编译结束  <时间> <包名> speed（时间为编译结束时刻）
 
 # 4) 确认产物与编译档
 su -c 'ls -l /data/app/~~*/<包名>-*/oat/arm64/'

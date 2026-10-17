@@ -4,9 +4,7 @@
 
 MODDIR="${0%/*}"
 DAEMON="$MODDIR/bin/dex2oat-boost-daemon.sh"
-WORKDIR=/data/adb/dex2oat-boost
-LOG_FILE="$WORKDIR/service.log"
-mkdir -p "$WORKDIR" 2>/dev/null
+LOG_FILE=/cache/dex2oat-boost.log
 
 log_msg() {
     if [ -f "$LOG_FILE" ]; then
@@ -15,10 +13,10 @@ log_msg() {
         _sz=0
     fi
     [ -n "$_sz" ] || _sz=0
-    if [ "$_sz" -ge 65536 ]; then
-        tail -n 100 "$LOG_FILE" > "$LOG_FILE.rot" 2>/dev/null && mv "$LOG_FILE.rot" "$LOG_FILE"
+    if [ "$_sz" -ge 262144 ]; then
+        tail -n 400 "$LOG_FILE" > "$LOG_FILE.rot" 2>/dev/null && mv "$LOG_FILE.rot" "$LOG_FILE"
     fi
-    printf '%s service.sh：%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$LOG_FILE" 2>/dev/null
+    printf '%s service.sh：%s\n' "$(date '+%d %H:%M:%S')" "$1" >> "$LOG_FILE" 2>/dev/null
 }
 
 trap 'log_msg "收到终止信号，退出"; exit 0' TERM INT
