@@ -19,3 +19,11 @@ dex2oat-boost/**/*.dex
 dex2oat-boost/**/*.so
 dex2oat-boost/**/*.log
 dex2oat-boost/**/*.tmp
+
+# ── 状态栏点击回顶屏蔽 ──
+# Android 构建产物与工程临时件（模块内另有 lsp模块/.gitignore）
+状态栏点击回顶屏蔽/**/build/
+状态栏点击回顶屏蔽/**/.gradle/
+状态栏点击回顶屏蔽/**/local.properties
+状态栏点击回顶屏蔽/**/*.apk
+状态栏点击回顶屏蔽/**/*.aab
