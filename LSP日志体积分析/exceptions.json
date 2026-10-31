@@ -1,0 +1,851 @@
+{
+  "units": [
+    {
+      "start_line": 6,
+      "end_line": 6,
+      "ts": "2026-10-30T21:11:59.597",
+      "bytes": 248,
+      "lines": 1,
+      "records": 1,
+      "stack_records": 0,
+      "exc": "<无异常类>",
+      "top_hc": "<无 HyperCeiler 帧>",
+      "rule": "<无业务规则帧>",
+      "msg": "[NewFlashLight]: Path does not exist: /sys/class/flashlight_core/flashlight/torchbrightness",
+      "hc_frames": [],
+      "rule_frames": []
+    },
+    {
+      "start_line": 7,
+      "end_line": 7,
+      "ts": "2026-10-30T21:11:59.725",
+      "bytes": 375,
+      "lines": 1,
+      "records": 1,
+      "stack_records": 0,
+      "exc": "<无异常类>",
+      "top_hc": "<无 HyperCeiler 帧>",
+      "rule": "<无业务规则帧>",
+      "msg": "[NewFlashLight]: Failed to set permissions for /sys/class/leds/led:torch_0/brightness: CommandResult{result=1, successMsg='', errorMsg='chmod: chmod '/sys/class",
+      "hc_frames": [],
+      "rule_frames": []
+    },
+    {
+      "start_line": 8,
+      "end_line": 8,
+      "ts": "2026-10-30T21:11:59.788",
+      "bytes": 232,
+      "lines": 1,
+      "records": 1,
+      "stack_records": 0,
+      "exc": "<无异常类>",
+      "top_hc": "<无 HyperCeiler 帧>",
+      "rule": "<无业务规则帧>",
+      "msg": "[NewFlashLight]: Path does not exist: /sys/class/leds/flashlight/brightness",
+      "hc_frames": [],
+      "rule_frames": []
+    },
+    {
+      "start_line": 3257,
+      "end_line": 3426,
+      "ts": "2026-10-31T18:40:19.471",
+      "bytes": 16000,
+      "lines": 170,
+      "records": 6,
+      "stack_records": 5,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 3427,
+      "end_line": 3606,
+      "ts": "2026-10-31T18:40:19.473",
+      "bytes": 16856,
+      "lines": 180,
+      "records": 6,
+      "stack_records": 5,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 3607,
+      "end_line": 3796,
+      "ts": "2026-10-31T18:40:19.476",
+      "bytes": 17712,
+      "lines": 190,
+      "records": 6,
+      "stack_records": 5,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 3797,
+      "end_line": 3996,
+      "ts": "2026-10-31T18:40:19.479",
+      "bytes": 18724,
+      "lines": 200,
+      "records": 7,
+      "stack_records": 6,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 3997,
+      "end_line": 4206,
+      "ts": "2026-10-31T18:40:19.481",
+      "bytes": 19580,
+      "lines": 210,
+      "records": 7,
+      "stack_records": 6,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 4207,
+      "end_line": 4426,
+      "ts": "2026-10-31T18:40:19.485",
+      "bytes": 20436,
+      "lines": 220,
+      "records": 7,
+      "stack_records": 6,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 4427,
+      "end_line": 4656,
+      "ts": "2026-10-31T18:40:19.487",
+      "bytes": 21448,
+      "lines": 230,
+      "records": 8,
+      "stack_records": 7,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 4657,
+      "end_line": 4896,
+      "ts": "2026-10-31T18:40:19.489",
+      "bytes": 22312,
+      "lines": 240,
+      "records": 8,
+      "stack_records": 7,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 4897,
+      "end_line": 5146,
+      "ts": "2026-10-31T18:40:19.492",
+      "bytes": 23168,
+      "lines": 250,
+      "records": 8,
+      "stack_records": 7,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 5147,
+      "end_line": 5406,
+      "ts": "2026-10-31T18:40:19.494",
+      "bytes": 24024,
+      "lines": 260,
+      "records": 8,
+      "stack_records": 7,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 5479,
+      "end_line": 5515,
+      "ts": "2026-10-31T19:07:03.177",
+      "bytes": 3576,
+      "lines": 37,
+      "records": 2,
+      "stack_records": 1,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 5516,
+      "end_line": 5562,
+      "ts": "2026-10-31T19:07:03.178",
+      "bytes": 4432,
+      "lines": 47,
+      "records": 2,
+      "stack_records": 1,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$1$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$1$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$1$1.before"
+      ]
+    },
+    {
+      "start_line": 5563,
+      "end_line": 5619,
+      "ts": "2026-10-31T19:07:03.179",
+      "bytes": 5288,
+      "lines": 57,
+      "records": 2,
+      "stack_records": 1,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 5620,
+      "end_line": 5686,
+      "ts": "2026-10-31T19:07:03.180",
+      "bytes": 6301,
+      "lines": 67,
+      "records": 3,
+      "stack_records": 2,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 5687,
+      "end_line": 5763,
+      "ts": "2026-10-31T19:07:03.181",
+      "bytes": 7157,
+      "lines": 77,
+      "records": 3,
+      "stack_records": 2,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 5764,
+      "end_line": 5850,
+      "ts": "2026-10-31T19:07:03.183",
+      "bytes": 8013,
+      "lines": 87,
+      "records": 3,
+      "stack_records": 2,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 5851,
+      "end_line": 5947,
+      "ts": "2026-10-31T19:07:03.184",
+      "bytes": 8869,
+      "lines": 97,
+      "records": 3,
+      "stack_records": 2,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 5948,
+      "end_line": 6054,
+      "ts": "2026-10-31T19:07:03.185",
+      "bytes": 9882,
+      "lines": 107,
+      "records": 4,
+      "stack_records": 3,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 6055,
+      "end_line": 6171,
+      "ts": "2026-10-31T19:07:03.186",
+      "bytes": 10738,
+      "lines": 117,
+      "records": 4,
+      "stack_records": 3,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 6172,
+      "end_line": 6298,
+      "ts": "2026-10-31T19:07:03.187",
+      "bytes": 11594,
+      "lines": 127,
+      "records": 4,
+      "stack_records": 3,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 6299,
+      "end_line": 6435,
+      "ts": "2026-10-31T19:07:03.187",
+      "bytes": 12607,
+      "lines": 137,
+      "records": 5,
+      "stack_records": 4,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 6436,
+      "end_line": 6582,
+      "ts": "2026-10-31T19:07:03.188",
+      "bytes": 13463,
+      "lines": 147,
+      "records": 5,
+      "stack_records": 4,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 6583,
+      "end_line": 6739,
+      "ts": "2026-10-31T19:07:03.189",
+      "bytes": 14319,
+      "lines": 157,
+      "records": 5,
+      "stack_records": 4,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 6740,
+      "end_line": 6906,
+      "ts": "2026-10-31T19:07:03.191",
+      "bytes": 15332,
+      "lines": 167,
+      "records": 6,
+      "stack_records": 5,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 6907,
+      "end_line": 7083,
+      "ts": "2026-10-31T19:07:03.192",
+      "bytes": 16188,
+      "lines": 177,
+      "records": 6,
+      "stack_records": 5,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 7084,
+      "end_line": 7270,
+      "ts": "2026-10-31T19:07:03.193",
+      "bytes": 17044,
+      "lines": 187,
+      "records": 6,
+      "stack_records": 5,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 7271,
+      "end_line": 7467,
+      "ts": "2026-10-31T19:07:03.194",
+      "bytes": 17900,
+      "lines": 197,
+      "records": 6,
+      "stack_records": 5,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 7468,
+      "end_line": 7674,
+      "ts": "2026-10-31T19:07:03.195",
+      "bytes": 18913,
+      "lines": 207,
+      "records": 7,
+      "stack_records": 6,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 7675,
+      "end_line": 7891,
+      "ts": "2026-10-31T19:07:03.197",
+      "bytes": 19769,
+      "lines": 217,
+      "records": 7,
+      "stack_records": 6,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 7892,
+      "end_line": 8118,
+      "ts": "2026-10-31T19:07:03.198",
+      "bytes": 20625,
+      "lines": 227,
+      "records": 7,
+      "stack_records": 6,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 8119,
+      "end_line": 8355,
+      "ts": "2026-10-31T19:07:03.199",
+      "bytes": 21638,
+      "lines": 237,
+      "records": 8,
+      "stack_records": 7,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    },
+    {
+      "start_line": 8356,
+      "end_line": 8602,
+      "ts": "2026-10-31T19:07:03.200",
+      "bytes": 22494,
+      "lines": 247,
+      "records": 8,
+      "stack_records": 7,
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "rule": "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+      "msg": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "hc_frames": [
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.EzxHelpUtils.findAndHookMethod",
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod$lambda$3$lambda$1",
+        "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.j"
+      ],
+      "rule_frames": [
+        "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before"
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "exc": "java.lang.IllegalStateException",
+      "top_hc": "com.sevtinge.hyperceiler.libhook.utils.hookapi.tool.internal.EzxHookHelper.hookMethod",
+      "count": 32,
+      "bytes": 486402,
+      "lines": 5274,
+      "records": 177,
+      "rules": [
+        [
+          "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$2$1.before",
+          31
+        ],
+        [
+          "com.sevtinge.hyperceiler.libhook.rules.systemui.lockscreen.DisableUnlockByBleToast$1$1.before",
+          1
+        ]
+      ]
+    },
+    {
+      "exc": "<无异常类>",
+      "top_hc": "<无 HyperCeiler 帧>",
+      "count": 3,
+      "bytes": 855,
+      "lines": 3,
+      "records": 3,
+      "rules": [
+        [
+          "<无业务规则帧>",
+          3
+        ]
+      ]
+    }
+  ]
+}

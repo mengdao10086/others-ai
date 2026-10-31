@@ -17,5 +17,5 @@ Thumbs.db
 *.apk
 
 ## Large binaries (GitHub limit 100MB)
-decompile/jadx.zip
+decompile/
 

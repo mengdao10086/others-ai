@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LSPosed 推荐作用域：传送门 + 系统界面 -->
+    <string-array name="xposed_scope">
+        <item>com.miui.contentextension</item>
+        <item>com.android.systemui</item>
+        <!-- 预留：实现相册功能后取消注释，并在 ModuleEntry 注册对应 Hook 组
+        <item>com.miui.gallery</item>
+        -->
+    </string-array>
+</resources>

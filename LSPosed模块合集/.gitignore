@@ -1,0 +1,15 @@
+## 反编译与构建中间物
+_分析/
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## 构建产物（发布时手动复制到 D:\下载\Edge）
+*.apk

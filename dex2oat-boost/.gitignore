@@ -1,0 +1,17 @@
+## 反编译产物与临时件（磁盘保留，不追踪）
+_分析/
+_scratch/
+
+## Android build
+.gradle/
+build/
+**/build/
+local.properties
+*.iml
+.idea/
+*.apk
+*.zip
+*.dex
+*.so
+*.log
+*.tmp

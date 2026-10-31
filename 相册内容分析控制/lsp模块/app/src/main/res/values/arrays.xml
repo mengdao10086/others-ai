@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LSPosed 推荐作用域：仅小米相册 -->
+    <string-array name="xposed_scope">
+        <item>com.miui.gallery</item>
+    </string-array>
+</resources>

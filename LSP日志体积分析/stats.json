@@ -1,0 +1,2418 @@
+{
+  "path": "D:/下载/LocalSend/ea61e5470491e2ba50cf8f14f0a392dd.log",
+  "sha256": "1dd873856dbddb2c5342e630a09d96071c758ec24de05588a203a41f500e51a4",
+  "size": 1421341,
+  "total_lines": 9083,
+  "total_bytes": 1421341,
+  "total_chars": 1344429,
+  "records": 3696,
+  "continuations": 5386,
+  "orphans": 0,
+  "stack_cont_lines": 5386,
+  "stack_cont_bytes": 461947,
+  "part_markers": [
+    [
+      1,
+      "----part 1 start----"
+    ]
+  ],
+  "first_ts": "2026-10-30T21:11:51.186",
+  "last_ts": "2026-10-31T21:28:11.911",
+  "assigned_bytes": 1421320,
+  "unassigned_bytes": 21,
+  "byte_sum_matches_file": true,
+  "modules": [
+    {
+      "module": "com.example.waspwingtempctrl",
+      "records": 3176,
+      "cont_lines": 0,
+      "lines": 3176,
+      "bytes": 841661,
+      "chars": 767119,
+      "pct_bytes": 59.2159798387579,
+      "pct_lines": 34.966420786083894
+    },
+    {
+      "module": "com.sevtinge.hyperceiler",
+      "records": 188,
+      "cont_lines": 5386,
+      "lines": 5574,
+      "bytes": 507940,
+      "chars": 507940,
+      "pct_bytes": 35.73667402825923,
+      "pct_lines": 61.36738962897721
+    },
+    {
+      "module": "com.taplus.fix",
+      "records": 263,
+      "cont_lines": 0,
+      "lines": 263,
+      "bytes": 56309,
+      "chars": 54059,
+      "pct_bytes": 3.9616812573478146,
+      "pct_lines": 2.895519101618408
+    },
+    {
+      "module": "com.mengdao.galleryanalyze",
+      "records": 42,
+      "cont_lines": 0,
+      "lines": 42,
+      "bytes": 9171,
+      "chars": 9171,
+      "pct_bytes": 0.6452357316083895,
+      "pct_lines": 0.46240228999229327
+    },
+    {
+      "module": "com.mengdao.lsposedtoolkit",
+      "records": 20,
+      "cont_lines": 0,
+      "lines": 20,
+      "bytes": 4424,
+      "chars": 4304,
+      "pct_bytes": 0.31125535673705323,
+      "pct_lines": 0.2201915666629968
+    },
+    {
+      "module": "cn.buffcow.hyper5g",
+      "records": 4,
+      "cont_lines": 0,
+      "lines": 4,
+      "bytes": 850,
+      "chars": 850,
+      "pct_bytes": 0.05980267930074486,
+      "pct_lines": 0.04403831333259936
+    },
+    {
+      "module": "xyz.cirno.noswipetokill",
+      "records": 2,
+      "cont_lines": 0,
+      "lines": 2,
+      "bytes": 707,
+      "chars": 707,
+      "pct_bytes": 0.04974175795956073,
+      "pct_lines": 0.02201915666629968
+    },
+    {
+      "module": "com.mengdao.statusbarclickblock",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 258,
+      "chars": 258,
+      "pct_bytes": 0.01815187207010844,
+      "pct_lines": 0.01100957833314984
+    }
+  ],
+  "procs": [
+    {
+      "proc": "com.flydigi.waspwing.experimental",
+      "records": 3174,
+      "cont_lines": 0,
+      "lines": 3174,
+      "bytes": 841194,
+      "chars": 766664,
+      "pct_bytes": 59.18312354318914,
+      "pct_lines": 34.94440162941759
+    },
+    {
+      "proc": "com.android.systemui",
+      "records": 185,
+      "cont_lines": 5097,
+      "lines": 5282,
+      "bytes": 488365,
+      "chars": 488365,
+      "pct_bytes": 34.35945350200972,
+      "pct_lines": 58.152592755697455
+    },
+    {
+      "proc": "com.miui.contentextension",
+      "records": 283,
+      "cont_lines": 0,
+      "lines": 283,
+      "bytes": 60733,
+      "chars": 58363,
+      "pct_bytes": 4.272936614084868,
+      "pct_lines": 3.115710668281405
+    },
+    {
+      "proc": "com.miui.misound",
+      "records": 6,
+      "cont_lines": 216,
+      "lines": 222,
+      "bytes": 15073,
+      "chars": 15073,
+      "pct_bytes": 1.060477394235444,
+      "pct_lines": 2.4441263899592647
+    },
+    {
+      "proc": "com.miui.gallery",
+      "records": 38,
+      "cont_lines": 0,
+      "lines": 38,
+      "bytes": 8347,
+      "chars": 8347,
+      "pct_bytes": 0.5872623107333145,
+      "pct_lines": 0.41836397665969394
+    },
+    {
+      "proc": "com.miui.packageinstaller",
+      "records": 2,
+      "cont_lines": 73,
+      "lines": 75,
+      "bytes": 5610,
+      "chars": 5610,
+      "pct_bytes": 0.39469768338491606,
+      "pct_lines": 0.825718374986238
+    },
+    {
+      "proc": "com.miui.gallery:provideData",
+      "records": 4,
+      "cont_lines": 0,
+      "lines": 4,
+      "bytes": 824,
+      "chars": 824,
+      "pct_bytes": 0.05797342087507502,
+      "pct_lines": 0.04403831333259936
+    },
+    {
+      "proc": "system",
+      "records": 2,
+      "cont_lines": 0,
+      "lines": 2,
+      "bytes": 707,
+      "chars": 707,
+      "pct_bytes": 0.04974175795956073,
+      "pct_lines": 0.02201915666629968
+    },
+    {
+      "proc": "com.example.waspwingtempctrl",
+      "records": 2,
+      "cont_lines": 0,
+      "lines": 2,
+      "bytes": 467,
+      "chars": 455,
+      "pct_bytes": 0.03285629556876218,
+      "pct_lines": 0.02201915666629968
+    }
+  ],
+  "pairs": [
+    {
+      "pair": [
+        "com.example.waspwingtempctrl",
+        "com.flydigi.waspwing.experimental"
+      ],
+      "records": 3174,
+      "cont_lines": 0,
+      "lines": 3174,
+      "bytes": 841194,
+      "chars": 766664,
+      "pct_bytes": 59.18312354318914,
+      "pct_lines": 34.94440162941759
+    },
+    {
+      "pair": [
+        "com.sevtinge.hyperceiler",
+        "com.android.systemui"
+      ],
+      "records": 180,
+      "cont_lines": 5097,
+      "lines": 5277,
+      "bytes": 487257,
+      "chars": 487257,
+      "pct_bytes": 34.28149895063887,
+      "pct_lines": 58.097544864031704
+    },
+    {
+      "pair": [
+        "com.taplus.fix",
+        "com.miui.contentextension"
+      ],
+      "records": 263,
+      "cont_lines": 0,
+      "lines": 263,
+      "bytes": 56309,
+      "chars": 54059,
+      "pct_bytes": 3.9616812573478146,
+      "pct_lines": 2.895519101618408
+    },
+    {
+      "pair": [
+        "com.sevtinge.hyperceiler",
+        "com.miui.misound"
+      ],
+      "records": 6,
+      "cont_lines": 216,
+      "lines": 222,
+      "bytes": 15073,
+      "chars": 15073,
+      "pct_bytes": 1.060477394235444,
+      "pct_lines": 2.4441263899592647
+    },
+    {
+      "pair": [
+        "com.mengdao.galleryanalyze",
+        "com.miui.gallery"
+      ],
+      "records": 38,
+      "cont_lines": 0,
+      "lines": 38,
+      "bytes": 8347,
+      "chars": 8347,
+      "pct_bytes": 0.5872623107333145,
+      "pct_lines": 0.41836397665969394
+    },
+    {
+      "pair": [
+        "com.sevtinge.hyperceiler",
+        "com.miui.packageinstaller"
+      ],
+      "records": 2,
+      "cont_lines": 73,
+      "lines": 75,
+      "bytes": 5610,
+      "chars": 5610,
+      "pct_bytes": 0.39469768338491606,
+      "pct_lines": 0.825718374986238
+    },
+    {
+      "pair": [
+        "com.mengdao.lsposedtoolkit",
+        "com.miui.contentextension"
+      ],
+      "records": 20,
+      "cont_lines": 0,
+      "lines": 20,
+      "bytes": 4424,
+      "chars": 4304,
+      "pct_bytes": 0.31125535673705323,
+      "pct_lines": 0.2201915666629968
+    },
+    {
+      "pair": [
+        "cn.buffcow.hyper5g",
+        "com.android.systemui"
+      ],
+      "records": 4,
+      "cont_lines": 0,
+      "lines": 4,
+      "bytes": 850,
+      "chars": 850,
+      "pct_bytes": 0.05980267930074486,
+      "pct_lines": 0.04403831333259936
+    },
+    {
+      "pair": [
+        "com.mengdao.galleryanalyze",
+        "com.miui.gallery:provideData"
+      ],
+      "records": 4,
+      "cont_lines": 0,
+      "lines": 4,
+      "bytes": 824,
+      "chars": 824,
+      "pct_bytes": 0.05797342087507502,
+      "pct_lines": 0.04403831333259936
+    },
+    {
+      "pair": [
+        "xyz.cirno.noswipetokill",
+        "system"
+      ],
+      "records": 2,
+      "cont_lines": 0,
+      "lines": 2,
+      "bytes": 707,
+      "chars": 707,
+      "pct_bytes": 0.04974175795956073,
+      "pct_lines": 0.02201915666629968
+    },
+    {
+      "pair": [
+        "com.example.waspwingtempctrl",
+        "com.example.waspwingtempctrl"
+      ],
+      "records": 2,
+      "cont_lines": 0,
+      "lines": 2,
+      "bytes": 467,
+      "chars": 455,
+      "pct_bytes": 0.03285629556876218,
+      "pct_lines": 0.02201915666629968
+    },
+    {
+      "pair": [
+        "com.mengdao.statusbarclickblock",
+        "com.android.systemui"
+      ],
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 258,
+      "chars": 258,
+      "pct_bytes": 0.01815187207010844,
+      "pct_lines": 0.01100957833314984
+    }
+  ],
+  "levels": [
+    {
+      "level": "I",
+      "records": 3504,
+      "cont_lines": 0,
+      "lines": 3504,
+      "bytes": 912530,
+      "chars": 835618,
+      "pct_bytes": 64.20204581448083,
+      "pct_lines": 38.57756247935704
+    },
+    {
+      "level": "E",
+      "records": 188,
+      "cont_lines": 5386,
+      "lines": 5574,
+      "bytes": 507940,
+      "chars": 507940,
+      "pct_bytes": 35.73667402825923,
+      "pct_lines": 61.36738962897721
+    },
+    {
+      "level": "D",
+      "records": 4,
+      "cont_lines": 0,
+      "lines": 4,
+      "bytes": 850,
+      "chars": 850,
+      "pct_bytes": 0.05980267930074486,
+      "pct_lines": 0.04403831333259936
+    }
+  ],
+  "mod_levels": {
+    "xyz.cirno.noswipetokill": [
+      {
+        "level": "I",
+        "records": 2,
+        "cont_lines": 0,
+        "lines": 2,
+        "bytes": 707,
+        "chars": 707,
+        "pct_bytes": 100.0,
+        "pct_lines": 100.0
+      }
+    ],
+    "com.mengdao.statusbarclickblock": [
+      {
+        "level": "I",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 258,
+        "chars": 258,
+        "pct_bytes": 100.0,
+        "pct_lines": 100.0
+      }
+    ],
+    "cn.buffcow.hyper5g": [
+      {
+        "level": "D",
+        "records": 4,
+        "cont_lines": 0,
+        "lines": 4,
+        "bytes": 850,
+        "chars": 850,
+        "pct_bytes": 100.0,
+        "pct_lines": 100.0
+      }
+    ],
+    "com.sevtinge.hyperceiler": [
+      {
+        "level": "E",
+        "records": 188,
+        "cont_lines": 5386,
+        "lines": 5574,
+        "bytes": 507940,
+        "chars": 507940,
+        "pct_bytes": 100.0,
+        "pct_lines": 100.0
+      }
+    ],
+    "com.example.waspwingtempctrl": [
+      {
+        "level": "I",
+        "records": 3176,
+        "cont_lines": 0,
+        "lines": 3176,
+        "bytes": 841661,
+        "chars": 767119,
+        "pct_bytes": 100.0,
+        "pct_lines": 100.0
+      }
+    ],
+    "com.taplus.fix": [
+      {
+        "level": "I",
+        "records": 263,
+        "cont_lines": 0,
+        "lines": 263,
+        "bytes": 56309,
+        "chars": 54059,
+        "pct_bytes": 100.0,
+        "pct_lines": 100.0
+      }
+    ],
+    "com.mengdao.galleryanalyze": [
+      {
+        "level": "I",
+        "records": 42,
+        "cont_lines": 0,
+        "lines": 42,
+        "bytes": 9171,
+        "chars": 9171,
+        "pct_bytes": 100.0,
+        "pct_lines": 100.0
+      }
+    ],
+    "com.mengdao.lsposedtoolkit": [
+      {
+        "level": "I",
+        "records": 20,
+        "cont_lines": 0,
+        "lines": 20,
+        "bytes": 4424,
+        "chars": 4304,
+        "pct_bytes": 100.0,
+        "pct_lines": 100.0
+      }
+    ]
+  },
+  "labels": [
+    {
+      "label": "[WaspWingTempCtrl] 状态观测",
+      "records": 2136,
+      "cont_lines": 0,
+      "lines": 2136,
+      "bytes": 575038,
+      "chars": 519502,
+      "pct_bytes": 40.45742717616673,
+      "pct_lines": 23.51645931960806
+    },
+    {
+      "label": "<堆栈帧>",
+      "records": 145,
+      "cont_lines": 4106,
+      "lines": 4251,
+      "bytes": 390193,
+      "chars": 390193,
+      "pct_bytes": 27.452455111053574,
+      "pct_lines": 46.80171749421997
+    },
+    {
+      "label": "[WaspWingTempCtrl] [诊断]",
+      "records": 492,
+      "cont_lines": 0,
+      "lines": 492,
+      "bytes": 124129,
+      "chars": 118921,
+      "pct_bytes": 8.733231504614304,
+      "pct_lines": 5.416712539909722
+    },
+    {
+      "label": "[EzxHookHelper]",
+      "records": 32,
+      "cont_lines": 991,
+      "lines": 1023,
+      "bytes": 96209,
+      "chars": 96209,
+      "pct_bytes": 6.768889379818074,
+      "pct_lines": 11.262798634812286
+    },
+    {
+      "label": "[WaspWingTempCtrl]",
+      "records": 306,
+      "cont_lines": 0,
+      "lines": 306,
+      "bytes": 77722,
+      "chars": 74016,
+      "pct_bytes": 5.46821628307352,
+      "pct_lines": 3.368930969943851
+    },
+    {
+      "label": "[WaspWingTempCtrl] 重连循环心跳",
+      "records": 240,
+      "cont_lines": 0,
+      "lines": 240,
+      "bytes": 64305,
+      "chars": 54225,
+      "pct_bytes": 4.524248579334587,
+      "pct_lines": 2.6422987999559617
+    },
+    {
+      "label": "TaplusFix",
+      "records": 275,
+      "cont_lines": 0,
+      "lines": 275,
+      "bytes": 59057,
+      "chars": 56687,
+      "pct_bytes": 4.1550198017224576,
+      "pct_lines": 3.027634041616206
+    },
+    {
+      "label": "[com.miui.misound][IncreaseSamplingRate]",
+      "records": 6,
+      "cont_lines": 216,
+      "lines": 222,
+      "bytes": 15073,
+      "chars": 15073,
+      "pct_bytes": 1.060477394235444,
+      "pct_lines": 2.4441263899592647
+    },
+    {
+      "label": "GalleryAnalyze",
+      "records": 42,
+      "cont_lines": 0,
+      "lines": 42,
+      "bytes": 9171,
+      "chars": 9171,
+      "pct_bytes": 0.6452357316083895,
+      "pct_lines": 0.46240228999229327
+    },
+    {
+      "label": "[com.miui.packageinstaller][InstallRiskDisable]",
+      "records": 1,
+      "cont_lines": 40,
+      "lines": 41,
+      "bytes": 3043,
+      "chars": 3043,
+      "pct_bytes": 0.2140935918966666,
+      "pct_lines": 0.45139271165914346
+    },
+    {
+      "label": "[com.miui.packageinstaller][DisableAd]",
+      "records": 1,
+      "cont_lines": 33,
+      "lines": 34,
+      "bytes": 2567,
+      "chars": 2567,
+      "pct_bytes": 0.1806040914882495,
+      "pct_lines": 0.37432566332709455
+    },
+    {
+      "label": "LSPosedToolkit",
+      "records": 8,
+      "cont_lines": 0,
+      "lines": 8,
+      "bytes": 1676,
+      "chars": 1676,
+      "pct_bytes": 0.11791681236240986,
+      "pct_lines": 0.08807662666519872
+    },
+    {
+      "label": "[NewFlashLight]",
+      "records": 3,
+      "cont_lines": 0,
+      "lines": 3,
+      "bytes": 855,
+      "chars": 855,
+      "pct_bytes": 0.06015445976721983,
+      "pct_lines": 0.03302873499944952
+    },
+    {
+      "label": "NoSwipeToKill",
+      "records": 2,
+      "cont_lines": 0,
+      "lines": 2,
+      "bytes": 707,
+      "chars": 707,
+      "pct_bytes": 0.04974175795956073,
+      "pct_lines": 0.02201915666629968
+    },
+    {
+      "label": "<无标签>",
+      "records": 2,
+      "cont_lines": 0,
+      "lines": 2,
+      "bytes": 442,
+      "chars": 442,
+      "pct_bytes": 0.031097393236387327,
+      "pct_lines": 0.02201915666629968
+    },
+    {
+      "label": "StatusBarClickBlock",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 258,
+      "chars": 258,
+      "pct_bytes": 0.01815187207010844,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "label": "[WaspWingTempCtrl] 跳过非目标包",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 237,
+      "chars": 225,
+      "pct_bytes": 0.016674394110913565,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "label": "[WaspWingTempCtrl] LoadPackage",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 230,
+      "chars": 230,
+      "pct_bytes": 0.016181901457848608,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "label": "created moduleResources",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 218,
+      "chars": 218,
+      "pct_bytes": 0.015337628338308682,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "label": "onPackageLoaded",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 190,
+      "chars": 190,
+      "pct_bytes": 0.013367657726048851,
+      "pct_lines": 0.01100957833314984
+    }
+  ],
+  "mod_labels": {
+    "xyz.cirno.noswipetokill": [
+      {
+        "label": "NoSwipeToKill",
+        "records": 2,
+        "cont_lines": 0,
+        "lines": 2,
+        "bytes": 707,
+        "chars": 707,
+        "pct_bytes": 100.0,
+        "pct_lines": 100.0
+      }
+    ],
+    "com.mengdao.statusbarclickblock": [
+      {
+        "label": "StatusBarClickBlock",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 258,
+        "chars": 258,
+        "pct_bytes": 100.0,
+        "pct_lines": 100.0
+      }
+    ],
+    "cn.buffcow.hyper5g": [
+      {
+        "label": "<无标签>",
+        "records": 2,
+        "cont_lines": 0,
+        "lines": 2,
+        "bytes": 442,
+        "chars": 442,
+        "pct_bytes": 52.0,
+        "pct_lines": 50.0
+      },
+      {
+        "label": "created moduleResources",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 218,
+        "chars": 218,
+        "pct_bytes": 25.647058823529413,
+        "pct_lines": 25.0
+      },
+      {
+        "label": "onPackageLoaded",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 190,
+        "chars": 190,
+        "pct_bytes": 22.352941176470587,
+        "pct_lines": 25.0
+      }
+    ],
+    "com.sevtinge.hyperceiler": [
+      {
+        "label": "<堆栈帧>",
+        "records": 145,
+        "cont_lines": 4106,
+        "lines": 4251,
+        "bytes": 390193,
+        "chars": 390193,
+        "pct_bytes": 76.81871874630862,
+        "pct_lines": 76.26480086114101
+      },
+      {
+        "label": "[EzxHookHelper]",
+        "records": 32,
+        "cont_lines": 991,
+        "lines": 1023,
+        "bytes": 96209,
+        "chars": 96209,
+        "pct_bytes": 18.941016655510495,
+        "pct_lines": 18.353067814854683
+      },
+      {
+        "label": "[com.miui.misound][IncreaseSamplingRate]",
+        "records": 6,
+        "cont_lines": 216,
+        "lines": 222,
+        "bytes": 15073,
+        "chars": 15073,
+        "pct_bytes": 2.967476473599244,
+        "pct_lines": 3.982777179763186
+      },
+      {
+        "label": "[com.miui.packageinstaller][InstallRiskDisable]",
+        "records": 1,
+        "cont_lines": 40,
+        "lines": 41,
+        "bytes": 3043,
+        "chars": 3043,
+        "pct_bytes": 0.5990865062802693,
+        "pct_lines": 0.7355579476139218
+      },
+      {
+        "label": "[com.miui.packageinstaller][DisableAd]",
+        "records": 1,
+        "cont_lines": 33,
+        "lines": 34,
+        "bytes": 2567,
+        "chars": 2567,
+        "pct_bytes": 0.5053746505492774,
+        "pct_lines": 0.6099748833871547
+      },
+      {
+        "label": "[NewFlashLight]",
+        "records": 3,
+        "cont_lines": 0,
+        "lines": 3,
+        "bytes": 855,
+        "chars": 855,
+        "pct_bytes": 0.1683269677520967,
+        "pct_lines": 0.05382131324004306
+      }
+    ],
+    "com.example.waspwingtempctrl": [
+      {
+        "label": "[WaspWingTempCtrl] 状态观测",
+        "records": 2136,
+        "cont_lines": 0,
+        "lines": 2136,
+        "bytes": 575038,
+        "chars": 519502,
+        "pct_bytes": 68.32180652305382,
+        "pct_lines": 67.2544080604534
+      },
+      {
+        "label": "[WaspWingTempCtrl] [诊断]",
+        "records": 492,
+        "cont_lines": 0,
+        "lines": 492,
+        "bytes": 124129,
+        "chars": 118921,
+        "pct_bytes": 14.748099294133862,
+        "pct_lines": 15.4911838790932
+      },
+      {
+        "label": "[WaspWingTempCtrl]",
+        "records": 306,
+        "cont_lines": 0,
+        "lines": 306,
+        "bytes": 77722,
+        "chars": 74016,
+        "pct_bytes": 9.234359201626308,
+        "pct_lines": 9.634760705289672
+      },
+      {
+        "label": "[WaspWingTempCtrl] 重连循环心跳",
+        "records": 240,
+        "cont_lines": 0,
+        "lines": 240,
+        "bytes": 64305,
+        "chars": 54225,
+        "pct_bytes": 7.640249459105269,
+        "pct_lines": 7.5566750629722925
+      },
+      {
+        "label": "[WaspWingTempCtrl] 跳过非目标包",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 237,
+        "chars": 225,
+        "pct_bytes": 0.028158605424274143,
+        "pct_lines": 0.031486146095717885
+      },
+      {
+        "label": "[WaspWingTempCtrl] LoadPackage",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 230,
+        "chars": 230,
+        "pct_bytes": 0.027326916656468577,
+        "pct_lines": 0.031486146095717885
+      }
+    ],
+    "com.taplus.fix": [
+      {
+        "label": "TaplusFix",
+        "records": 263,
+        "cont_lines": 0,
+        "lines": 263,
+        "bytes": 56309,
+        "chars": 54059,
+        "pct_bytes": 100.0,
+        "pct_lines": 100.0
+      }
+    ],
+    "com.mengdao.galleryanalyze": [
+      {
+        "label": "GalleryAnalyze",
+        "records": 42,
+        "cont_lines": 0,
+        "lines": 42,
+        "bytes": 9171,
+        "chars": 9171,
+        "pct_bytes": 100.0,
+        "pct_lines": 100.0
+      }
+    ],
+    "com.mengdao.lsposedtoolkit": [
+      {
+        "label": "TaplusFix",
+        "records": 12,
+        "cont_lines": 0,
+        "lines": 12,
+        "bytes": 2748,
+        "chars": 2628,
+        "pct_bytes": 62.11573236889693,
+        "pct_lines": 60.0
+      },
+      {
+        "label": "LSPosedToolkit",
+        "records": 8,
+        "cont_lines": 0,
+        "lines": 8,
+        "bytes": 1676,
+        "chars": 1676,
+        "pct_bytes": 37.88426763110307,
+        "pct_lines": 40.0
+      }
+    ]
+  },
+  "patterns": [
+    {
+      "pattern": "[WaspWingTempCtrl] 状态观测: state=<N> 已持续 <N>s inScanning=false 自锁命中累计=<N>",
+      "records": 2136,
+      "cont_lines": 0,
+      "lines": 2136,
+      "bytes": 575038,
+      "chars": 519502,
+      "pct_bytes": 40.45742717616673,
+      "pct_lines": 23.51645931960806
+    },
+    {
+      "pattern": "at k<N>.intercept(<RMAP>:<N>)",
+      "records": 52,
+      "cont_lines": 1575,
+      "lines": 1627,
+      "bytes": 150293,
+      "chars": 150293,
+      "pct_bytes": 10.574028329584527,
+      "pct_lines": 17.91258394803479
+    },
+    {
+      "pattern": "at j<N>.proceed(<RMAP>:<N>)",
+      "records": 39,
+      "cont_lines": 1206,
+      "lines": 1245,
+      "bytes": 115008,
+      "chars": 115008,
+      "pct_bytes": 8.091513577670664,
+      "pct_lines": 13.706925024771552
+    },
+    {
+      "pattern": "[EzxHookHelper]: [Toast#show()] hook failed",
+      "records": 32,
+      "cont_lines": 991,
+      "lines": 1023,
+      "bytes": 96209,
+      "chars": 96209,
+      "pct_bytes": 6.768889379818074,
+      "pct_lines": 11.262798634812286
+    },
+    {
+      "pattern": "at io.github.kyuubiran.ezxhelper.xposed.common.HookChain.invoke(Unknown Source:<N>)",
+      "records": 30,
+      "cont_lines": 928,
+      "lines": 958,
+      "bytes": 87161,
+      "chars": 87161,
+      "pct_bytes": 6.132307447684968,
+      "pct_lines": 10.547176043157547
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] [诊断] connect() 进入 device=<MAC> state=<N>",
+      "records": 233,
+      "cont_lines": 0,
+      "lines": 233,
+      "bytes": 59398,
+      "chars": 57534,
+      "pct_bytes": 4.179011229536051,
+      "pct_lines": 2.5652317516239127
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] 后台重连尝试 -> <MAC> state=<N> type=LE",
+      "records": 232,
+      "cont_lines": 0,
+      "lines": 232,
+      "bytes": 58449,
+      "chars": 55665,
+      "pct_bytes": 4.112243296999101,
+      "pct_lines": 2.554222173290763
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] [诊断] connect() 退出 gatt=有值 throwable=null",
+      "records": 233,
+      "cont_lines": 0,
+      "lines": 233,
+      "bytes": 58000,
+      "chars": 55204,
+      "pct_bytes": 4.080653411109649,
+      "pct_lines": 2.5652317516239127
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] 重连循环心跳: 仍断连（屏幕 亮），tick 线程持续推进",
+      "records": 124,
+      "cont_lines": 0,
+      "lines": 124,
+      "bytes": 33221,
+      "chars": 28013,
+      "pct_bytes": 2.337299775352994,
+      "pct_lines": 1.3651877133105803
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] 重连循环心跳: 仍断连（屏幕 灭），tick 线程持续推进",
+      "records": 116,
+      "cont_lines": 0,
+      "lines": 116,
+      "bytes": 31084,
+      "chars": 26212,
+      "pct_bytes": 2.186948803981592,
+      "pct_lines": 1.2771110866453814
+    },
+    {
+      "pattern": "[com.miui.misound][IncreaseSamplingRate]: hook com.miui.misound.mihearingassist.h.b failed by",
+      "records": 4,
+      "cont_lines": 144,
+      "lines": 148,
+      "bytes": 10050,
+      "chars": 10050,
+      "pct_bytes": 0.7070787376146892,
+      "pct_lines": 1.6294175933061763
+    },
+    {
+      "pattern": "TaplusFix: [竞态] Hook TextContentExtensionService.setBitmap() — 就绪",
+      "records": 42,
+      "cont_lines": 0,
+      "lines": 42,
+      "bytes": 9621,
+      "chars": 9201,
+      "pct_bytes": 0.6768959735911368,
+      "pct_lines": 0.46240228999229327
+    },
+    {
+      "pattern": "TaplusFix: [格式] Hook ContentValues.put(mime_type) — 就绪",
+      "records": 42,
+      "cont_lines": 0,
+      "lines": 42,
+      "bytes": 9159,
+      "chars": 8739,
+      "pct_bytes": 0.6443914584888496,
+      "pct_lines": 0.46240228999229327
+    },
+    {
+      "pattern": "TaplusFix: [格式] Hook Bitmap.compress() — 就绪",
+      "records": 42,
+      "cont_lines": 0,
+      "lines": 42,
+      "bytes": 8697,
+      "chars": 8277,
+      "pct_bytes": 0.6118869433865624,
+      "pct_lines": 0.46240228999229327
+    },
+    {
+      "pattern": "TaplusFix: [格式] ContentValues mime_type image/png→image/jpeg",
+      "records": 37,
+      "cont_lines": 0,
+      "lines": 37,
+      "bytes": 8139,
+      "chars": 7917,
+      "pct_bytes": 0.5726282433279558,
+      "pct_lines": 0.4073543983265441
+    },
+    {
+      "pattern": "TaplusFix: [竞态] 阻止 setBitmap(null) — 保护 bitmap",
+      "records": 37,
+      "cont_lines": 0,
+      "lines": 37,
+      "bytes": 7920,
+      "chars": 7402,
+      "pct_bytes": 0.5572202588963521,
+      "pct_lines": 0.4073543983265441
+    },
+    {
+      "pattern": "TaplusFix: Module loaded for com.miui.contentextension",
+      "records": 38,
+      "cont_lines": 0,
+      "lines": 38,
+      "bytes": 7863,
+      "chars": 7863,
+      "pct_bytes": 0.5532099615785374,
+      "pct_lines": 0.41836397665969394
+    },
+    {
+      "pattern": "TaplusFix: [格式] Bitmap.compress 格式 PNG→JPEG",
+      "records": 37,
+      "cont_lines": 0,
+      "lines": 37,
+      "bytes": 7658,
+      "chars": 7288,
+      "pct_bytes": 0.5387869624530637,
+      "pct_lines": 0.4073543983265441
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] setRunMode 已下发 method=setRunMode 请求mode=<N> SDKmode=<N> temp=<N> windOC=<N> coldOC=<N> windLv=<N> modeCustom=<N> extra=<N>",
+      "records": 16,
+      "cont_lines": 0,
+      "lines": 16,
+      "bytes": 5031,
+      "chars": 4871,
+      "pct_bytes": 0.35396150536711457,
+      "pct_lines": 0.17615325333039744
+    },
+    {
+      "pattern": "[com.miui.misound][IncreaseSamplingRate]: hook com.miui.misound.mihearingassist.h.a failed by",
+      "records": 2,
+      "cont_lines": 72,
+      "lines": 74,
+      "bytes": 5023,
+      "chars": 5023,
+      "pct_bytes": 0.35339865662075465,
+      "pct_lines": 0.8147087966530882
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] [诊断] <N>s后散热器实际 RPM=<N> 制冷=<N> 热端=<N> 目标=<N>",
+      "records": 16,
+      "cont_lines": 0,
+      "lines": 16,
+      "bytes": 4231,
+      "chars": 3783,
+      "pct_bytes": 0.29767663073111944,
+      "pct_lines": 0.17615325333039744
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] 收到广播 mode=<N> temp=<N> windOC=<N> coldOC=<N> windLv=<N>",
+      "records": 16,
+      "cont_lines": 0,
+      "lines": 16,
+      "bytes": 4023,
+      "chars": 3895,
+      "pct_bytes": 0.28304256332576067,
+      "pct_lines": 0.17615325333039744
+    },
+    {
+      "pattern": "at com.android.systemui.shade.NotificationPanelViewController.handleShadeTouch(go/retraceme <HEX>:<N>)",
+      "records": 1,
+      "cont_lines": 35,
+      "lines": 36,
+      "bytes": 3071,
+      "chars": 3071,
+      "pct_bytes": 0.21606356250892642,
+      "pct_lines": 0.39634481999339427
+    },
+    {
+      "pattern": "at com.android.systemui.statusbar.phone.StatusBarKeyguardViewManager.showPrimaryBouncer(go/retraceme <HEX>:<N>)",
+      "records": 1,
+      "cont_lines": 27,
+      "lines": 28,
+      "bytes": 3066,
+      "chars": 3066,
+      "pct_bytes": 0.21571178204245145,
+      "pct_lines": 0.30826819332819555
+    },
+    {
+      "pattern": "[com.miui.packageinstaller][InstallRiskDisable]: Hook Failed: org.luckypray.dexkit.exceptions.NoResultException: No result found for query",
+      "records": 1,
+      "cont_lines": 40,
+      "lines": 41,
+      "bytes": 3043,
+      "chars": 3043,
+      "pct_bytes": 0.2140935918966666,
+      "pct_lines": 0.45139271165914346
+    },
+    {
+      "pattern": "at com.android.systemui.shade.NotificationPanelViewController$TouchHandler.handleTouch$<N>(go/retraceme <HEX>:<N>)",
+      "records": 1,
+      "cont_lines": 30,
+      "lines": 31,
+      "bytes": 3034,
+      "chars": 3034,
+      "pct_bytes": 0.21346038705701165,
+      "pct_lines": 0.3412969283276451
+    },
+    {
+      "pattern": "at com.android.keyguard.KeyguardSecurityContainerController.showNextSecurityScreenOrFinish(go/retraceme <HEX>:<N>)",
+      "records": 1,
+      "cont_lines": 24,
+      "lines": 25,
+      "bytes": 3033,
+      "chars": 3033,
+      "pct_bytes": 0.21339003096371667,
+      "pct_lines": 0.275239458328746
+    },
+    {
+      "pattern": "at com.android.systemui.shade.NotificationPanelViewController.-$$Nest$mendMotionEvent(go/retraceme <HEX>:<N>)",
+      "records": 1,
+      "cont_lines": 29,
+      "lines": 30,
+      "bytes": 3028,
+      "chars": 3028,
+      "pct_bytes": 0.21303825049724168,
+      "pct_lines": 0.3302873499944952
+    },
+    {
+      "pattern": "at com.android.systemui.statusbar.phone.CentralSurfacesImpl$$ExternalSyntheticLambda<N>.onTouch(go/retraceme <HEX>:<N>)",
+      "records": 1,
+      "cont_lines": 35,
+      "lines": 36,
+      "bytes": 2908,
+      "chars": 2908,
+      "pct_bytes": 0.20459551930184242,
+      "pct_lines": 0.39634481999339427
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] 控制器：扫描已停止，b<N>x BLE 已连接",
+      "records": 11,
+      "cont_lines": 0,
+      "lines": 11,
+      "bytes": 2662,
+      "chars": 2376,
+      "pct_bytes": 0.1872879203512739,
+      "pct_lines": 0.12110536166464825
+    },
+    {
+      "pattern": "at android.view.ViewGroup.dispatchTransformedTouchEvent(ViewGroup.java:<N>)",
+      "records": 1,
+      "cont_lines": 32,
+      "lines": 33,
+      "bytes": 2609,
+      "chars": 2609,
+      "pct_bytes": 0.18355904740663923,
+      "pct_lines": 0.36331608499394474
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] BLE 断联（onConnectionStateChange） device=<MAC>",
+      "records": 10,
+      "cont_lines": 0,
+      "lines": 10,
+      "bytes": 2600,
+      "chars": 2520,
+      "pct_bytes": 0.18292584256698427,
+      "pct_lines": 0.1100957833314984
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] dataInteractionController 已同步到已连接实例 state=<N>",
+      "records": 10,
+      "cont_lines": 0,
+      "lines": 10,
+      "bytes": 2570,
+      "chars": 2390,
+      "pct_bytes": 0.18081515976813445,
+      "pct_lines": 0.1100957833314984
+    },
+    {
+      "pattern": "[com.miui.packageinstaller][DisableAd]: Hook Failed: java.lang.NullPointerException: Attempt to invoke virtual method 'java.lang.Class[] java.lang.reflect.Method.getParameterTypes()' on a null object reference",
+      "records": 1,
+      "cont_lines": 33,
+      "lines": 34,
+      "bytes": 2567,
+      "chars": 2567,
+      "pct_bytes": 0.1806040914882495,
+      "pct_lines": 0.37432566332709455
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] [诊断] discoverServices 被调用 device=Flydigi B<N>X",
+      "records": 10,
+      "cont_lines": 0,
+      "lines": 10,
+      "bytes": 2500,
+      "chars": 2400,
+      "pct_bytes": 0.17589023323748487,
+      "pct_lines": 0.1100957833314984
+    },
+    {
+      "pattern": "at com.android.systemui.shade.NotificationShadeWindowView.dispatchTouchEvent(go/retraceme <HEX>:<N>)",
+      "records": 1,
+      "cont_lines": 30,
+      "lines": 31,
+      "bytes": 2464,
+      "chars": 2464,
+      "pct_bytes": 0.1733574138788651,
+      "pct_lines": 0.3412969283276451
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] ViewModel 修复完成",
+      "records": 11,
+      "cont_lines": 0,
+      "lines": 11,
+      "bytes": 2387,
+      "chars": 2299,
+      "pct_bytes": 0.16793999469515056,
+      "pct_lines": 0.12110536166464825
+    },
+    {
+      "pattern": "at com.android.keyguard.MiuiBleUnlockHelper.tryUnlockByBle(go/retraceme <HEX>:<N>)",
+      "records": 2,
+      "cont_lines": 22,
+      "lines": 24,
+      "bytes": 2346,
+      "chars": 2346,
+      "pct_bytes": 0.16505539487005583,
+      "pct_lines": 0.26422987999559616
+    },
+    {
+      "pattern": "at android.view.ViewRootImpl$ViewPostImeInputStage.onProcess(ViewRootImpl.java:<N>)",
+      "records": 1,
+      "cont_lines": 26,
+      "lines": 27,
+      "bytes": 2076,
+      "chars": 2076,
+      "pct_bytes": 0.14605924968040745,
+      "pct_lines": 0.2972586149950457
+    },
+    {
+      "pattern": "at com.android.keyguard.MiuiBleUnlockHelper$bleListener$<N>.onUnlocked(go/retraceme <HEX>:<N>)",
+      "records": 2,
+      "cont_lines": 18,
+      "lines": 20,
+      "bytes": 1772,
+      "chars": 1772,
+      "pct_bytes": 0.12467099731872928,
+      "pct_lines": 0.2201915666629968
+    },
+    {
+      "pattern": "at android.view.ViewRootImpl$AsyncInputStage.forward(ViewRootImpl.java:<N>)",
+      "records": 1,
+      "cont_lines": 22,
+      "lines": 23,
+      "bytes": 1762,
+      "chars": 1762,
+      "pct_bytes": 0.12396743638577934,
+      "pct_lines": 0.2532203016624463
+    },
+    {
+      "pattern": "at android.os.Looper.loopOnce(Looper.java:<N>)",
+      "records": 3,
+      "cont_lines": 15,
+      "lines": 18,
+      "bytes": 1545,
+      "chars": 1545,
+      "pct_bytes": 0.10870016414076565,
+      "pct_lines": 0.19817240999669714
+    },
+    {
+      "pattern": "at android.view.ViewRootImpl$InputStage.deliver(ViewRootImpl.java:<N>)",
+      "records": 1,
+      "cont_lines": 19,
+      "lines": 20,
+      "bytes": 1537,
+      "chars": 1537,
+      "pct_bytes": 0.1081373153944057,
+      "pct_lines": 0.2201915666629968
+    },
+    {
+      "pattern": "GalleryAnalyze: NightScheduleHook installed",
+      "records": 7,
+      "cont_lines": 0,
+      "lines": 7,
+      "bytes": 1404,
+      "chars": 1404,
+      "pct_bytes": 0.09877995498617151,
+      "pct_lines": 0.07706704833204889
+    },
+    {
+      "pattern": "GalleryAnalyze: TimeWindowHook installed",
+      "records": 7,
+      "cont_lines": 0,
+      "lines": 7,
+      "bytes": 1383,
+      "chars": 1383,
+      "pct_bytes": 0.09730247702697664,
+      "pct_lines": 0.07706704833204889
+    },
+    {
+      "pattern": "GalleryAnalyze: SettingsHook installed",
+      "records": 7,
+      "cont_lines": 0,
+      "lines": 7,
+      "bytes": 1369,
+      "chars": 1369,
+      "pct_bytes": 0.09631749172084672,
+      "pct_lines": 0.07706704833204889
+    },
+    {
+      "pattern": "GalleryAnalyze: hooks installed",
+      "records": 7,
+      "cont_lines": 0,
+      "lines": 7,
+      "bytes": 1320,
+      "chars": 1320,
+      "pct_bytes": 0.09287004314939201,
+      "pct_lines": 0.07706704833204889
+    },
+    {
+      "pattern": "at android.view.ViewRootImpl.deliverInputEvent(ViewRootImpl.java:<N>)",
+      "records": 1,
+      "cont_lines": 14,
+      "lines": 15,
+      "bytes": 1167,
+      "chars": 1167,
+      "pct_bytes": 0.08210556087525794,
+      "pct_lines": 0.1651436749972476
+    },
+    {
+      "pattern": "GalleryAnalyze: night work schedule failed: java.lang.NoSuchMethodError: androidx.work.PeriodicWorkRequest$Builder#setConstraints[class androidx.work.Constraints]#exact",
+      "records": 3,
+      "cont_lines": 0,
+      "lines": 3,
+      "bytes": 975,
+      "chars": 975,
+      "pct_bytes": 0.0685971909626191,
+      "pct_lines": 0.03302873499944952
+    },
+    {
+      "pattern": "at android.view.ViewRootImpl$WindowInputEventReceiver.onInputEvent(ViewRootImpl.java:<N>)",
+      "records": 1,
+      "cont_lines": 10,
+      "lines": 11,
+      "bytes": 868,
+      "chars": 868,
+      "pct_bytes": 0.06106908898005475,
+      "pct_lines": 0.12110536166464825
+    },
+    {
+      "pattern": "LSPosedToolkit: TaplusSaveFormatHook installed",
+      "records": 4,
+      "cont_lines": 0,
+      "lines": 4,
+      "bytes": 844,
+      "chars": 844,
+      "pct_bytes": 0.059380542740974894,
+      "pct_lines": 0.04403831333259936
+    },
+    {
+      "pattern": "LSPosedToolkit: TaplusRaceFixHook installed",
+      "records": 4,
+      "cont_lines": 0,
+      "lines": 4,
+      "bytes": 832,
+      "chars": 832,
+      "pct_bytes": 0.05853626962143497,
+      "pct_lines": 0.04403831333259936
+    },
+    {
+      "pattern": "GalleryAnalyze: setSelectable failed: java.lang.reflect.InvocationTargetException",
+      "records": 3,
+      "cont_lines": 0,
+      "lines": 3,
+      "bytes": 709,
+      "chars": 709,
+      "pct_bytes": 0.049882470146150715,
+      "pct_lines": 0.03302873499944952
+    },
+    {
+      "pattern": "GalleryAnalyze: settings row added to 'others' as miuix.preference.BasePreference",
+      "records": 3,
+      "cont_lines": 0,
+      "lines": 3,
+      "bytes": 709,
+      "chars": 709,
+      "pct_bytes": 0.049882470146150715,
+      "pct_lines": 0.03302873499944952
+    },
+    {
+      "pattern": "at android.os.MessageQueue.nativePollOnce(Native Method)",
+      "records": 1,
+      "cont_lines": 8,
+      "lines": 9,
+      "bytes": 691,
+      "chars": 691,
+      "pct_bytes": 0.04861606046684082,
+      "pct_lines": 0.09908620499834857
+    },
+    {
+      "pattern": "GalleryAnalyze: add settings row failed: java.lang.NoSuchMethodError: com.miui.gallery.ui.GallerySettingsFragment#findPreference[interface java.lang.CharSequence]#exact",
+      "records": 2,
+      "cont_lines": 0,
+      "lines": 2,
+      "bytes": 648,
+      "chars": 648,
+      "pct_bytes": 0.04559074845515608,
+      "pct_lines": 0.02201915666629968
+    },
+    {
+      "pattern": "at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:<N>)",
+      "records": 2,
+      "cont_lines": 0,
+      "lines": 2,
+      "bytes": 446,
+      "chars": 446,
+      "pct_bytes": 0.0313788176095673,
+      "pct_lines": 0.02201915666629968
+    },
+    {
+      "pattern": "GalleryAnalyze: night work scheduled (<N> min, battery not low)",
+      "records": 2,
+      "cont_lines": 0,
+      "lines": 2,
+      "bytes": 437,
+      "chars": 437,
+      "pct_bytes": 0.030745612769912358,
+      "pct_lines": 0.02201915666629968
+    },
+    {
+      "pattern": "NoSwipeToKill: hooked void com.android.server.am.ProcessCleanerBase.killOnce(com.android.server.am.ProcessRecord,int,java.lang.String,boolean,com.android.server.am.ProcessManagerService,java.lang.String,android.os.Handler,android.content.Context)",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 388,
+      "chars": 388,
+      "pct_bytes": 0.027298164198457653,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "pattern": "[NewFlashLight]: Failed to set permissions for /sys/class/leds/led:torch_<N>/brightness: CommandResult{result=<N>, successMsg='', errorMsg='chmod: chmod '/sys/class/leds/led:torch_<N>/brightness' to <N>: Permission denied'}",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 375,
+      "chars": 375,
+      "pct_bytes": 0.026383534985622733,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "pattern": "NoSwipeToKill: hooked void com.android.server.am.ProcessCleanerBase.killOnce(com.android.server.am.ProcessRecord,java.lang.String,int,android.os.Handler,android.content.Context)",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 319,
+      "chars": 319,
+      "pct_bytes": 0.02244359376110307,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "pattern": "at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:<N>)",
+      "records": 1,
+      "cont_lines": 1,
+      "lines": 2,
+      "bytes": 308,
+      "chars": 308,
+      "pct_bytes": 0.02166967673485814,
+      "pct_lines": 0.02201915666629968
+    },
+    {
+      "pattern": "StatusBarClickBlock: hooked com.miui.systemui.statusbar.StatusBarClickTool#invokeInputManager",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 258,
+      "chars": 258,
+      "pct_bytes": 0.01815187207010844,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "pattern": "[NewFlashLight]: Path does not exist: /sys/class/flashlight_core/flashlight/torchbrightness",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 248,
+      "chars": 248,
+      "pct_bytes": 0.0174483111371585,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "pattern": "onCreate, ctrl=miui.systemui.controlcenter.panel.secondary.detail.DetailPanelDelegate@<N>dbc<N>",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 246,
+      "chars": 246,
+      "pct_bytes": 0.017307598950568513,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] 跳过非目标包: com.example.waspwingtempctrl",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 237,
+      "chars": 225,
+      "pct_bytes": 0.016674394110913565,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "pattern": "[NewFlashLight]: Path does not exist: /sys/class/leds/flashlight/brightness",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 232,
+      "chars": 232,
+      "pct_bytes": 0.016322613644438596,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "pattern": "[WaspWingTempCtrl] LoadPackage: com.example.waspwingtempctrl",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 230,
+      "chars": 230,
+      "pct_bytes": 0.016181901457848608,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "pattern": "created moduleResources: android.content.res.MiuiResources@c<N>ddd<N>",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 218,
+      "chars": 218,
+      "pct_bytes": 0.015337628338308682,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "pattern": "GalleryAnalyze: start requested (execDirectly false,false,<N>)",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 217,
+      "chars": 217,
+      "pct_bytes": 0.015267272245013688,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "pattern": "Plugin for systemui control center created.",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 196,
+      "chars": 196,
+      "pct_bytes": 0.013789794285818814,
+      "pct_lines": 0.01100957833314984
+    },
+    {
+      "pattern": "onPackageLoaded: com.android.systemui",
+      "records": 1,
+      "cont_lines": 0,
+      "lines": 1,
+      "bytes": 190,
+      "chars": 190,
+      "pct_bytes": 0.013367657726048851,
+      "pct_lines": 0.01100957833314984
+    }
+  ],
+  "mod_patterns": {
+    "xyz.cirno.noswipetokill": [
+      {
+        "pattern": "NoSwipeToKill: hooked void com.android.server.am.ProcessCleanerBase.killOnce(com.android.server.am.ProcessRecord,int,java.lang.String,boolean,com.android.server.am.ProcessManagerService,java.lang.String,android.os.Handler,android.content.Context)",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 388,
+        "chars": 388,
+        "pct_bytes": 54.87977369165488,
+        "pct_lines": 50.0
+      },
+      {
+        "pattern": "NoSwipeToKill: hooked void com.android.server.am.ProcessCleanerBase.killOnce(com.android.server.am.ProcessRecord,java.lang.String,int,android.os.Handler,android.content.Context)",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 319,
+        "chars": 319,
+        "pct_bytes": 45.12022630834512,
+        "pct_lines": 50.0
+      }
+    ],
+    "com.mengdao.statusbarclickblock": [
+      {
+        "pattern": "StatusBarClickBlock: hooked com.miui.systemui.statusbar.StatusBarClickTool#invokeInputManager",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 258,
+        "chars": 258,
+        "pct_bytes": 100.0,
+        "pct_lines": 100.0
+      }
+    ],
+    "cn.buffcow.hyper5g": [
+      {
+        "pattern": "onCreate, ctrl=miui.systemui.controlcenter.panel.secondary.detail.DetailPanelDelegate@<N>dbc<N>",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 246,
+        "chars": 246,
+        "pct_bytes": 28.941176470588236,
+        "pct_lines": 25.0
+      },
+      {
+        "pattern": "created moduleResources: android.content.res.MiuiResources@c<N>ddd<N>",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 218,
+        "chars": 218,
+        "pct_bytes": 25.647058823529413,
+        "pct_lines": 25.0
+      },
+      {
+        "pattern": "Plugin for systemui control center created.",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 196,
+        "chars": 196,
+        "pct_bytes": 23.058823529411764,
+        "pct_lines": 25.0
+      },
+      {
+        "pattern": "onPackageLoaded: com.android.systemui",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 190,
+        "chars": 190,
+        "pct_bytes": 22.352941176470587,
+        "pct_lines": 25.0
+      }
+    ],
+    "com.sevtinge.hyperceiler": [
+      {
+        "pattern": "at k<N>.intercept(<RMAP>:<N>)",
+        "records": 52,
+        "cont_lines": 1575,
+        "lines": 1627,
+        "bytes": 150293,
+        "chars": 150293,
+        "pct_bytes": 29.5887309524747,
+        "pct_lines": 29.189092213850017
+      },
+      {
+        "pattern": "at j<N>.proceed(<RMAP>:<N>)",
+        "records": 39,
+        "cont_lines": 1206,
+        "lines": 1245,
+        "bytes": 115008,
+        "chars": 115008,
+        "pct_bytes": 22.64204433594519,
+        "pct_lines": 22.33584499461787
+      },
+      {
+        "pattern": "[EzxHookHelper]: [Toast#show()] hook failed",
+        "records": 32,
+        "cont_lines": 991,
+        "lines": 1023,
+        "bytes": 96209,
+        "chars": 96209,
+        "pct_bytes": 18.941016655510495,
+        "pct_lines": 18.353067814854683
+      },
+      {
+        "pattern": "at io.github.kyuubiran.ezxhelper.xposed.common.HookChain.invoke(Unknown Source:<N>)",
+        "records": 30,
+        "cont_lines": 928,
+        "lines": 958,
+        "bytes": 87161,
+        "chars": 87161,
+        "pct_bytes": 17.159703902035673,
+        "pct_lines": 17.186939361320416
+      },
+      {
+        "pattern": "[com.miui.misound][IncreaseSamplingRate]: hook com.miui.misound.mihearingassist.h.b failed by",
+        "records": 4,
+        "cont_lines": 144,
+        "lines": 148,
+        "bytes": 10050,
+        "chars": 10050,
+        "pct_bytes": 1.9785801472614877,
+        "pct_lines": 2.6551847865087908
+      },
+      {
+        "pattern": "[com.miui.misound][IncreaseSamplingRate]: hook com.miui.misound.mihearingassist.h.a failed by",
+        "records": 2,
+        "cont_lines": 72,
+        "lines": 74,
+        "bytes": 5023,
+        "chars": 5023,
+        "pct_bytes": 0.9888963263377565,
+        "pct_lines": 1.3275923932543954
+      },
+      {
+        "pattern": "at com.android.systemui.shade.NotificationPanelViewController.handleShadeTouch(go/retraceme <HEX>:<N>)",
+        "records": 1,
+        "cont_lines": 35,
+        "lines": 36,
+        "bytes": 3071,
+        "chars": 3071,
+        "pct_bytes": 0.6045989683820924,
+        "pct_lines": 0.6458557588805167
+      },
+      {
+        "pattern": "at com.android.systemui.statusbar.phone.StatusBarKeyguardViewManager.showPrimaryBouncer(go/retraceme <HEX>:<N>)",
+        "records": 1,
+        "cont_lines": 27,
+        "lines": 28,
+        "bytes": 3066,
+        "chars": 3066,
+        "pct_bytes": 0.603614600149624,
+        "pct_lines": 0.5023322569070685
+      },
+      {
+        "pattern": "[com.miui.packageinstaller][InstallRiskDisable]: Hook Failed: org.luckypray.dexkit.exceptions.NoResultException: No result found for query",
+        "records": 1,
+        "cont_lines": 40,
+        "lines": 41,
+        "bytes": 3043,
+        "chars": 3043,
+        "pct_bytes": 0.5990865062802693,
+        "pct_lines": 0.7355579476139218
+      },
+      {
+        "pattern": "at com.android.systemui.shade.NotificationPanelViewController$TouchHandler.handleTouch$<N>(go/retraceme <HEX>:<N>)",
+        "records": 1,
+        "cont_lines": 30,
+        "lines": 31,
+        "bytes": 3034,
+        "chars": 3034,
+        "pct_bytes": 0.5973146434618262,
+        "pct_lines": 0.5561535701471116
+      },
+      {
+        "pattern": "at com.android.keyguard.KeyguardSecurityContainerController.showNextSecurityScreenOrFinish(go/retraceme <HEX>:<N>)",
+        "records": 1,
+        "cont_lines": 24,
+        "lines": 25,
+        "bytes": 3033,
+        "chars": 3033,
+        "pct_bytes": 0.5971177698153325,
+        "pct_lines": 0.4485109436670255
+      },
+      {
+        "pattern": "at com.android.systemui.shade.NotificationPanelViewController.-$$Nest$mendMotionEvent(go/retraceme <HEX>:<N>)",
+        "records": 1,
+        "cont_lines": 29,
+        "lines": 30,
+        "bytes": 3028,
+        "chars": 3028,
+        "pct_bytes": 0.5961334015828641,
+        "pct_lines": 0.5382131324004306
+      },
+      {
+        "pattern": "at com.android.systemui.statusbar.phone.CentralSurfacesImpl$$ExternalSyntheticLambda<N>.onTouch(go/retraceme <HEX>:<N>)",
+        "records": 1,
+        "cont_lines": 35,
+        "lines": 36,
+        "bytes": 2908,
+        "chars": 2908,
+        "pct_bytes": 0.5725085640036225,
+        "pct_lines": 0.6458557588805167
+      },
+      {
+        "pattern": "at android.view.ViewGroup.dispatchTransformedTouchEvent(ViewGroup.java:<N>)",
+        "records": 1,
+        "cont_lines": 32,
+        "lines": 33,
+        "bytes": 2609,
+        "chars": 2609,
+        "pct_bytes": 0.513643343702012,
+        "pct_lines": 0.5920344456404736
+      },
+      {
+        "pattern": "[com.miui.packageinstaller][DisableAd]: Hook Failed: java.lang.NullPointerException: Attempt to invoke virtual method 'java.lang.Class[] java.lang.reflect.Method.getParameterTypes()' on a null object reference",
+        "records": 1,
+        "cont_lines": 33,
+        "lines": 34,
+        "bytes": 2567,
+        "chars": 2567,
+        "pct_bytes": 0.5053746505492774,
+        "pct_lines": 0.6099748833871547
+      },
+      {
+        "pattern": "at com.android.systemui.shade.NotificationShadeWindowView.dispatchTouchEvent(go/retraceme <HEX>:<N>)",
+        "records": 1,
+        "cont_lines": 30,
+        "lines": 31,
+        "bytes": 2464,
+        "chars": 2464,
+        "pct_bytes": 0.4850966649604284,
+        "pct_lines": 0.5561535701471116
+      },
+      {
+        "pattern": "at com.android.keyguard.MiuiBleUnlockHelper.tryUnlockByBle(go/retraceme <HEX>:<N>)",
+        "records": 2,
+        "cont_lines": 22,
+        "lines": 24,
+        "bytes": 2346,
+        "chars": 2346,
+        "pct_bytes": 0.4618655746741741,
+        "pct_lines": 0.43057050592034446
+      },
+      {
+        "pattern": "at android.view.ViewRootImpl$ViewPostImeInputStage.onProcess(ViewRootImpl.java:<N>)",
+        "records": 1,
+        "cont_lines": 26,
+        "lines": 27,
+        "bytes": 2076,
+        "chars": 2076,
+        "pct_bytes": 0.40870969012088043,
+        "pct_lines": 0.48439181916038754
+      },
+      {
+        "pattern": "at com.android.keyguard.MiuiBleUnlockHelper$bleListener$<N>.onUnlocked(go/retraceme <HEX>:<N>)",
+        "records": 2,
+        "cont_lines": 18,
+        "lines": 20,
+        "bytes": 1772,
+        "chars": 1772,
+        "pct_bytes": 0.3488601015868016,
+        "pct_lines": 0.35880875493362036
+      },
+      {
+        "pattern": "at android.view.ViewRootImpl$AsyncInputStage.forward(ViewRootImpl.java:<N>)",
+        "records": 1,
+        "cont_lines": 22,
+        "lines": 23,
+        "bytes": 1762,
+        "chars": 1762,
+        "pct_bytes": 0.3468913651218648,
+        "pct_lines": 0.41263006817366343
+      },
+      {
+        "pattern": "at android.os.Looper.loopOnce(Looper.java:<N>)",
+        "records": 3,
+        "cont_lines": 15,
+        "lines": 18,
+        "bytes": 1545,
+        "chars": 1545,
+        "pct_bytes": 0.30416978383273613,
+        "pct_lines": 0.32292787944025836
+      },
+      {
+        "pattern": "at android.view.ViewRootImpl$InputStage.deliver(ViewRootImpl.java:<N>)",
+        "records": 1,
+        "cont_lines": 19,
+        "lines": 20,
+        "bytes": 1537,
+        "chars": 1537,
+        "pct_bytes": 0.3025947946607867,
+        "pct_lines": 0.35880875493362036
+      },
+      {
+        "pattern": "at android.view.ViewRootImpl.deliverInputEvent(ViewRootImpl.java:<N>)",
+        "records": 1,
+        "cont_lines": 14,
+        "lines": 15,
+        "bytes": 1167,
+        "chars": 1167,
+        "pct_bytes": 0.22975154545812498,
+        "pct_lines": 0.2691065662002153
+      },
+      {
+        "pattern": "at android.view.ViewRootImpl$WindowInputEventReceiver.onInputEvent(ViewRootImpl.java:<N>)",
+        "records": 1,
+        "cont_lines": 10,
+        "lines": 11,
+        "bytes": 868,
+        "chars": 868,
+        "pct_bytes": 0.17088632515651456,
+        "pct_lines": 0.1973448152134912
+      },
+      {
+        "pattern": "at android.os.MessageQueue.nativePollOnce(Native Method)",
+        "records": 1,
+        "cont_lines": 8,
+        "lines": 9,
+        "bytes": 691,
+        "chars": 691,
+        "pct_bytes": 0.13603968972713312,
+        "pct_lines": 0.16146393972012918
+      },
+      {
+        "pattern": "at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:<N>)",
+        "records": 2,
+        "cont_lines": 0,
+        "lines": 2,
+        "bytes": 446,
+        "chars": 446,
+        "pct_bytes": 0.08780564633618144,
+        "pct_lines": 0.03588087549336204
+      },
+      {
+        "pattern": "[NewFlashLight]: Failed to set permissions for /sys/class/leds/led:torch_<N>/brightness: CommandResult{result=<N>, successMsg='', errorMsg='chmod: chmod '/sys/class/leds/led:torch_<N>/brightness' to <N>: Permission denied'}",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 375,
+        "chars": 375,
+        "pct_bytes": 0.07382761743513014,
+        "pct_lines": 0.01794043774668102
+      },
+      {
+        "pattern": "at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:<N>)",
+        "records": 1,
+        "cont_lines": 1,
+        "lines": 2,
+        "bytes": 308,
+        "chars": 308,
+        "pct_bytes": 0.06063708312005355,
+        "pct_lines": 0.03588087549336204
+      },
+      {
+        "pattern": "[NewFlashLight]: Path does not exist: /sys/class/flashlight_core/flashlight/torchbrightness",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 248,
+        "chars": 248,
+        "pct_bytes": 0.04882466433043273,
+        "pct_lines": 0.01794043774668102
+      },
+      {
+        "pattern": "[NewFlashLight]: Path does not exist: /sys/class/leds/flashlight/brightness",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 232,
+        "chars": 232,
+        "pct_bytes": 0.04567468598653384,
+        "pct_lines": 0.01794043774668102
+      }
+    ],
+    "com.example.waspwingtempctrl": [
+      {
+        "pattern": "[WaspWingTempCtrl] 状态观测: state=<N> 已持续 <N>s inScanning=false 自锁命中累计=<N>",
+        "records": 2136,
+        "cont_lines": 0,
+        "lines": 2136,
+        "bytes": 575038,
+        "chars": 519502,
+        "pct_bytes": 68.32180652305382,
+        "pct_lines": 67.2544080604534
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] [诊断] connect() 进入 device=<MAC> state=<N>",
+        "records": 233,
+        "cont_lines": 0,
+        "lines": 233,
+        "bytes": 59398,
+        "chars": 57534,
+        "pct_bytes": 7.057235632873568,
+        "pct_lines": 7.336272040302267
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] 后台重连尝试 -> <MAC> state=<N> type=LE",
+        "records": 232,
+        "cont_lines": 0,
+        "lines": 232,
+        "bytes": 58449,
+        "chars": 55665,
+        "pct_bytes": 6.9444823984953565,
+        "pct_lines": 7.30478589420655
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] [诊断] connect() 退出 gatt=有值 throwable=null",
+        "records": 233,
+        "cont_lines": 0,
+        "lines": 233,
+        "bytes": 58000,
+        "chars": 55204,
+        "pct_bytes": 6.8911355046746845,
+        "pct_lines": 7.336272040302267
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] 重连循环心跳: 仍断连（屏幕 亮），tick 线程持续推进",
+        "records": 124,
+        "cont_lines": 0,
+        "lines": 124,
+        "bytes": 33221,
+        "chars": 28013,
+        "pct_bytes": 3.9470760793240984,
+        "pct_lines": 3.9042821158690177
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] 重连循环心跳: 仍断连（屏幕 灭），tick 线程持续推进",
+        "records": 116,
+        "cont_lines": 0,
+        "lines": 116,
+        "bytes": 31084,
+        "chars": 26212,
+        "pct_bytes": 3.6931733797811708,
+        "pct_lines": 3.652392947103275
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] setRunMode 已下发 method=setRunMode 请求mode=<N> SDKmode=<N> temp=<N> windOC=<N> coldOC=<N> windLv=<N> modeCustom=<N> extra=<N>",
+        "records": 16,
+        "cont_lines": 0,
+        "lines": 16,
+        "bytes": 5031,
+        "chars": 4871,
+        "pct_bytes": 0.5977465986899714,
+        "pct_lines": 0.5037783375314862
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] [诊断] <N>s后散热器实际 RPM=<N> 制冷=<N> 热端=<N> 目标=<N>",
+        "records": 16,
+        "cont_lines": 0,
+        "lines": 16,
+        "bytes": 4231,
+        "chars": 3783,
+        "pct_bytes": 0.5026964537979067,
+        "pct_lines": 0.5037783375314862
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] 收到广播 mode=<N> temp=<N> windOC=<N> coldOC=<N> windLv=<N>",
+        "records": 16,
+        "cont_lines": 0,
+        "lines": 16,
+        "bytes": 4023,
+        "chars": 3895,
+        "pct_bytes": 0.47798341612596995,
+        "pct_lines": 0.5037783375314862
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] 控制器：扫描已停止，b<N>x BLE 已连接",
+        "records": 11,
+        "cont_lines": 0,
+        "lines": 11,
+        "bytes": 2662,
+        "chars": 2376,
+        "pct_bytes": 0.31627935712834504,
+        "pct_lines": 0.34634760705289674
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] BLE 断联（onConnectionStateChange） device=<MAC>",
+        "records": 10,
+        "cont_lines": 0,
+        "lines": 10,
+        "bytes": 2600,
+        "chars": 2520,
+        "pct_bytes": 0.30891297089921,
+        "pct_lines": 0.3148614609571788
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] dataInteractionController 已同步到已连接实例 state=<N>",
+        "records": 10,
+        "cont_lines": 0,
+        "lines": 10,
+        "bytes": 2570,
+        "chars": 2390,
+        "pct_bytes": 0.3053485904657576,
+        "pct_lines": 0.3148614609571788
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] [诊断] discoverServices 被调用 device=Flydigi B<N>X",
+        "records": 10,
+        "cont_lines": 0,
+        "lines": 10,
+        "bytes": 2500,
+        "chars": 2400,
+        "pct_bytes": 0.2970317027877019,
+        "pct_lines": 0.3148614609571788
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] ViewModel 修复完成",
+        "records": 11,
+        "cont_lines": 0,
+        "lines": 11,
+        "bytes": 2387,
+        "chars": 2299,
+        "pct_bytes": 0.28360586982169783,
+        "pct_lines": 0.34634760705289674
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] 跳过非目标包: com.example.waspwingtempctrl",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 237,
+        "chars": 225,
+        "pct_bytes": 0.028158605424274143,
+        "pct_lines": 0.031486146095717885
+      },
+      {
+        "pattern": "[WaspWingTempCtrl] LoadPackage: com.example.waspwingtempctrl",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 230,
+        "chars": 230,
+        "pct_bytes": 0.027326916656468577,
+        "pct_lines": 0.031486146095717885
+      }
+    ],
+    "com.taplus.fix": [
+      {
+        "pattern": "TaplusFix: [竞态] Hook TextContentExtensionService.setBitmap() — 就绪",
+        "records": 38,
+        "cont_lines": 0,
+        "lines": 38,
+        "bytes": 8661,
+        "chars": 8281,
+        "pct_bytes": 15.381200163384184,
+        "pct_lines": 14.448669201520913
+      },
+      {
+        "pattern": "TaplusFix: [格式] Hook ContentValues.put(mime_type) — 就绪",
+        "records": 38,
+        "cont_lines": 0,
+        "lines": 38,
+        "bytes": 8243,
+        "chars": 7863,
+        "pct_bytes": 14.638867676570353,
+        "pct_lines": 14.448669201520913
+      },
+      {
+        "pattern": "TaplusFix: [格式] ContentValues mime_type image/png→image/jpeg",
+        "records": 37,
+        "cont_lines": 0,
+        "lines": 37,
+        "bytes": 8139,
+        "chars": 7917,
+        "pct_bytes": 14.454172512387007,
+        "pct_lines": 14.068441064638783
+      },
+      {
+        "pattern": "TaplusFix: [竞态] 阻止 setBitmap(null) — 保护 bitmap",
+        "records": 37,
+        "cont_lines": 0,
+        "lines": 37,
+        "bytes": 7920,
+        "chars": 7402,
+        "pct_bytes": 14.065247118577847,
+        "pct_lines": 14.068441064638783
+      },
+      {
+        "pattern": "TaplusFix: Module loaded for com.miui.contentextension",
+        "records": 38,
+        "cont_lines": 0,
+        "lines": 38,
+        "bytes": 7863,
+        "chars": 7863,
+        "pct_bytes": 13.964019961285052,
+        "pct_lines": 14.448669201520913
+      },
+      {
+        "pattern": "TaplusFix: [格式] Hook Bitmap.compress() — 就绪",
+        "records": 38,
+        "cont_lines": 0,
+        "lines": 38,
+        "bytes": 7825,
+        "chars": 7445,
+        "pct_bytes": 13.896535189756522,
+        "pct_lines": 14.448669201520913
+      },
+      {
+        "pattern": "TaplusFix: [格式] Bitmap.compress 格式 PNG→JPEG",
+        "records": 37,
+        "cont_lines": 0,
+        "lines": 37,
+        "bytes": 7658,
+        "chars": 7288,
+        "pct_bytes": 13.599957378039035,
+        "pct_lines": 14.068441064638783
+      }
+    ],
+    "com.mengdao.galleryanalyze": [
+      {
+        "pattern": "GalleryAnalyze: NightScheduleHook installed",
+        "records": 7,
+        "cont_lines": 0,
+        "lines": 7,
+        "bytes": 1404,
+        "chars": 1404,
+        "pct_bytes": 15.309126594700688,
+        "pct_lines": 16.666666666666668
+      },
+      {
+        "pattern": "GalleryAnalyze: TimeWindowHook installed",
+        "records": 7,
+        "cont_lines": 0,
+        "lines": 7,
+        "bytes": 1383,
+        "chars": 1383,
+        "pct_bytes": 15.080143931959437,
+        "pct_lines": 16.666666666666668
+      },
+      {
+        "pattern": "GalleryAnalyze: SettingsHook installed",
+        "records": 7,
+        "cont_lines": 0,
+        "lines": 7,
+        "bytes": 1369,
+        "chars": 1369,
+        "pct_bytes": 14.927488823465271,
+        "pct_lines": 16.666666666666668
+      },
+      {
+        "pattern": "GalleryAnalyze: hooks installed",
+        "records": 7,
+        "cont_lines": 0,
+        "lines": 7,
+        "bytes": 1320,
+        "chars": 1320,
+        "pct_bytes": 14.39319594373569,
+        "pct_lines": 16.666666666666668
+      },
+      {
+        "pattern": "GalleryAnalyze: night work schedule failed: java.lang.NoSuchMethodError: androidx.work.PeriodicWorkRequest$Builder#setConstraints[class androidx.work.Constraints]#exact",
+        "records": 3,
+        "cont_lines": 0,
+        "lines": 3,
+        "bytes": 975,
+        "chars": 975,
+        "pct_bytes": 10.631337912986588,
+        "pct_lines": 7.142857142857143
+      },
+      {
+        "pattern": "GalleryAnalyze: setSelectable failed: java.lang.reflect.InvocationTargetException",
+        "records": 3,
+        "cont_lines": 0,
+        "lines": 3,
+        "bytes": 709,
+        "chars": 709,
+        "pct_bytes": 7.730890851597427,
+        "pct_lines": 7.142857142857143
+      },
+      {
+        "pattern": "GalleryAnalyze: settings row added to 'others' as miuix.preference.BasePreference",
+        "records": 3,
+        "cont_lines": 0,
+        "lines": 3,
+        "bytes": 709,
+        "chars": 709,
+        "pct_bytes": 7.730890851597427,
+        "pct_lines": 7.142857142857143
+      },
+      {
+        "pattern": "GalleryAnalyze: add settings row failed: java.lang.NoSuchMethodError: com.miui.gallery.ui.GallerySettingsFragment#findPreference[interface java.lang.CharSequence]#exact",
+        "records": 2,
+        "cont_lines": 0,
+        "lines": 2,
+        "bytes": 648,
+        "chars": 648,
+        "pct_bytes": 7.065750736015701,
+        "pct_lines": 4.761904761904762
+      },
+      {
+        "pattern": "GalleryAnalyze: night work scheduled (<N> min, battery not low)",
+        "records": 2,
+        "cont_lines": 0,
+        "lines": 2,
+        "bytes": 437,
+        "chars": 437,
+        "pct_bytes": 4.765020172282194,
+        "pct_lines": 4.761904761904762
+      },
+      {
+        "pattern": "GalleryAnalyze: start requested (execDirectly false,false,<N>)",
+        "records": 1,
+        "cont_lines": 0,
+        "lines": 1,
+        "bytes": 217,
+        "chars": 217,
+        "pct_bytes": 2.3661541816595792,
+        "pct_lines": 2.380952380952381
+      }
+    ],
+    "com.mengdao.lsposedtoolkit": [
+      {
+        "pattern": "TaplusFix: [竞态] Hook TextContentExtensionService.setBitmap() — 就绪",
+        "records": 4,
+        "cont_lines": 0,
+        "lines": 4,
+        "bytes": 960,
+        "chars": 920,
+        "pct_bytes": 21.699819168173597,
+        "pct_lines": 20.0
+      },
+      {
+        "pattern": "TaplusFix: [格式] Hook ContentValues.put(mime_type) — 就绪",
+        "records": 4,
+        "cont_lines": 0,
+        "lines": 4,
+        "bytes": 916,
+        "chars": 876,
+        "pct_bytes": 20.70524412296564,
+        "pct_lines": 20.0
+      },
+      {
+        "pattern": "TaplusFix: [格式] Hook Bitmap.compress() — 就绪",
+        "records": 4,
+        "cont_lines": 0,
+        "lines": 4,
+        "bytes": 872,
+        "chars": 832,
+        "pct_bytes": 19.710669077757686,
+        "pct_lines": 20.0
+      },
+      {
+        "pattern": "LSPosedToolkit: TaplusSaveFormatHook installed",
+        "records": 4,
+        "cont_lines": 0,
+        "lines": 4,
+        "bytes": 844,
+        "chars": 844,
+        "pct_bytes": 19.077757685352623,
+        "pct_lines": 20.0
+      },
+      {
+        "pattern": "LSPosedToolkit: TaplusRaceFixHook installed",
+        "records": 4,
+        "cont_lines": 0,
+        "lines": 4,
+        "bytes": 832,
+        "chars": 832,
+        "pct_bytes": 18.806509945750452,
+        "pct_lines": 20.0
+      }
+    ]
+  },
+  "cont_bytes_by_module": {
+    "com.sevtinge.hyperceiler": 461947
+  },
+  "cont_lines_by_module": {
+    "com.sevtinge.hyperceiler": 5386
+  },
+  "stack_record_bytes_by_module": {
+    "com.sevtinge.hyperceiler": 36560
+  },
+  "stack_record_lines_by_module": {
+    "com.sevtinge.hyperceiler": 145
+  }
+}
