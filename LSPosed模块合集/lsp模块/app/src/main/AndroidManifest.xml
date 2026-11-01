@@ -14,7 +14,7 @@
 
         <meta-data
             android:name="xposeddescription"
-            android:value="传送门保存增强（PNG→JPEG、修复保存竞态）+ 屏蔽状态栏点击回顶" />
+            android:value="传送门保存增强 + 屏蔽状态栏点击回顶 + 相册内容分析控制 + 屏蔽蓝牙解锁toast" />
 
         <meta-data
             android:name="xposedminversion"

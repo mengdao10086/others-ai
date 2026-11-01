@@ -19,6 +19,8 @@ import de.robv.android.xposed.XposedHelpers;
  *
  * 充电广播那条路径另外补一次触发：原来只有插电时才判断电量/温度/息屏，
  * 不插电时永不计入；改为不插电但电量 >92%、温度 <43℃、屏幕熄灭时也触发一次。
+ *
+ * 本类只做门禁放宽，不记录分析决策日志（决策日志统一在 ExecDirectlyLogHook）。
  */
 final class PowerGateHook {
 
@@ -47,23 +49,6 @@ final class PowerGateHook {
         hookExecDirectly(classLoader);
         hookGetIsPlugged(classLoader);
         hookBatteryReceiver(classLoader);
-        logAicrSnapshot(classLoader);
-    }
-
-    /** 装载时先打一条当前 aicr 状态，不用等到下次触发才看得到。 */
-    private static void logAicrSnapshot(ClassLoader classLoader) {
-        try {
-            Class<?> manager = XposedHelpers.findClass(
-                    "com.miui.gallery.assistant.manager.AlgoProgressManager", classLoader);
-            boolean aiClip = (Boolean) XposedHelpers.callStaticMethod(manager, "isAIClipSupport");
-            boolean miAiRunning = (Boolean) XposedHelpers.callStaticMethod(
-                    manager, "isMIAISupportProgress");
-            XposedBridge.log(TAG + ": aicr snapshot isAIClipSupport=" + aiClip
-                    + " isMIAISupportProgress=" + miAiRunning
-                    + " 自动分析" + (aiClip && miAiRunning ? "由 aicr 接管" : "由相册侧执行"));
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + ": aicr snapshot failed: " + t);
-        }
     }
 
     // ------------------------------------------------------------------
@@ -89,7 +74,6 @@ final class PowerGateHook {
                             if (force) {
                                 FORCE_PLUGGED.set(true);
                             }
-                            logDecision(classLoader, startState, charging, battery, force);
                         } catch (Throwable t) {
                             XposedBridge.log(TAG + ": power gate before failed: " + t);
                         }
@@ -158,7 +142,6 @@ final class PowerGateHook {
                             }
                             Class<?> monitorClass = XposedHelpers.findClass(BATTERY_MONITOR_CLASS, classLoader);
                             XposedHelpers.callStaticMethod(monitorClass, "tryTriggerCalc", false);
-                            XposedBridge.log(TAG + ": unplugged high battery, trigger analysis");
                         } catch (Throwable t) {
                             XposedBridge.log(TAG + ": battery trigger failed: " + t);
                         }
@@ -193,31 +176,6 @@ final class PowerGateHook {
         Intent intent = context.registerReceiver(null,
                 new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
         return intent == null ? -1 : batteryPercent(intent);
-    }
-
-    /**
-     * 每次 execDirectly 打一行决策日志，用来回答「夜间任务为什么没跑」：
-     * 电源门禁是否放行、aicr 是否已接管（接管时相册侧本身就不跑）。
-     */
-    private static void logDecision(ClassLoader classLoader, int startState,
-                                    boolean charging, int battery, boolean force) {
-        String aicr;
-        boolean aiClip;
-        boolean miAiRunning;
-        try {
-            Class<?> manager = XposedHelpers.findClass(
-                    "com.miui.gallery.assistant.manager.AlgoProgressManager", classLoader);
-            aiClip = (Boolean) XposedHelpers.callStaticMethod(manager, "isAIClipSupport");
-            miAiRunning = (Boolean) XposedHelpers.callStaticMethod(manager, "isMIAISupportProgress");
-            boolean takeover = startState == 0 && aiClip && miAiRunning;
-            aicr = "isAIClipSupport=" + aiClip + " isMIAISupportProgress=" + miAiRunning
-                    + " aicr接管=" + takeover + (takeover ? "(相册侧跳过)" : "(相册侧执行)");
-        } catch (Throwable t) {
-            aicr = "aicr检测失败(" + t.getClass().getSimpleName() + ")";
-        }
-        XposedBridge.log(TAG + ": execDirectly startState=" + startState
-                + " 充电=" + charging + " 电量=" + battery + "%"
-                + " 电源门禁放行=" + force + " " + aicr);
     }
 
     private static int batteryPercent(Intent intent) {

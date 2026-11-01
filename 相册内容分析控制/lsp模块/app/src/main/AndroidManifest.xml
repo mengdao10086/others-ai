@@ -14,7 +14,7 @@
 
         <meta-data
             android:name="xposeddescription"
-            android:value="相册 AI 内容分析：夜间自动调度 + 设置页手动启动/停止" />
+            android:value="相册内容分析：设置页启停相册侧分析，并联动 aicr 计算" />
 
         <meta-data
             android:name="xposedminversion"

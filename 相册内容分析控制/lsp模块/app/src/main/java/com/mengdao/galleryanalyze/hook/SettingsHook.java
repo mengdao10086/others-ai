@@ -286,8 +286,8 @@ final class SettingsHook {
                         ViewGroup.LayoutParams.WRAP_CONTENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT));
             }
-            setSelectable(preference, false);
             updateControls(itemView, preference);
+            XposedBridge.log(TAG + ": controls injected into widget_frame");
             return;
         }
 
@@ -309,13 +309,12 @@ final class SettingsHook {
             });
             root.addView(single, new ViewGroup.LayoutParams(
                     dp(context, 72), dp(context, 32)));
-            setSelectable(preference, false);
             updateControls(itemView, preference);
+            XposedBridge.log(TAG + ": single toggle button injected");
             return;
         }
 
-        // 降级 2：行点击切换，summary 提示
-        setSelectable(preference, true);
+        // 降级 2：行点击切换，summary 提示（selectable 已在 addRow 里设好，绑定期不能再动）
         setSummary(preference, AnalyzeControl.statusText() + "（点按切换）");
     }
 
@@ -406,8 +405,7 @@ final class SettingsHook {
     private static void updateControls(View itemView, Object preference) throws Exception {
         boolean running = AnalyzeControl.isRunning();
         boolean canceled = running && AnalyzeControl.isCanceled();
-        String status = !running ? "空闲" : (canceled ? "正在停止" : "分析中");
-        setSummary(preference, status);
+        setSummary(preference, AnalyzeControl.statusText());
 
         View controls = itemView.findViewWithTag(CONTROLS_TAG);
         if (controls instanceof LinearLayout) {
@@ -470,7 +468,8 @@ final class SettingsHook {
             Reflect.findMethod(preference.getClass(), "setSelectable", boolean.class)
                     .invoke(preference, selectable);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": setSelectable failed: " + t);
+            Throwable cause = t.getCause() != null ? t.getCause() : t;
+            XposedBridge.log(TAG + ": setSelectable failed: " + cause);
         }
     }
 }

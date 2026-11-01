@@ -1,5 +1,20 @@
 # 变更记录
 
+## 2.1.1 — 2026-11-01
+
+- 新增「屏蔽蓝牙解锁 Toast」：`Toast.makeText` 命中 `miui_keyguard_ble_unlock_succeed_msg` 后记下该 Toast，`Toast.show` 时置空
+- 只做抑制，不改 HyperCeiler 的注册链路；作用域仍是 `com.android.systemui`
+- 模块介绍追加该项
+
+## 2.1.0 — 2026-11-01
+
+- 并入「相册内容分析控制」（原独立模块 `com.mengdao.galleryanalyze` 2.0.6）
+- 新增作用域 `com.miui.gallery` 与 `com.xiaomi.aicr`；相册侧只在主进程安装，aicr 侧只在 `:searchDataService` 安装
+- 新增 `gallery/` 与 `gallery/aicr/` 两组 hook；跨进程广播 action 迁到 `com.mengdao.lsposedtoolkit.action.*`
+- 相册设置页「其他设置」新增一行：启动 / 停止，状态跟随 aicr 真实进度
+- aicr 侧新增 06:00 时间窗收尾（仍在跑就停一次）
+- `xposeddescription` 改为「传送门保存增强 + 屏蔽状态栏点击回顶 + 相册内容分析控制」
+
 ## 2.0.0 — 2026-10-31
 
 - 合并「小米传送门增强」与「状态栏点击回顶屏蔽」为单 APK

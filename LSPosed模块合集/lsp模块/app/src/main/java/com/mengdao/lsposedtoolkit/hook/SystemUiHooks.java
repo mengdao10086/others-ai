@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.hook;
 
+import com.mengdao.lsposedtoolkit.hook.systemui.BleUnlockToastHook;
 import com.mengdao.lsposedtoolkit.hook.systemui.StatusBarClickBlockHook;
 
 import de.robv.android.xposed.XposedBridge;
@@ -20,6 +21,13 @@ public final class SystemUiHooks {
             XposedBridge.log(TAG + ": StatusBarClickBlockHook installed");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": StatusBarClickBlockHook failed: " + t);
+        }
+
+        try {
+            BleUnlockToastHook.install();
+            XposedBridge.log(TAG + ": BleUnlockToastHook installed");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": BleUnlockToastHook failed: " + t);
         }
     }
 }

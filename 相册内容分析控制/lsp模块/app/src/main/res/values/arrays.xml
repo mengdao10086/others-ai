@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- LSPosed 推荐作用域：仅小米相册 -->
+    <!--
+        作用域分两处：
+        com.miui.gallery —— 设置页启停、execDirectly 观测、清理 v1.x 遗留任务
+        com.xiaomi.aicr —— 接收显式广播，在 :searchDataService 进程内发起计算
+    -->
     <string-array name="xposed_scope">
         <item>com.miui.gallery</item>
+        <item>com.xiaomi.aicr</item>
     </string-array>
 </resources>
