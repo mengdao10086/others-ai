@@ -7,7 +7,7 @@
 | 传送门保存增强 | `com.miui.contentextension` | PNG→JPEG、MIME 修正、阻止 `setBitmap(null)` 清空新 bitmap |
 | 状态栏点击回顶屏蔽 | `com.android.systemui` | 屏蔽单击/双击状态栏触发的自动回顶，不影响双击锁屏等手势 |
 | 屏蔽蓝牙解锁 Toast | `com.android.systemui` | 吞掉「已通过蓝牙设备解锁」提示；不改 HyperCeiler 的注册链路 |
-| 相册内容分析控制 | `com.miui.gallery` + `com.xiaomi.aicr` | 相册设置页「其他设置」里加一行，手动启停内容分析；触发转交 aicr，回传真实状态；手动启动只把 aicr 分析线程绑 4-6 并每 3 秒重绑，其它与停止后绑 0-3；自动分析间隔 30 分钟 |
+| 相册内容分析控制 | `com.miui.gallery` + `com.xiaomi.aicr` | 相册设置页「其他设置」里加一行，手动启停内容分析；触发转交 aicr，回传真实状态；手动启动只把 aicr 分析线程绑 4-6 并每 3 秒重绑，其它与停止后绑 0-3 |
 
 各功能常开，无开关；是否生效由 LSPosed 中勾选的作用域决定。
 

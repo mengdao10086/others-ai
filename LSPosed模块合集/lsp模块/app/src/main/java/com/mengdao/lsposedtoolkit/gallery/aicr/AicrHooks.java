@@ -65,13 +65,6 @@ public final class AicrHooks {
         }
 
         try {
-            AicrIntervalHook.install(classLoader);
-            XposedBridge.log(TAG + ": AicrIntervalHook installed");
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + ": AicrIntervalHook failed: " + t);
-        }
-
-        try {
             AicrWindowEndGuard.install(classLoader);
             XposedBridge.log(TAG + ": AicrWindowEndGuard installed");
         } catch (Throwable t) {
