@@ -26,12 +26,19 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
+    // classes.dex 默认 Stored；改回 deflate 压缩以缩小 APK。
+    packaging {
+        dex {
+            useLegacyPackaging = true
         }
     }
 
