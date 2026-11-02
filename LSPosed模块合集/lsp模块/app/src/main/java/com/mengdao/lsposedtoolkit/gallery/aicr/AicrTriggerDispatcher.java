@@ -58,9 +58,9 @@ final class AicrTriggerDispatcher {
                 return;
             }
             if (start) {
-                // 手动启动：大核 4-6；先打标记，状态由空闲转运行时会再次确认。
+                // 手动启动：大核 4-6，并在分析期间每 3 秒重绑；状态转运行时会再确认一次。
                 AicrCpuAffinity.markManualStart();
-                AicrCpuAffinity.bindBig();
+                AicrCpuAffinity.startManual();
             }
             String method = start
                     ? AicrProtocol.METHOD_START_UNLIMITED
@@ -77,8 +77,8 @@ final class AicrTriggerDispatcher {
                     + " from " + source + "): " + t);
         } finally {
             if (!start) {
-                // 分析停止：无论 provider 是否成功，都落到小核 0-3。
-                AicrCpuAffinity.bindSmall();
+                // 分析停止：退出手动模式并绑回小核 0-3。
+                AicrCpuAffinity.stopManual();
             }
         }
     }

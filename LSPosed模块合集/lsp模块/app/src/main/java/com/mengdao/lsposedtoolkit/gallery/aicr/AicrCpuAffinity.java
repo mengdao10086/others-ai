@@ -2,6 +2,8 @@ package com.mengdao.lsposedtoolkit.gallery.aicr;
 
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.SystemClock;
 
 import java.io.File;
@@ -10,10 +12,11 @@ import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
- * aicr 分析进程的 CPU 亲和性控制。
+ * aicr 分析线程的 CPU 亲和性控制。
  *
- * 只在 :searchDataService 进程内使用。手动启动绑大核 4-6，其它分析与停止后绑小核 0-3。
- * 原生库从模块 APK 里直接加载，失败只记日志，绝不影响分析。
+ * 只作用于 aicr 自己命名的 AISearchWork* 线程（comm 截断到 15 字符，按前缀匹配）。
+ * 手动启动后绑大核 4-6，并每 3 秒重绑一次：aicr 自己会调 shieldCPU(tid, 4) 把该线程绑回低核。
+ * 其它分析与停止后绑小核 0-3。原生库加载失败只记日志，不影响分析。
  */
 final class AicrCpuAffinity {
 
@@ -21,7 +24,11 @@ final class AicrCpuAffinity {
     private static final String MODULE_PACKAGE = "com.mengdao.lsposedtoolkit";
     private static final String LIB_NAME = "libmengdao_cpuaff.so";
     private static final String ABI = "arm64-v8a";
+    private static final String TARGET_THREAD = "AISearchWorkThr";
+    private static final String AFFINITY_THREAD_NAME = "mengdao-aicr-affinity";
     private static final long MANUAL_WINDOW_MS = 5000L;
+    private static final long MANUAL_REBIND_MS = 3000L;
+    private static final int ENOENT = 2;
 
     static final int MASK_BIG = 0x70;   // cpu 4-6
     static final int MASK_SMALL = 0x0F; // cpu 0-3
@@ -30,7 +37,11 @@ final class AicrCpuAffinity {
     private static boolean sLoadTried;
     private static boolean sAvailable;
     private static volatile long sManualAt;
-    private static volatile int sCurrentMask = -1;
+    private static volatile boolean sManualActive;
+    private static HandlerThread sThread;
+    private static Handler sHandler;
+    private static boolean sThreadInitialized;
+    private static int sLastResult = Integer.MIN_VALUE;
 
     private AicrCpuAffinity() {
     }
@@ -39,7 +50,7 @@ final class AicrCpuAffinity {
         sModulePath = modulePath;
     }
 
-    /** 标记下一次「空闲 → 运行」是手动启动，5 秒内有效。 */
+    /** 标记这一次「空闲 → 运行」是手动启动，5 秒内有效。 */
     static void markManualStart() {
         sManualAt = SystemClock.elapsedRealtime();
     }
@@ -51,30 +62,107 @@ final class AicrCpuAffinity {
         return at > 0L && SystemClock.elapsedRealtime() - at <= MANUAL_WINDOW_MS;
     }
 
-    static void bindBig() {
-        bind(MASK_BIG);
+    /** 手动模式：立即绑 4-6，并每 3 秒重绑一次，抵消 aicr 自己的 shieldCPU。 */
+    static void startManual() {
+        sManualActive = true;
+        postBind(MASK_BIG);
+        Handler handler = handler();
+        if (handler != null) {
+            handler.removeCallbacks(REBIND);
+            handler.postDelayed(REBIND, MANUAL_REBIND_MS);
+        }
+    }
+
+    /** 退出手动模式并绑回 0-3。 */
+    static void stopManual() {
+        sManualActive = false;
+        Handler handler = sHandler;
+        if (handler != null) {
+            handler.removeCallbacks(REBIND);
+        }
+        postBind(MASK_SMALL);
     }
 
     static void bindSmall() {
-        bind(MASK_SMALL);
+        postBind(MASK_SMALL);
     }
 
-    private static synchronized void bind(int mask) {
-        if (mask == sCurrentMask || !load()) {
+    private static final Runnable REBIND = new Runnable() {
+        @Override
+        public void run() {
+            if (!sManualActive) {
+                return;
+            }
+            bindNow(MASK_BIG);
+            Handler handler = sHandler;
+            if (handler != null && sManualActive) {
+                handler.postDelayed(this, MANUAL_REBIND_MS);
+            }
+        }
+    };
+
+    private static void postBind(final int mask) {
+        Handler handler = handler();
+        if (handler != null) {
+            handler.post(new Runnable() {
+                @Override
+                public void run() {
+                    bindNow(mask);
+                }
+            });
+        } else {
+            bindNow(mask);
+        }
+    }
+
+    private static void bindNow(int mask) {
+        if (!load()) {
             return;
         }
         try {
-            int result = nativeBind(mask);
+            int result = nativeBindThread(mask, TARGET_THREAD);
+            if (result == -ENOENT) {
+                logOnce("cpu affinity waiting for " + TARGET_THREAD + " thread");
+                return;
+            }
             if (result < 0) {
-                XposedBridge.log(TAG + ": cpu affinity mask=0x" + Integer.toHexString(mask)
+                logOnce("cpu affinity mask=0x" + Integer.toHexString(mask)
                         + " skipped (errno=" + (-result) + ")");
                 return;
             }
-            sCurrentMask = mask;
-            XposedBridge.log(TAG + ": cpu affinity applied mask=0x" + Integer.toHexString(result));
+            logOnce("cpu affinity applied mask=0x" + Integer.toHexString(result));
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": cpu affinity failed: " + t);
+            logOnce("cpu affinity failed: " + t);
         }
+    }
+
+    /** 同样的结果只写一次日志，避免 3 秒循环刷屏。 */
+    private static void logOnce(String message) {
+        int hash = message.hashCode();
+        if (hash == sLastResult) {
+            return;
+        }
+        sLastResult = hash;
+        XposedBridge.log(TAG + ": " + message);
+    }
+
+    private static synchronized Handler handler() {
+        if (sThreadInitialized) {
+            return sHandler;
+        }
+        sThreadInitialized = true;
+        try {
+            HandlerThread thread = new HandlerThread(AFFINITY_THREAD_NAME);
+            thread.setDaemon(true);
+            thread.start();
+            sThread = thread;
+            sHandler = new Handler(thread.getLooper());
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": affinity thread start failed: " + t);
+            sThread = null;
+            sHandler = null;
+        }
+        return sHandler;
     }
 
     private static boolean load() {
@@ -137,5 +225,5 @@ final class AicrCpuAffinity {
         }
     }
 
-    private static native int nativeBind(int mask);
+    private static native int nativeBindThread(int mask, String namePrefix);
 }

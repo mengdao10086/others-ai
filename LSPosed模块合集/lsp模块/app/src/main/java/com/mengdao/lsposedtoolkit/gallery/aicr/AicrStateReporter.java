@@ -70,23 +70,28 @@ final class AicrStateReporter {
     private static void onStatusChanged(int status) {
         try {
             int previous = sStatus;
-            sStatus = status;
+            int normalized = status > 0 ? status : STATUS_IDLE;
+            sStatus = normalized;
             XposedBridge.log(TAG + ": aicr runningStatus=" + status);
             Handler handler = handler();
-            if (status == STATUS_IDLE) {
+            if (normalized == STATUS_IDLE) {
                 stopLoop();
-                // 分析停止：落到小核 0-3
-                applyAffinity(false);
-                report(status, -1);
+                // 分析停止：退出大核模式并绑回 0-3
+                AicrCpuAffinity.stopManual();
+                report(STATUS_IDLE, -1);
                 return;
             }
             if (previous == STATUS_IDLE) {
                 // 空闲 → 运行：只有手动启动走大核，其余分析走小核
-                applyAffinity(AicrCpuAffinity.consumeManualStart());
+                if (AicrCpuAffinity.consumeManualStart()) {
+                    AicrCpuAffinity.startManual();
+                } else {
+                    AicrCpuAffinity.bindSmall();
+                }
             }
             sLastProgressBroadcastAt = 0L;
             if (handler == null) {
-                report(status, -1);
+                report(normalized, -1);
                 return;
             }
             handler.post(IMMEDIATE_BROADCAST);
@@ -104,43 +109,19 @@ final class AicrStateReporter {
                 handler.post(QUERY_REPORT);
             } else {
                 // 没有后台线程时绝不读进度：主线程读 Room 会抛异常并被 aicr 吞成 0
-                report(currentStatus(), -1);
+                report(sStatus, -1);
             }
             return;
         }
         QUERY_REPORT.run();
     }
 
-    /** 亲和性设置放到进度线程，避免卡到 aicr 主线程。 */
-    private static void applyAffinity(boolean big) {
-        Runnable task = big ? BIND_BIG : BIND_SMALL;
-        Handler handler = handler();
-        if (handler != null) {
-            handler.post(task);
-        } else {
-            task.run();
-        }
-    }
-
-    private static final Runnable BIND_BIG = new Runnable() {
-        @Override
-        public void run() {
-            AicrCpuAffinity.bindBig();
-        }
-    };
-
-    private static final Runnable BIND_SMALL = new Runnable() {
-        @Override
-        public void run() {
-            AicrCpuAffinity.bindSmall();
-        }
-    };
-
     private static final Runnable QUERY_REPORT = new Runnable() {
         @Override
         public void run() {
-            int status = currentStatus();
-            sStatus = status;
+            // sStatus 来自本进程的 setRunningStatus hook，是实时值；
+            // 不能用 getRunningStatus()，它读 SharedPreferences，开机会带出上次运行的旧值。
+            int status = sStatus;
             if (status == STATUS_IDLE) {
                 stopLoop();
                 report(status, -1);
@@ -154,43 +135,6 @@ final class AicrStateReporter {
             sLastProgressBroadcastAt = SystemClock.elapsedRealtime();
         }
     };
-
-    /** 读 aicr 当前运行状态；方法缺失时回落到 hook 缓存值。 */
-    private static int currentStatus() {
-        try {
-            Class<?> statusClass = XposedHelpers.findClassIfExists(
-                    RUNNING_STATUS_CLASS, sClassLoader);
-            if (statusClass == null) {
-                return sStatus;
-            }
-            Object value = callStatusGetter(statusClass, true);
-            if (value instanceof Integer) {
-                return (Integer) value;
-            }
-            Object instance = XposedHelpers.getStaticObjectField(statusClass, "INSTANCE");
-            value = callStatusGetter(instance, false);
-            if (value instanceof Integer) {
-                return (Integer) value;
-            }
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + ": status lookup failed: " + t);
-        }
-        return sStatus;
-    }
-
-    private static Object callStatusGetter(Object target, boolean isStatic) {
-        String[] names = {"getRunningStatus", "getRunStatus"};
-        for (String name : names) {
-            try {
-                return isStatic
-                        ? XposedHelpers.callStaticMethod((Class<?>) target, name)
-                        : XposedHelpers.callMethod(target, name);
-            } catch (Throwable ignored) {
-                // 试下一个名字
-            }
-        }
-        return null;
-    }
 
     private static final Runnable IMMEDIATE_BROADCAST = new Runnable() {
         @Override
