@@ -55,6 +55,13 @@ public final class AicrHooks {
         }
 
         try {
+            AicrProgressDiagnostics.install(classLoader);
+            XposedBridge.log(TAG + ": AicrProgressDiagnostics installed");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": AicrProgressDiagnostics failed: " + t);
+        }
+
+        try {
             AicrWindowEndGuard.install(classLoader);
             XposedBridge.log(TAG + ": AicrWindowEndGuard installed");
         } catch (Throwable t) {

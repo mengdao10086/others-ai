@@ -3,7 +3,8 @@ package com.mengdao.galleryanalyze.hook.aicr;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Handler;
-import android.os.Looper;
+import android.os.HandlerThread;
+import android.os.SystemClock;
 
 import com.mengdao.galleryanalyze.hook.AicrProtocol;
 
@@ -15,8 +16,13 @@ import de.robv.android.xposed.XposedHelpers;
  * 把 aicr 的真实运行状态回传给相册。
  *
  * 相册设置页原先只读自己进程里的 isRunning，aicr 在 :searchDataService 里算多久都显示「空闲」。
- * 这里 hook RunningStatus.setRunningStatus：每次状态变化立刻广播一次；非空闲期间每 3 秒
- * 补一次进度，让相册那边的进度能走动。只读，不改变任何状态。
+ * 这里 hook RunningStatus.setRunningStatus：状态变化立即广播；非空闲期间每秒检查一次进度，
+ * 最多每 5 秒广播一次。只读，不改变任何状态。
+ *
+ * 进度读取必须离开主线程：ManagerDataBase 未开 allowMainThreadQueries，主线程访问 QueryDao
+ * 会抛 IllegalStateException，被 getRealProgressFromAI 吞掉后返回 0，再把 0 写回
+ * migrate_gallery_progress，相册搜索页就显示 0。这里改用独立 HandlerThread 读取。
+ * 后台线程启动失败时降级为「只报状态、不读进度」，绝不回退到主线程读取。
  */
 final class AicrStateReporter {
 
@@ -25,13 +31,18 @@ final class AicrStateReporter {
             "com.xiaomi.aicr.searchpro.monitor.RunningStatus";
     private static final String PROGRESS_MONITOR_CLASS =
             "com.xiaomi.aicr.searchpro.monitor.ProgressMonitor";
-    private static final long PROGRESS_INTERVAL_MS = 3000L;
+    private static final String PROGRESS_THREAD_NAME = "mengdao-aicr-progress";
+    private static final long POLL_INTERVAL_MS = 1000L;
+    private static final long BROADCAST_INTERVAL_MS = 5000L;
     private static final int STATUS_IDLE = 0;
 
     private static ClassLoader sClassLoader;
+    private static HandlerThread sThread;
     private static Handler sHandler;
+    private static boolean sHandlerInitialized;
     private static volatile int sStatus = STATUS_IDLE;
     private static volatile boolean sLooping;
+    private static volatile long sLastProgressBroadcastAt;
 
     private AicrStateReporter() {
     }
@@ -42,6 +53,9 @@ final class AicrStateReporter {
         if (statusClass == null) {
             XposedBridge.log(TAG + ": RunningStatus not found, skip state reporting");
             return;
+        }
+        if (handler() == null) {
+            XposedBridge.log(TAG + ": progress thread unavailable, status-only mode");
         }
         XposedHelpers.findAndHookMethod(statusClass, "setRunningStatus", int.class,
                 new XC_MethodHook() {
@@ -56,29 +70,49 @@ final class AicrStateReporter {
         try {
             sStatus = status;
             XposedBridge.log(TAG + ": aicr runningStatus=" + status);
-            report(status, currentProgress());
+            Handler handler = handler();
             if (status == STATUS_IDLE) {
                 stopLoop();
-            } else {
-                startLoop();
+                report(status, -1);
+                return;
             }
+            sLastProgressBroadcastAt = 0L;
+            if (handler == null) {
+                report(status, -1);
+                return;
+            }
+            handler.post(IMMEDIATE_BROADCAST);
+            startLoop(handler);
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": state report failed: " + t);
         }
     }
 
-    private static void startLoop() {
+    private static final Runnable IMMEDIATE_BROADCAST = new Runnable() {
+        @Override
+        public void run() {
+            int status = sStatus;
+            if (status == STATUS_IDLE) {
+                return;
+            }
+            report(status, currentProgress());
+            sLastProgressBroadcastAt = SystemClock.elapsedRealtime();
+        }
+    };
+
+    private static void startLoop(Handler handler) {
         if (sLooping) {
             return;
         }
         sLooping = true;
-        handler().postDelayed(LOOP, PROGRESS_INTERVAL_MS);
+        handler.postDelayed(LOOP, POLL_INTERVAL_MS);
     }
 
     private static void stopLoop() {
         sLooping = false;
-        if (sHandler != null) {
-            sHandler.removeCallbacks(LOOP);
+        Handler handler = sHandler;
+        if (handler != null) {
+            handler.removeCallbacks(LOOP);
         }
     }
 
@@ -89,19 +123,41 @@ final class AicrStateReporter {
                 return;
             }
             try {
-                report(sStatus, currentProgress());
+                int status = sStatus;
+                if (status == STATUS_IDLE) {
+                    stopLoop();
+                    return;
+                }
+                long now = SystemClock.elapsedRealtime();
+                if (now - sLastProgressBroadcastAt >= BROADCAST_INTERVAL_MS) {
+                    report(status, currentProgress());
+                    sLastProgressBroadcastAt = now;
+                }
             } catch (Throwable t) {
                 XposedBridge.log(TAG + ": progress report failed: " + t);
             }
-            if (sLooping) {
-                handler().postDelayed(this, PROGRESS_INTERVAL_MS);
+            Handler handler = sHandler;
+            if (sLooping && handler != null) {
+                handler.postDelayed(this, POLL_INTERVAL_MS);
             }
         }
     };
 
-    private static Handler handler() {
-        if (sHandler == null) {
-            sHandler = new Handler(Looper.getMainLooper());
+    private static synchronized Handler handler() {
+        if (sHandlerInitialized) {
+            return sHandler;
+        }
+        sHandlerInitialized = true;
+        try {
+            HandlerThread thread = new HandlerThread(PROGRESS_THREAD_NAME);
+            thread.setDaemon(true);
+            thread.start();
+            sThread = thread;
+            sHandler = new Handler(thread.getLooper());
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": progress thread start failed: " + t);
+            sThread = null;
+            sHandler = null;
         }
         return sHandler;
     }
@@ -141,6 +197,7 @@ final class AicrStateReporter {
     /**
      * 读相册建的索引进度（0~100）。取不到就返回 -1，相册侧按「只显示分析中」处理。
      * getIndexProgress 是带默认参数的 Kotlin 方法，走 $default 合成方法调用。
+     * 必须在后台线程调用：内部会访问 Room，主线程会抛 IllegalStateException。
      */
     private static int currentProgress() {
         try {
