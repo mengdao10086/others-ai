@@ -28,8 +28,10 @@ final class AiCrSearchDataBaseServiceHook {
     private static final String SOURCE = "service";
     private static final long START_KEEP_ALIVE_MS = 90_000L;
     private static final long STOP_SETTLE_MS = 15_000L;
+    private static final long RUNNING_RECHECK_MS = 60_000L;
 
     private static ExecutorService sExecutor;
+    private static volatile boolean sKeepLogged;
 
     private AiCrSearchDataBaseServiceHook() {
     }
@@ -76,7 +78,7 @@ final class AiCrSearchDataBaseServiceHook {
             long delay = AicrProtocol.ACTION_START.equals(action)
                     ? START_KEEP_ALIVE_MS
                     : STOP_SETTLE_MS;
-            scheduleStopSelf(service, delay);
+            scheduleStopCheck(service, delay);
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": aicr service hook failed: " + t);
         }
@@ -93,10 +95,23 @@ final class AiCrSearchDataBaseServiceHook {
         return null;
     }
 
-    private static void scheduleStopSelf(Object service, long delayMs) {
+    /**
+     * 到点先看是否还在分析：还在跑就不停止，隔 60 秒再查一次；
+     * 空闲后才 stopSelf。分析期间保持前台，避免进程被降级到只含小核的 cpuset。
+     */
+    private static void scheduleStopCheck(Object service, long delayMs) {
         try {
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 try {
+                    if (AicrStateReporter.isRunningNow()) {
+                        if (!sKeepLogged) {
+                            sKeepLogged = true;
+                            XposedBridge.log(TAG + ": analysis running, keep-alive service kept");
+                        }
+                        scheduleStopCheck(service, RUNNING_RECHECK_MS);
+                        return;
+                    }
+                    sKeepLogged = false;
                     XposedHelpers.callMethod(service, "stopSelf");
                     XposedBridge.log(TAG + ": aicr keep-alive service stopped");
                 } catch (Throwable t) {
@@ -104,7 +119,7 @@ final class AiCrSearchDataBaseServiceHook {
                 }
             }, delayMs);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": schedule stopSelf failed: " + t);
+            XposedBridge.log(TAG + ": schedule stop check failed: " + t);
         }
     }
 }

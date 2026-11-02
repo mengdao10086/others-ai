@@ -101,6 +101,11 @@ final class AicrStateReporter {
         }
     }
 
+    /** 当前是否在分析；给保活服务判断能否停止。 */
+    static boolean isRunningNow() {
+        return sStatus > 0;
+    }
+
     /** 相册主动查询：立即回报一次当前状态与进度（进度仍在后台线程读）。 */
     static void reportNow() {
         if (Looper.myLooper() == Looper.getMainLooper()) {

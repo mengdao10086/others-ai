@@ -142,19 +142,12 @@ final class AicrCpuAffinity {
         }
         int tid = state[0];
         int mask = state[1];
-        if (tid != sLastTid) {
-            sLastTid = tid;
-            XposedBridge.log(TAG + ": affinity target tid=" + tid
-                    + " mask=0x" + Integer.toHexString(mask));
-        }
+        sLastTid = tid;
         if (mask != sLastObservedMask) {
             sLastObservedMask = mask;
-            if (mask == MASK_BIG) {
-                XposedBridge.log(TAG + ": affinity back to 0x"
-                        + Integer.toHexString(mask) + " (4-6)");
-            } else {
-                XposedBridge.log(TAG + ": affinity changed to 0x"
-                        + Integer.toHexString(mask) + " (was 4-6), rebinding");
+            if (mask != MASK_BIG) {
+                XposedBridge.log(TAG + ": affinity lost 4-6, now 0x"
+                        + Integer.toHexString(mask));
             }
         }
         if (mask == MASK_BIG) {
@@ -168,14 +161,12 @@ final class AicrCpuAffinity {
         }
         if (after == MASK_BIG) {
             sLastObservedMask = MASK_BIG;
-            XposedBridge.log(TAG + ": affinity restored to 0x70 (4-6)");
+            XposedBridge.log(TAG + ": affinity restored to 4-6");
         } else {
             int errno = applied < 0 ? -applied : EINVAL;
             logOnce(errno == EINVAL
-                    ? "cpu affinity blocked by cpuset (errno=22), thread mask=0x"
-                    + Integer.toHexString(after)
-                    : "cpu affinity rebind failed (errno=" + errno
-                    + "), thread mask=0x" + Integer.toHexString(after));
+                    ? "cpu affinity blocked by cpuset (errno=22)"
+                    : "cpu affinity rebind failed (errno=" + errno + ")");
         }
     }
 
