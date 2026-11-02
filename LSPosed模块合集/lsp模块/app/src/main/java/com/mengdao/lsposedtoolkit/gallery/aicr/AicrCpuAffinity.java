@@ -29,6 +29,7 @@ final class AicrCpuAffinity {
     private static final long MANUAL_WINDOW_MS = 5000L;
     private static final long MANUAL_REBIND_MS = 3000L;
     private static final int ENOENT = 2;
+    private static final int EINVAL = 22;
 
     static final int MASK_BIG = 0x70;   // cpu 4-6
     static final int MASK_SMALL = 0x0F; // cpu 0-3
@@ -42,6 +43,9 @@ final class AicrCpuAffinity {
     private static Handler sHandler;
     private static boolean sThreadInitialized;
     private static int sLastResult = Integer.MIN_VALUE;
+    private static int sLastObservedMask = Integer.MIN_VALUE;
+    /** -2 = 还没见过目标线程，-1 = 已消失，>=0 = 当前 tid。 */
+    private static int sLastTid = -2;
 
     private AicrCpuAffinity() {
     }
@@ -62,20 +66,25 @@ final class AicrCpuAffinity {
         return at > 0L && SystemClock.elapsedRealtime() - at <= MANUAL_WINDOW_MS;
     }
 
-    /** 手动模式：立即绑 4-6，并每 3 秒重绑一次，抵消 aicr 自己的 shieldCPU。 */
+    /** 手动模式：立即绑 4-6，并每 3 秒检查/重绑一次，抵消 aicr 的 shieldCPU 或 cpuset 变化。 */
     static void startManual() {
         sManualActive = true;
-        postBind(MASK_BIG);
+        sLastObservedMask = Integer.MIN_VALUE;
+        sLastTid = -2;
         Handler handler = handler();
         if (handler != null) {
             handler.removeCallbacks(REBIND);
-            handler.postDelayed(REBIND, MANUAL_REBIND_MS);
+            handler.post(REBIND);
+        } else {
+            monitorAndRebind();
         }
     }
 
     /** 退出手动模式并绑回 0-3。 */
     static void stopManual() {
         sManualActive = false;
+        sLastObservedMask = Integer.MIN_VALUE;
+        sLastTid = -2;
         Handler handler = sHandler;
         if (handler != null) {
             handler.removeCallbacks(REBIND);
@@ -93,13 +102,82 @@ final class AicrCpuAffinity {
             if (!sManualActive) {
                 return;
             }
-            bindNow(MASK_BIG);
+            monitorAndRebind();
             Handler handler = sHandler;
             if (handler != null && sManualActive) {
                 handler.postDelayed(this, MANUAL_REBIND_MS);
             }
         }
     };
+
+    /**
+     * 读目标线程的真实亲和性，和 4-6 不一致就重绑。
+     * 掩码变化各记一条：被改成 0-3 记一条，重绑回 4-6 再记一条。
+     */
+    private static void monitorAndRebind() {
+        if (!load()) {
+            return;
+        }
+        int[] state = new int[2];
+        int rc;
+        try {
+            rc = nativeThreadState(TARGET_THREAD, state);
+        } catch (Throwable t) {
+            logOnce("thread state failed: " + t);
+            return;
+        }
+        if (rc == -ENOENT) {
+            if (sLastTid >= 0) {
+                XposedBridge.log(TAG + ": affinity target thread gone");
+                sLastTid = -1;
+            } else if (sLastTid == -2) {
+                XposedBridge.log(TAG + ": cpu affinity waiting for " + TARGET_THREAD + " thread");
+                sLastTid = -1;
+            }
+            return;
+        }
+        if (rc < 0) {
+            logOnce("thread state failed (errno=" + (-rc) + ")");
+            return;
+        }
+        int tid = state[0];
+        int mask = state[1];
+        if (tid != sLastTid) {
+            sLastTid = tid;
+            XposedBridge.log(TAG + ": affinity target tid=" + tid
+                    + " mask=0x" + Integer.toHexString(mask));
+        }
+        if (mask != sLastObservedMask) {
+            sLastObservedMask = mask;
+            if (mask == MASK_BIG) {
+                XposedBridge.log(TAG + ": affinity back to 0x"
+                        + Integer.toHexString(mask) + " (4-6)");
+            } else {
+                XposedBridge.log(TAG + ": affinity changed to 0x"
+                        + Integer.toHexString(mask) + " (was 4-6), rebinding");
+            }
+        }
+        if (mask == MASK_BIG) {
+            return;
+        }
+
+        int applied = nativeBindThread(MASK_BIG, TARGET_THREAD);
+        int after = -1;
+        if (nativeThreadState(TARGET_THREAD, state) == 0) {
+            after = state[1];
+        }
+        if (after == MASK_BIG) {
+            sLastObservedMask = MASK_BIG;
+            XposedBridge.log(TAG + ": affinity restored to 0x70 (4-6)");
+        } else {
+            int errno = applied < 0 ? -applied : EINVAL;
+            logOnce(errno == EINVAL
+                    ? "cpu affinity blocked by cpuset (errno=22), thread mask=0x"
+                    + Integer.toHexString(after)
+                    : "cpu affinity rebind failed (errno=" + errno
+                    + "), thread mask=0x" + Integer.toHexString(after));
+        }
+    }
 
     private static void postBind(final int mask) {
         Handler handler = handler();
@@ -226,4 +304,6 @@ final class AicrCpuAffinity {
     }
 
     private static native int nativeBindThread(int mask, String namePrefix);
+
+    private static native int nativeThreadState(String namePrefix, int[] out);
 }

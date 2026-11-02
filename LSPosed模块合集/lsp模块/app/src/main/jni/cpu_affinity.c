@@ -107,3 +107,54 @@ Java_com_mengdao_lsposedtoolkit_gallery_aicr_AicrCpuAffinity_nativeBindThread(
     (*env)->ReleaseStringUTFChars(env, prefix, chars);
     return result;
 }
+
+/* 读取第一个匹配线程的 tid 与当前亲和掩码，out[0]=tid, out[1]=mask。 */
+JNIEXPORT jint JNICALL
+Java_com_mengdao_lsposedtoolkit_gallery_aicr_AicrCpuAffinity_nativeThreadState(
+        JNIEnv *env, jclass clazz, jstring prefix, jintArray out) {
+    (void) clazz;
+    if (prefix == NULL || out == NULL) {
+        return -EINVAL;
+    }
+    const char *chars = (*env)->GetStringUTFChars(env, prefix, NULL);
+    if (chars == NULL) {
+        return -ENOMEM;
+    }
+
+    int result = -ENOENT;
+    DIR *dir = opendir("/proc/self/task");
+    if (dir == NULL) {
+        result = -errno;
+    } else {
+        struct dirent *entry;
+        while (result == -ENOENT && (entry = readdir(dir)) != NULL) {
+            const char *name = entry->d_name;
+            if (name[0] < '0' || name[0] > '9') {
+                continue;
+            }
+            pid_t tid = (pid_t) atoi(name);
+            if (tid <= 0 || !comm_matches(tid, chars)) {
+                continue;
+            }
+            cpu_set_t current;
+            CPU_ZERO(&current);
+            if (sched_getaffinity(tid, sizeof(current), &current) != 0) {
+                result = -errno;
+                break;
+            }
+            unsigned int mask = 0;
+            for (int i = 0; i < MAX_CPUS; i++) {
+                if (CPU_ISSET(i, &current)) {
+                    mask |= (1u << i);
+                }
+            }
+            jint values[2] = {(jint) tid, (jint) mask};
+            (*env)->SetIntArrayRegion(env, out, 0, 2, values);
+            result = 0;
+        }
+        closedir(dir);
+    }
+
+    (*env)->ReleaseStringUTFChars(env, prefix, chars);
+    return result;
+}
