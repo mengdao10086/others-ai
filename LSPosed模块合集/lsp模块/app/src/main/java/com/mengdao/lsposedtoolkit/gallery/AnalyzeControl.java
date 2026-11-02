@@ -60,7 +60,10 @@ final class AnalyzeControl {
     }
 
     static String statusText() {
-        AicrStateReceiver.ensureRegistered(appContext());
+        Context context = appContext();
+        AicrStateReceiver.ensureRegistered(context);
+        // 设置页首次渲染时主动问一次 aicr，避免等下一次周期广播
+        AicrTrigger.sendQuery(context);
         if (AicrStateReceiver.isRunning()) {
             int progress = AicrStateReceiver.progress();
             if (progress > 0) {

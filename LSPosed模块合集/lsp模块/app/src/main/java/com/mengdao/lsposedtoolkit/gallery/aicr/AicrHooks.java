@@ -19,12 +19,15 @@ public final class AicrHooks {
     private AicrHooks() {
     }
 
-    public static void install(String packageName, String processName, ClassLoader classLoader) {
+    public static void install(String packageName, String processName, ClassLoader classLoader,
+                               String modulePath) {
         if (!AicrProtocol.PACKAGE.equals(packageName)
                 || processName == null
                 || !processName.endsWith(SERVICE_PROCESS_SUFFIX)) {
             return;
         }
+
+        AicrCpuAffinity.init(modulePath);
 
         try {
             AiCrSearchDataBaseServiceHook.install(classLoader);

@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.os.Build;
 
 import de.robv.android.xposed.XposedBridge;
@@ -19,6 +20,11 @@ final class AicrStateReceiver extends BroadcastReceiver {
 
     private static final String TAG = "GalleryAnalyze";
     private static final long FRESH_MS = 20_000L;
+    private static final String PREFS = "mengdao_gallery_analyze_state";
+    private static final String KEY_STATUS = "status";
+    private static final String KEY_PROGRESS = "progress";
+    private static final String KEY_STARTED_AT = "started_at";
+    private static final String KEY_SAVED_AT = "saved_at";
 
     private static final AicrStateReceiver INSTANCE = new AicrStateReceiver();
 
@@ -29,6 +35,18 @@ final class AicrStateReceiver extends BroadcastReceiver {
     private static volatile boolean sRegistered;
 
     private AicrStateReceiver() {
+    }
+
+    /**
+     * 相册进程启动时调用：注册接收器，并把上一次落盘的状态恢复回来，
+     * 让设置页首次渲染就有值，而不是先显示「空闲」。
+     */
+    static void init(Context context) {
+        if (context == null) {
+            return;
+        }
+        ensureRegistered(context);
+        restore(context);
     }
 
     static void ensureRegistered(Context context) {
@@ -58,6 +76,44 @@ final class AicrStateReceiver extends BroadcastReceiver {
         sProgress = intent.getIntExtra(AicrProtocol.EXTRA_PROGRESS, -1);
         sStartedAt = intent.getLongExtra(AicrProtocol.EXTRA_STARTED_AT, 0L);
         sUpdatedAt = System.currentTimeMillis();
+        persist(context);
+    }
+
+    /** 把最新状态落盘，供相册进程下次启动时立即恢复。 */
+    private static void persist(Context context) {
+        try {
+            SharedPreferences preferences =
+                    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            preferences.edit()
+                    .putInt(KEY_STATUS, sStatus)
+                    .putInt(KEY_PROGRESS, sProgress)
+                    .putLong(KEY_STARTED_AT, sStartedAt)
+                    .putLong(KEY_SAVED_AT, sUpdatedAt)
+                    .apply();
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": state persist failed: " + t);
+        }
+    }
+
+    /** 恢复 20 秒内的落盘状态；已有实时值时不覆盖。 */
+    private static void restore(Context context) {
+        if (sUpdatedAt > 0) {
+            return;
+        }
+        try {
+            SharedPreferences preferences =
+                    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            long savedAt = preferences.getLong(KEY_SAVED_AT, 0L);
+            if (savedAt <= 0L || System.currentTimeMillis() - savedAt >= FRESH_MS) {
+                return;
+            }
+            sStatus = preferences.getInt(KEY_STATUS, 0);
+            sProgress = preferences.getInt(KEY_PROGRESS, -1);
+            sStartedAt = preferences.getLong(KEY_STARTED_AT, 0L);
+            sUpdatedAt = savedAt;
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": state restore failed: " + t);
+        }
     }
 
     static boolean isRunning() {

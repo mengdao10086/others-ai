@@ -1,6 +1,10 @@
 package com.mengdao.lsposedtoolkit.gallery;
 
+import android.content.Context;
+
+import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
+import de.robv.android.xposed.XposedHelpers;
 
 /**
  * 相册侧 hook 装配：设置页、电源门禁放宽、execDirectly 观测、遗留任务清理。
@@ -15,6 +19,12 @@ public final class GalleryHooks {
 
     public static void install(ClassLoader classLoader) {
         AnalyzeControl.init(classLoader);
+
+        try {
+            hookAppCreate(classLoader);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": GalleryApp.onCreate hook failed: " + t);
+        }
 
         try {
             SettingsHook.install(classLoader);
@@ -43,5 +53,22 @@ public final class GalleryHooks {
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": LegacyNightWorkCleanupHook failed: " + t);
         }
+    }
+
+    /** 相册进程一启动就注册状态接收器并恢复落盘状态，避免设置页先显示空闲。 */
+    private static void hookAppCreate(ClassLoader classLoader) throws Exception {
+        Class<?> appClass = XposedHelpers.findClass("com.miui.gallery.GalleryApp", classLoader);
+        XposedBridge.hookMethod(appClass.getMethod("onCreate"), new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) {
+                try {
+                    if (param.thisObject instanceof Context) {
+                        AicrStateReceiver.init((Context) param.thisObject);
+                    }
+                } catch (Throwable t) {
+                    XposedBridge.log(TAG + ": aicr state init failed: " + t);
+                }
+            }
+        });
     }
 }

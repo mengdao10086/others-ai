@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.ComponentInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.os.SystemClock;
 
 import de.robv.android.xposed.XposedBridge;
 
@@ -19,7 +20,9 @@ import de.robv.android.xposed.XposedBridge;
 final class AicrTrigger {
 
     private static final String TAG = "GalleryAnalyze";
+    private static final long QUERY_INTERVAL_MS = 3000L;
     private static volatile boolean sEnvironmentLogged;
+    private static volatile long sLastQueryAt;
 
     private AicrTrigger() {
     }
@@ -30,6 +33,27 @@ final class AicrTrigger {
 
     static void sendStop(Context context) {
         send(context, AicrProtocol.ACTION_STOP);
+    }
+
+    /** 只读查询，3 秒内最多一次；aicr 收到后立即回报当前状态。 */
+    static void sendQuery(Context context) {
+        if (context == null) {
+            return;
+        }
+        long now = SystemClock.elapsedRealtime();
+        if (now - sLastQueryAt < QUERY_INTERVAL_MS) {
+            return;
+        }
+        sLastQueryAt = now;
+        try {
+            Intent intent = new Intent(AicrProtocol.ACTION_QUERY);
+            intent.setComponent(new ComponentName(
+                    AicrProtocol.PACKAGE, AicrProtocol.RECEIVER_CLASS));
+            intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+            context.sendBroadcast(intent);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": aicr state query failed: " + t);
+        }
     }
 
     private static void send(Context context, String action) {

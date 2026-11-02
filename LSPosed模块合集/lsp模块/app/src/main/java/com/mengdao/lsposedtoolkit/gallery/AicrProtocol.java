@@ -23,6 +23,8 @@ public final class AicrProtocol {
 
     public static final String ACTION_START = "com.mengdao.lsposedtoolkit.action.AICR_START";
     public static final String ACTION_STOP = "com.mengdao.lsposedtoolkit.action.AICR_STOP";
+    /** 相册主动问一次当前状态，让设置页首次渲染就有值。 */
+    public static final String ACTION_QUERY = "com.mengdao.lsposedtoolkit.action.AICR_QUERY";
 
     /** aicr → 相册的状态回报（运行状态 + 进度），相册侧动态注册接收器。 */
     public static final String ACTION_STATE = "com.mengdao.lsposedtoolkit.action.AICR_STATE";

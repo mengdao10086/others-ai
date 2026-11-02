@@ -35,10 +35,17 @@ final class AicrTriggerDispatcher {
 
     static boolean isTriggerAction(String action) {
         return AicrProtocol.ACTION_START.equals(action)
-                || AicrProtocol.ACTION_STOP.equals(action);
+                || AicrProtocol.ACTION_STOP.equals(action)
+                || AicrProtocol.ACTION_QUERY.equals(action);
     }
 
     static void dispatch(Context fallback, String action, String source) {
+        if (AicrProtocol.ACTION_QUERY.equals(action)) {
+            XposedBridge.log(TAG + ": aicr state query from " + source);
+            AicrStateReporter.reportNow();
+            return;
+        }
+        boolean start = AicrProtocol.ACTION_START.equals(action);
         try {
             Context context = appContext(fallback);
             if (context == null) {
@@ -46,10 +53,14 @@ final class AicrTriggerDispatcher {
                         + " from " + source);
                 return;
             }
-            boolean start = AicrProtocol.ACTION_START.equals(action);
             if (start && !checkCta()) {
                 XposedBridge.log(TAG + ": CTA switch is off, skip aicr start (" + source + ")");
                 return;
+            }
+            if (start) {
+                // 手动启动：大核 4-6；先打标记，状态由空闲转运行时会再次确认。
+                AicrCpuAffinity.markManualStart();
+                AicrCpuAffinity.bindBig();
             }
             String method = start
                     ? AicrProtocol.METHOD_START_UNLIMITED
@@ -64,6 +75,11 @@ final class AicrTriggerDispatcher {
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": aicr provider call failed (" + action
                     + " from " + source + "): " + t);
+        } finally {
+            if (!start) {
+                // 分析停止：无论 provider 是否成功，都落到小核 0-3。
+                AicrCpuAffinity.bindSmall();
+            }
         }
     }
 

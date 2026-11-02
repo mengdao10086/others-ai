@@ -6,6 +6,7 @@ import com.mengdao.lsposedtoolkit.hook.ContentExtensionHooks;
 import com.mengdao.lsposedtoolkit.hook.SystemUiHooks;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
@@ -15,9 +16,19 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
  * 未命中的包只做几次字符串比较就返回，不加载任何 Hook 类；
  * 每组内部再对每个功能单独 try/catch，单功能失败不影响同包其他功能。
  */
-public final class ModuleEntry implements IXposedHookLoadPackage {
+public final class ModuleEntry implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
     private static final String TAG = "LSPosedToolkit";
+
+    /** 模块 APK 绝对路径；用于在宿主进程里加载模块自带的原生库。 */
+    private static volatile String sModulePath;
+
+    @Override
+    public void initZygote(StartupParam startupParam) {
+        if (startupParam != null) {
+            sModulePath = startupParam.modulePath;
+        }
+    }
     static final String PKG_CONTENT_EXTENSION = "com.miui.contentextension";
     static final String PKG_SYSTEM_UI = "com.android.systemui";
     static final String PKG_GALLERY = "com.miui.gallery";
@@ -50,7 +61,8 @@ public final class ModuleEntry implements IXposedHookLoadPackage {
             }
         } else if (PKG_AICR.equals(pkg)) {
             try {
-                AicrHooks.install(lpparam.packageName, lpparam.processName, lpparam.classLoader);
+                AicrHooks.install(lpparam.packageName, lpparam.processName,
+                        lpparam.classLoader, sModulePath);
                 XposedBridge.log(TAG + ": aicr hook group handled for " + lpparam.processName);
             } catch (Throwable t) {
                 XposedBridge.log(TAG + ": aicr group failed: " + t);

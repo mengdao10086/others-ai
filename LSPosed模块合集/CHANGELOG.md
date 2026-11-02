@@ -1,5 +1,10 @@
 # 变更记录
 
+## 未发布
+
+- 相册分析：手动启动时把 aicr `:searchDataService` 全部线程绑到 CPU 4-6；其它分析开始与停止后绑到 0-3（新增 arm64 原生库 `libmengdao_cpuaff.so`）
+- 相册设置页状态：相册进程启动即注册接收器、状态落盘并在下次启动恢复、进入设置页主动查询 aicr，消除首次 1~2 秒「空闲」
+
 ## 2.1.1 — 2026-11-01
 
 - 新增「屏蔽蓝牙解锁 Toast」：`Toast.makeText` 命中 `miui_keyguard_ble_unlock_succeed_msg` 后记下该 Toast，`Toast.show` 时置空
