@@ -40,7 +40,6 @@ public final class TaplusSaveFormatHook {
                         }
                     }
                 });
-        XposedBridge.log(TAG + ": [格式] Hook Bitmap.compress() — 就绪");
     }
 
     private static void hookContentValuesMimeType() {
@@ -56,6 +55,5 @@ public final class TaplusSaveFormatHook {
                         }
                     }
                 });
-        XposedBridge.log(TAG + ": [格式] Hook ContentValues.put(mime_type) — 就绪");
     }
 }

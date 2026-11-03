@@ -16,18 +16,31 @@ public final class SystemUiHooks {
     }
 
     public static void install(ClassLoader classLoader) {
+        StringBuilder installed = new StringBuilder();
+
         try {
             StatusBarClickBlockHook.install(classLoader);
-            XposedBridge.log(TAG + ": StatusBarClickBlockHook installed");
+            appendInstalled(installed, "StatusBarClickBlockHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": StatusBarClickBlockHook failed: " + t);
         }
 
         try {
             BleUnlockToastHook.install();
-            XposedBridge.log(TAG + ": BleUnlockToastHook installed");
+            appendInstalled(installed, "BleUnlockToastHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": BleUnlockToastHook failed: " + t);
         }
+
+        if (installed.length() > 0) {
+            XposedBridge.log(TAG + ": hooks installed: " + installed);
+        }
+    }
+
+    private static void appendInstalled(StringBuilder installed, String name) {
+        if (installed.length() > 0) {
+            installed.append(", ");
+        }
+        installed.append(name);
     }
 }

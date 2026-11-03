@@ -54,7 +54,6 @@ public final class ModuleEntry implements IXposedHookLoadPackage, IXposedHookZyg
             if (lpparam.processName == null || PKG_GALLERY.equals(lpparam.processName)) {
                 try {
                     GalleryHooks.install(lpparam.classLoader);
-                    XposedBridge.log(TAG + ": gallery hooks installed");
                 } catch (Throwable t) {
                     XposedBridge.log(TAG + ": gallery group failed: " + t);
                 }
@@ -63,7 +62,6 @@ public final class ModuleEntry implements IXposedHookLoadPackage, IXposedHookZyg
             try {
                 AicrHooks.install(lpparam.packageName, lpparam.processName,
                         lpparam.classLoader, sModulePath);
-                XposedBridge.log(TAG + ": aicr hook group handled for " + lpparam.processName);
             } catch (Throwable t) {
                 XposedBridge.log(TAG + ": aicr group failed: " + t);
             }

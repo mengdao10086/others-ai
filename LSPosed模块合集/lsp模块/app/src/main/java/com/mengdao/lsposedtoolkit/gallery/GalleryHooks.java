@@ -19,39 +19,56 @@ public final class GalleryHooks {
 
     public static void install(ClassLoader classLoader) {
         AnalyzeControl.init(classLoader);
+        StringBuilder installed = new StringBuilder();
 
         try {
             hookAppCreate(classLoader);
+            appendInstalled(installed, "GalleryApp.onCreate");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": GalleryApp.onCreate hook failed: " + t);
         }
 
         try {
             SettingsHook.install(classLoader);
-            XposedBridge.log(TAG + ": SettingsHook installed");
+            appendInstalled(installed, "SettingsHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": SettingsHook failed: " + t);
         }
 
         try {
             ExecDirectlyLogHook.install(classLoader);
-            XposedBridge.log(TAG + ": ExecDirectlyLogHook installed");
+            appendInstalled(installed, "ExecDirectlyLogHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": ExecDirectlyLogHook failed: " + t);
         }
 
         try {
             PowerGateHook.install(classLoader);
-            XposedBridge.log(TAG + ": PowerGateHook installed");
+            appendInstalled(installed, "PowerGateHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": PowerGateHook failed: " + t);
         }
 
         try {
             LegacyNightWorkCleanupHook.install(classLoader);
-            XposedBridge.log(TAG + ": LegacyNightWorkCleanupHook installed");
+            appendInstalled(installed, "LegacyNightWorkCleanupHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": LegacyNightWorkCleanupHook failed: " + t);
+        }
+
+        logInstalled(installed);
+    }
+
+    private static void appendInstalled(StringBuilder installed, String name) {
+        if (installed.length() > 0) {
+            installed.append(", ");
+        }
+        installed.append(name);
+    }
+
+    private static void logInstalled(StringBuilder installed) {
+        if (installed.length() > 0) {
+            XposedBridge.log(TAG + ": hooks installed: " + installed);
         }
     }
 

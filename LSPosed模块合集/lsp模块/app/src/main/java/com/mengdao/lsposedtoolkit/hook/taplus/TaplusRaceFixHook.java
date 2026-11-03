@@ -32,6 +32,5 @@ public final class TaplusRaceFixHook {
                         }
                     }
                 });
-        XposedBridge.log(TAG + ": [竞态] Hook TextContentExtensionService.setBitmap() — 就绪");
     }
 }

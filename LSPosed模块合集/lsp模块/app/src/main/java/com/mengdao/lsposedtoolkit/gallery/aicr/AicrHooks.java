@@ -28,49 +28,59 @@ public final class AicrHooks {
         }
 
         AicrCpuAffinity.init(modulePath);
+        StringBuilder installed = new StringBuilder();
 
         try {
             AiCrSearchDataBaseServiceHook.install(classLoader);
-            XposedBridge.log(TAG + ": AiCrSearchDataBaseServiceHook installed");
+            appendInstalled(installed, "AiCrSearchDataBaseServiceHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": AiCrSearchDataBaseServiceHook failed: " + t);
         }
 
         try {
             AisearchTriggerReceiverHook.install(classLoader);
-            XposedBridge.log(TAG + ": AisearchTriggerReceiverHook installed");
+            appendInstalled(installed, "AisearchTriggerReceiverHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": AisearchTriggerReceiverHook failed: " + t);
         }
 
         try {
             AisearchTaskDiagnosticHook.install(classLoader);
-            XposedBridge.log(TAG + ": AisearchTaskDiagnosticHook installed");
+            appendInstalled(installed, "AisearchTaskDiagnosticHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": AisearchTaskDiagnosticHook failed: " + t);
         }
 
         try {
             AicrStateReporter.install(classLoader);
-            XposedBridge.log(TAG + ": AicrStateReporter installed");
+            appendInstalled(installed, "AicrStateReporter");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": AicrStateReporter failed: " + t);
         }
 
         try {
             AicrProgressDiagnostics.install(classLoader);
-            XposedBridge.log(TAG + ": AicrProgressDiagnostics installed");
+            appendInstalled(installed, "AicrProgressDiagnostics");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": AicrProgressDiagnostics failed: " + t);
         }
 
         try {
             AicrWindowEndGuard.install(classLoader);
-            XposedBridge.log(TAG + ": AicrWindowEndGuard installed");
+            appendInstalled(installed, "AicrWindowEndGuard");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": AicrWindowEndGuard failed: " + t);
         }
 
-        XposedBridge.log(TAG + ": aicr hooks installed in " + processName);
+        if (installed.length() > 0) {
+            XposedBridge.log(TAG + ": hooks installed in " + processName + ": " + installed);
+        }
+    }
+
+    private static void appendInstalled(StringBuilder installed, String name) {
+        if (installed.length() > 0) {
+            installed.append(", ");
+        }
+        installed.append(name);
     }
 }
