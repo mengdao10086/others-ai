@@ -21,7 +21,7 @@ import de.robv.android.xposed.XposedHelpers;
  * 主线程访问 QueryDao 会抛 IllegalStateException，计数只能取到 err。
  *
  * RunningStatus.setRunningStatus 变为 &gt;0 时开始：立即采一行，之后每 30 秒一行；
- * 期间状态回到 0 时补采一行即停。总日志上限 40 行（含 doWork 心跳）。
+ * 期间状态回到 0 时补采一行即停。总日志上限 40 行（含 doWork 心跳与 stage-write）。
  */
 final class AicrProgressDiagnostics {
 
@@ -176,6 +176,8 @@ final class AicrProgressDiagnostics {
             line = line.substring(0, MAX_LINE_LENGTH);
         }
         XposedBridge.log(line);
+        // 同一采样点追加流水线落点行；单独一行，避免主行超长被截断。
+        logDiagLine("stage-write " + StageWriteProbe.describe());
     }
 
     private static String buildLine(int n) {

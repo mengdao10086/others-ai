@@ -25,8 +25,10 @@ public final class AicrHooks {
             return;
         }
 
-        // doWork 心跳只在「实际执行 AISearchDataTask 的进程」可见；该进程不一定是
+        // doRemoteWork 心跳只在「实际执行 AISearchDataTask 的进程」可见；该进程不一定是
         // :searchDataService，所以这条只读 hook 装到 aicr 所有进程，其余 hook 仍只装服务进程。
+        // 注意：心跳只证明启动任务跑过（0.9 秒返回即成功），不证明相册分析在跑，
+        // 分析卡住时它仍可能正常；判断流水线是否在动要看 DIAG stage-write。
         try {
             AisearchTaskDiagnosticHook.install(classLoader);
         } catch (Throwable t) {
@@ -66,6 +68,15 @@ public final class AicrHooks {
             appendInstalled(installed, "AicrProgressDiagnostics");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": AicrProgressDiagnostics failed: " + t);
+        }
+
+        // 相册分析实际在 :searchDataService 的 SearchDataBaseProvider 里执行
+        // （AISearchOperation.doWork → GalleryOperation.calculate），探针只装这里。
+        try {
+            StageWriteProbe.install(classLoader);
+            appendInstalled(installed, "StageWriteProbe");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": StageWriteProbe failed: " + t);
         }
 
         try {
