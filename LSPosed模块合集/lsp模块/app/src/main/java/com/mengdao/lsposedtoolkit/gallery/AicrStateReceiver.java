@@ -25,6 +25,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
     private static final String PREFS = "mengdao_gallery_analyze_state";
     private static final String KEY_STATUS = "status";
     private static final String KEY_PROGRESS = "progress";
+    private static final String KEY_DETAIL = "detail";
     private static final String KEY_STARTED_AT = "started_at";
     private static final String KEY_SAVED_AT = "saved_at";
 
@@ -32,6 +33,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
 
     private static volatile int sStatus = 0;
     private static volatile int sProgress = -1;
+    private static volatile String sDetail = "";
     private static volatile long sStartedAt;
     private static volatile long sUpdatedAt;
     private static volatile boolean sRegistered;
@@ -77,6 +79,10 @@ final class AicrStateReceiver extends BroadcastReceiver {
         }
         sStatus = intent.getIntExtra(AicrProtocol.EXTRA_STATUS, 0);
         sProgress = intent.getIntExtra(AicrProtocol.EXTRA_PROGRESS, -1);
+        sDetail = intent.getStringExtra(AicrProtocol.EXTRA_DETAIL);
+        if (sDetail == null) {
+            sDetail = "";
+        }
         sStartedAt = intent.getLongExtra(AicrProtocol.EXTRA_STARTED_AT, 0L);
         sWhitelistFailed = intent.getIntExtra(RecentsLock.EXTRA_WHITELIST_FAILED, 0) == 1;
         sUpdatedAt = System.currentTimeMillis();
@@ -100,6 +106,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
             preferences.edit()
                     .putInt(KEY_STATUS, sStatus)
                     .putInt(KEY_PROGRESS, sProgress)
+                    .putString(KEY_DETAIL, sDetail)
                     .putLong(KEY_STARTED_AT, sStartedAt)
                     .putLong(KEY_SAVED_AT, sUpdatedAt)
                     .apply();
@@ -122,6 +129,10 @@ final class AicrStateReceiver extends BroadcastReceiver {
             }
             sStatus = preferences.getInt(KEY_STATUS, 0);
             sProgress = preferences.getInt(KEY_PROGRESS, -1);
+            sDetail = preferences.getString(KEY_DETAIL, "");
+            if (sDetail == null) {
+                sDetail = "";
+            }
             sStartedAt = preferences.getLong(KEY_STARTED_AT, 0L);
             sUpdatedAt = savedAt;
         } catch (Throwable t) {
@@ -131,6 +142,16 @@ final class AicrStateReceiver extends BroadcastReceiver {
 
     static boolean isRunning() {
         return isFresh() && sStatus > 0;
+    }
+
+    /** 原始运行状态（1/2/3/4 运行，5/6 重载暂停）；过期返回 0。 */
+    static int status() {
+        return isFresh() ? sStatus : 0;
+    }
+
+    /** 进度明细「已处理张数|总张数|最慢阶段」；拿不到或过期返回空串。 */
+    static String detail() {
+        return isFresh() && sDetail != null ? sDetail : "";
     }
 
     /** 0~100；拿不到或为 0 都返回 -1（aicr 的进度在迁移后会回落成 0，不能当真实进度显示）。 */

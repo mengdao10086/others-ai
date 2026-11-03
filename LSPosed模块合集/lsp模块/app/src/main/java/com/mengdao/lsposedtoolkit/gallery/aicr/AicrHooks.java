@@ -21,9 +21,19 @@ public final class AicrHooks {
 
     public static void install(String packageName, String processName, ClassLoader classLoader,
                                String modulePath) {
-        if (!AicrProtocol.PACKAGE.equals(packageName)
-                || processName == null
-                || !processName.endsWith(SERVICE_PROCESS_SUFFIX)) {
+        if (!AicrProtocol.PACKAGE.equals(packageName) || processName == null) {
+            return;
+        }
+
+        // doWork 心跳只在「实际执行 AISearchDataTask 的进程」可见；该进程不一定是
+        // :searchDataService，所以这条只读 hook 装到 aicr 所有进程，其余 hook 仍只装服务进程。
+        try {
+            AisearchTaskDiagnosticHook.install(classLoader);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": AisearchTaskDiagnosticHook failed: " + t);
+        }
+
+        if (!processName.endsWith(SERVICE_PROCESS_SUFFIX)) {
             return;
         }
 
@@ -42,13 +52,6 @@ public final class AicrHooks {
             appendInstalled(installed, "AisearchTriggerReceiverHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": AisearchTriggerReceiverHook failed: " + t);
-        }
-
-        try {
-            AisearchTaskDiagnosticHook.install(classLoader);
-            appendInstalled(installed, "AisearchTaskDiagnosticHook");
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + ": AisearchTaskDiagnosticHook failed: " + t);
         }
 
         try {

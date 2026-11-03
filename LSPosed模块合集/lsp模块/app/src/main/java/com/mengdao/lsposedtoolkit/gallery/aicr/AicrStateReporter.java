@@ -17,8 +17,8 @@ import de.robv.android.xposed.XposedHelpers;
  * 把 aicr 的真实运行状态回传给相册。
  *
  * 相册设置页原先只读自己进程里的 isRunning，aicr 在 :searchDataService 里算多久都显示「空闲」。
- * 这里 hook RunningStatus.setRunningStatus：状态变化立即广播；非空闲期间每秒检查一次进度，
- * 最多每 5 秒广播一次。只读，不改变任何状态。
+ * 这里 hook RunningStatus.setRunningStatus：状态变化立即广播；运行期间每 1 秒巡检状态、
+ * 每 30 秒重算一次进度、每 5 秒用缓存值发一次心跳。只读，不改变任何状态。
  *
  * 进度读取必须离开主线程：ManagerDataBase 未开 allowMainThreadQueries，主线程访问 QueryDao
  * 会抛 IllegalStateException，被 getRealProgressFromAI 吞掉后返回 0，再把 0 写回
@@ -33,9 +33,21 @@ final class AicrStateReporter {
     private static final String PROGRESS_MONITOR_CLASS =
             "com.xiaomi.aicr.searchpro.monitor.ProgressMonitor";
     private static final String PROGRESS_THREAD_NAME = "mengdao-aicr-progress";
-    private static final long POLL_INTERVAL_MS = 1000L;
+    /** 状态巡检周期：只读静态状态，不做任何 Room 查询，保证停止能被 1 秒发现。 */
+    private static final long STATUS_TICK_MS = 1000L;
     private static final long BROADCAST_INTERVAL_MS = 5000L;
+    /** 进度重算周期：每次都要查 Room，放宽到 30 秒。 */
+    private static final long PROGRESS_READ_INTERVAL_MS = 30000L;
     private static final int STATUS_IDLE = 0;
+
+    private static final String MANAGER_DATABASE_CLASS =
+            "com.xiaomi.aicr.aisearch.database.managerdb.ManagerDataBase";
+    private static final String QUERY_DAO_CLASS =
+            "com.xiaomi.aicr.aisearch.database.managerdb.dao.QueryDao";
+    private static final String GALLERY_PROGRESS_MONITOR_CLASS =
+            "com.xiaomi.aicr.searchpro.monitor.GalleryProgressMonitor";
+    private static final String GALLERY_MIGRATE_CLASS =
+            "com.xiaomi.aicr.searchpro.gallery.GalleryMigrate";
 
     private static ClassLoader sClassLoader;
     private static HandlerThread sThread;
@@ -43,7 +55,12 @@ final class AicrStateReporter {
     private static boolean sHandlerInitialized;
     private static volatile int sStatus = STATUS_IDLE;
     private static volatile boolean sLooping;
-    private static volatile long sLastProgressBroadcastAt;
+    private static volatile int sCachedProgress = -1;
+    private static volatile String sCachedDetail = "";
+    private static volatile long sLastProgressReadAt;
+    private static volatile long sLastBroadcastAt;
+    private static volatile boolean sProgressFailureLogged;
+    private static volatile boolean sDetailFailureLogged;
 
     private AicrStateReporter() {
     }
@@ -79,7 +96,8 @@ final class AicrStateReporter {
                 // 分析停止：退出大核模式并绑回 0-3
                 AicrCpuAffinity.stopManual();
                 RecentsLock.onRunStopped(context());
-                report(STATUS_IDLE, -1);
+                clearCache();
+                report(STATUS_IDLE, -1, "");
                 return;
             }
             if (previous == STATUS_IDLE) {
@@ -95,9 +113,10 @@ final class AicrStateReporter {
                     RecentsLock.onManualRunStarted(context());
                 }
             }
-            sLastProgressBroadcastAt = 0L;
+            sLastProgressReadAt = 0L;
+            sLastBroadcastAt = 0L;
             if (handler == null) {
-                report(normalized, -1);
+                report(normalized, -1, "");
                 return;
             }
             handler.post(IMMEDIATE_BROADCAST);
@@ -120,7 +139,7 @@ final class AicrStateReporter {
                 handler.post(QUERY_REPORT);
             } else {
                 // 没有后台线程时绝不读进度：主线程读 Room 会抛异常并被 aicr 吞成 0
-                report(sStatus, -1);
+                report(sStatus, -1, "");
             }
             return;
         }
@@ -135,15 +154,16 @@ final class AicrStateReporter {
             int status = sStatus;
             if (status == STATUS_IDLE) {
                 stopLoop();
-                report(status, -1);
+                clearCache();
+                report(status, -1, "");
                 return;
             }
             Handler handler = sHandler;
             if (handler != null) {
                 startLoop(handler);
             }
-            report(status, currentProgress());
-            sLastProgressBroadcastAt = SystemClock.elapsedRealtime();
+            refreshProgress();
+            shortCircuitBroadcast(status);
         }
     };
 
@@ -154,17 +174,34 @@ final class AicrStateReporter {
             if (status == STATUS_IDLE) {
                 return;
             }
-            report(status, currentProgress());
-            sLastProgressBroadcastAt = SystemClock.elapsedRealtime();
+            refreshProgress();
+            shortCircuitBroadcast(status);
         }
     };
+
+    /** 只在需要时重算进度（30 秒一次或状态切换），其余心跳复用缓存。 */
+    private static void refreshProgress() {
+        sCachedProgress = currentProgress();
+        sCachedDetail = currentDetail();
+        sLastProgressReadAt = SystemClock.elapsedRealtime();
+    }
+
+    private static void shortCircuitBroadcast(int status) {
+        report(status, sCachedProgress, sCachedDetail);
+        sLastBroadcastAt = SystemClock.elapsedRealtime();
+    }
+
+    private static void clearCache() {
+        sCachedProgress = -1;
+        sCachedDetail = "";
+    }
 
     private static void startLoop(Handler handler) {
         if (sLooping) {
             return;
         }
         sLooping = true;
-        handler.postDelayed(LOOP, POLL_INTERVAL_MS);
+        handler.postDelayed(LOOP, STATUS_TICK_MS);
     }
 
     private static void stopLoop() {
@@ -175,6 +212,10 @@ final class AicrStateReporter {
         }
     }
 
+    /**
+     * 每 1 秒只看静态状态（停止不被拖慢）；进度每 30 秒重算一次，
+     * 广播仍每 5 秒一次但复用缓存值，保证接收端 20 秒新鲜度。
+     */
     private static final Runnable LOOP = new Runnable() {
         @Override
         public void run() {
@@ -188,16 +229,19 @@ final class AicrStateReporter {
                     return;
                 }
                 long now = SystemClock.elapsedRealtime();
-                if (now - sLastProgressBroadcastAt >= BROADCAST_INTERVAL_MS) {
-                    report(status, currentProgress());
-                    sLastProgressBroadcastAt = now;
+                if (now - sLastProgressReadAt >= PROGRESS_READ_INTERVAL_MS) {
+                    refreshProgress();
+                }
+                if (now - sLastBroadcastAt >= BROADCAST_INTERVAL_MS) {
+                    report(status, sCachedProgress, sCachedDetail);
+                    sLastBroadcastAt = now;
                 }
             } catch (Throwable t) {
                 XposedBridge.log(TAG + ": progress report failed: " + t);
             }
             Handler handler = sHandler;
             if (sLooping && handler != null) {
-                handler.postDelayed(this, POLL_INTERVAL_MS);
+                handler.postDelayed(this, STATUS_TICK_MS);
             }
         }
     };
@@ -221,7 +265,7 @@ final class AicrStateReporter {
         return sHandler;
     }
 
-    private static void report(int status, int progress) {
+    private static void report(int status, int progress, String detail) {
         try {
             Context context = context();
             if (context == null) {
@@ -231,6 +275,9 @@ final class AicrStateReporter {
             intent.setPackage(AicrProtocol.GALLERY_PACKAGE);
             intent.putExtra(AicrProtocol.EXTRA_STATUS, status);
             intent.putExtra(AicrProtocol.EXTRA_PROGRESS, progress);
+            if (detail != null && detail.length() > 0) {
+                intent.putExtra(AicrProtocol.EXTRA_DETAIL, detail);
+            }
             intent.putExtra(AicrProtocol.EXTRA_STARTED_AT, runningStartTime());
             intent.putExtra(RecentsLock.EXTRA_WHITELIST_FAILED,
                     RecentsLock.whitelistFailed() ? 1 : 0);
@@ -274,9 +321,111 @@ final class AicrStateReporter {
                 return ((android.os.Bundle) bundle).getInt("analyse_progress", -1);
             }
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": progress lookup failed: " + t);
+            if (!sProgressFailureLogged) {
+                sProgressFailureLogged = true;
+                XposedBridge.log(TAG + ": progress lookup failed: " + t);
+            }
         }
         return -1;
+    }
+
+    /**
+     * 分阶段明细：「已处理张数|总张数|最慢阶段」。拿不到返回空串，调用方退回百分比。
+     *
+     * 口径与 aicr 的分子一致：图片的 face/ocr/tag/pet/clip 任一状态非 0 即计数；
+     * 只有这些阶段都完成才算一张图片处理完，所以取各阶段计数的最小值作为图片下界；
+     * 视频只参与 clip，已完成数取 min(clipVid, totalVid)。
+     */
+    private static String currentDetail() {
+        try {
+            Class<?> dbClass = XposedHelpers.findClassIfExists(
+                    MANAGER_DATABASE_CLASS, sClassLoader);
+            Class<?> daoClass = XposedHelpers.findClassIfExists(
+                    QUERY_DAO_CLASS, sClassLoader);
+            if (dbClass == null || daoClass == null) {
+                return "";
+            }
+            Object db = XposedHelpers.callStaticMethod(dbClass, "getInstance");
+            Object dao = XposedHelpers.callMethod(db, "queryDao");
+            int face = callInt(dao, "getGalleryFaceStateCount");
+            int ocr = callInt(dao, "getGalleryOcrStateCount");
+            int tag = callInt(dao, "getGalleryTagStateCount");
+            int pet = callInt(dao, "getGalleryPetCount");
+            int clipPic = callInt(dao, "getGalleryClipStateCount", "PICTURE");
+            int clipVid = callInt(dao, "getGalleryClipStateCount", "VIDEO");
+            boolean petSupported = isPetSupported();
+
+            Class<?> monitorClass = XposedHelpers.findClassIfExists(
+                    GALLERY_PROGRESS_MONITOR_CLASS, sClassLoader);
+            if (monitorClass == null) {
+                return "";
+            }
+            Object monitor = XposedHelpers.getStaticObjectField(monitorClass, "INSTANCE");
+            Object ori = XposedHelpers.callMethod(monitor, "getDelayedOriGalleryInfo");
+            if (!(ori instanceof android.os.Bundle)) {
+                return "";
+            }
+            android.os.Bundle oriInfo = (android.os.Bundle) ori;
+            int totalPic = oriInfo.getInt("totalPicCount", 0);
+            int totalVid = oriInfo.getInt("totalVidCount", 0);
+            if (totalPic <= 0) {
+                return "";
+            }
+
+            int processedPic = face;
+            String stage = "face";
+            if (ocr < processedPic) {
+                processedPic = ocr;
+                stage = "ocr";
+            }
+            if (tag < processedPic) {
+                processedPic = tag;
+                stage = "tag";
+            }
+            if (petSupported && pet < processedPic) {
+                processedPic = pet;
+                stage = "pet";
+            }
+            if (clipPic < processedPic) {
+                processedPic = clipPic;
+                stage = "clip";
+            }
+            if (processedPic < 0) {
+                return "";
+            }
+            int processedVid = Math.max(0, Math.min(clipVid, totalVid));
+            int processed = Math.max(0, Math.min(processedPic, totalPic)) + processedVid;
+            int total = totalPic + totalVid;
+            if (total <= 0) {
+                return "";
+            }
+            return processed + "|" + total + "|" + stage;
+        } catch (Throwable t) {
+            if (!sDetailFailureLogged) {
+                sDetailFailureLogged = true;
+                XposedBridge.log(TAG + ": detail lookup failed: " + t);
+            }
+            return "";
+        }
+    }
+
+    private static int callInt(Object target, String method, Object... args) {
+        Object value = XposedHelpers.callMethod(target, method, args);
+        return value instanceof Integer ? (Integer) value : -1;
+    }
+
+    private static boolean isPetSupported() {
+        try {
+            Class<?> migrateClass = XposedHelpers.findClassIfExists(
+                    GALLERY_MIGRATE_CLASS, sClassLoader);
+            if (migrateClass == null) {
+                return false;
+            }
+            Object migrate = XposedHelpers.getStaticObjectField(migrateClass, "INSTANCE");
+            return Boolean.TRUE.equals(XposedHelpers.callMethod(migrate, "isAlbumSupportPet"));
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     private static Context context() {

@@ -65,9 +65,24 @@ final class AnalyzeControl {
         // 设置页首次渲染时主动问一次 aicr，避免等下一次周期广播
         AicrTrigger.sendQuery(context);
         if (AicrStateReceiver.isRunning()) {
+            int status = AicrStateReceiver.status();
+            if (status == AicrProtocol.RUNNING_LEVEL_OVERLOAD) {
+                return "分析暂停（设备负载过高）";
+            }
+            if (status == AicrProtocol.RUNNING_LEVEL_OVERLOAD_WAIT_RECOVER) {
+                return "分析暂停（等待恢复）";
+            }
+            String detail = AicrStateReceiver.detail();
+            if (detail.length() > 0) {
+                String[] parts = detail.split("\\|");
+                if (parts.length == 3) {
+                    return "分析中 已处理 " + parts[0] + " / " + parts[1]
+                            + " 张 · 阶段：" + parts[2];
+                }
+            }
             int progress = AicrStateReceiver.progress();
             if (progress > 0) {
-                return "分析中 " + progress + "%";
+                return "分析中 " + String.format(java.util.Locale.US, "%.1f", (float) progress) + "%";
             }
             long startedAt = AicrStateReceiver.startedAt();
             if (startedAt > 0) {

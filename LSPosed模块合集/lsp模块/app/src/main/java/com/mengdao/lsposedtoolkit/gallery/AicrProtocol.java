@@ -32,6 +32,13 @@ public final class AicrProtocol {
     public static final String EXTRA_STATUS = "status";
     public static final String EXTRA_PROGRESS = "progress";
     public static final String EXTRA_STARTED_AT = "started_at";
+    /** 进度明细：已处理张数|总张数|最慢阶段（拿不到时为空串）。 */
+    public static final String EXTRA_DETAIL = "detail";
+
+    /** 与 aicr RunningStatus.RUNNING_LEVEL_OVERLOAD 一致：设备重载，暂停建库。 */
+    public static final int RUNNING_LEVEL_OVERLOAD = 5;
+    /** 与 aicr RunningStatus.RUNNING_LEVEL_OVERLOAD_WAIT_RECOVER 一致：等待重载恢复。 */
+    public static final int RUNNING_LEVEL_OVERLOAD_WAIT_RECOVER = 6;
 
     /** 与 SearchDataBaseProvider 的 Manifest authority 一致（exported=false，仅同进程/同 UID 可用）。 */
     public static final String PROVIDER_AUTHORITY = "provider.SearchDataBaseProvider";

@@ -20,8 +20,8 @@ import de.robv.android.xposed.XposedHelpers;
  * 所有采样都在独立 HandlerThread 上执行：ManagerDataBase 未开 allowMainThreadQueries，
  * 主线程访问 QueryDao 会抛 IllegalStateException，计数只能取到 err。
  *
- * RunningStatus.setRunningStatus 变为 &gt;0 时开始，t0 / +5s / +30s 各采一行；
- * 期间状态回到 0 时补采一行即停。总日志上限 8 行。
+ * RunningStatus.setRunningStatus 变为 &gt;0 时开始：立即采一行，之后每 30 秒一行；
+ * 期间状态回到 0 时补采一行即停。总日志上限 40 行（含 doWork 心跳）。
  */
 final class AicrProgressDiagnostics {
 
@@ -42,8 +42,8 @@ final class AicrProgressDiagnostics {
     private static final String CONTEXT_UTIL_CLASS =
             "com.xiaomi.aicr.common.ContextUtil";
 
-    private static final long[] SAMPLE_DELAYS_MS = {0L, 5000L, 30000L};
-    private static final int MAX_LOG_LINES = 8;
+    private static final long SAMPLE_INTERVAL_MS = 30_000L;
+    private static final int MAX_LOG_LINES = 40;
     private static final int MAX_LINE_LENGTH = 399;
     private static final int MAX_ERR_MESSAGE_LENGTH = 80;
     private static final String DIAG_THREAD_NAME = "mengdao-aicr-diag";
@@ -57,7 +57,6 @@ final class AicrProgressDiagnostics {
     private static boolean sActive;
     private static int sSampleIndex;
     private static int sLogCount;
-    private static Runnable[] sPending = new Runnable[0];
     private static final Set<String> sUnavailableClasses = new HashSet<>();
 
     private AicrProgressDiagnostics() {
@@ -115,26 +114,31 @@ final class AicrProgressDiagnostics {
         cancelPending();
         sActive = true;
         sSampleIndex = 0;
-        Runnable[] pending = new Runnable[SAMPLE_DELAYS_MS.length];
-        for (int i = 0; i < SAMPLE_DELAYS_MS.length; i++) {
-            final int sampleNo = i + 1;
-            Runnable sampler = new Runnable() {
-                @Override
-                public void run() {
-                    if (!sActive) {
-                        return;
-                    }
-                    emitSample(sampleNo);
-                    if (sampleNo >= SAMPLE_DELAYS_MS.length) {
-                        sActive = false;
-                    }
-                }
-            };
-            pending[i] = sampler;
-            handler().postDelayed(sampler, SAMPLE_DELAYS_MS[i]);
+        Handler handler = handler();
+        if (handler == null) {
+            sActive = false;
+            return;
         }
-        sPending = pending;
+        handler.post(SAMPLER);
     }
+
+    /** 运行期间每 30 秒采一行，与心跳共享 40 行上限；状态回 0 时补采一行即停。 */
+    private static final Runnable SAMPLER = new Runnable() {
+        @Override
+        public void run() {
+            if (!sActive) {
+                return;
+            }
+            emitSample(sSampleIndex + 1);
+            if (!sActive) {
+                return;
+            }
+            Handler handler = sHandler;
+            if (handler != null) {
+                handler.postDelayed(this, SAMPLE_INTERVAL_MS);
+            }
+        }
+    };
 
     /** 状态回到 0：撤掉后续采样，补一行后停止本轮。 */
     private static void finishWithIdleSample() {
@@ -145,13 +149,17 @@ final class AicrProgressDiagnostics {
 
     private static void cancelPending() {
         Handler handler = sHandler;
-        if (handler == null) {
+        if (handler != null) {
+            handler.removeCallbacks(SAMPLER);
+        }
+    }
+
+    /** 任务心跳等外部 DIAG 行：与采样共享 40 行上限，超出后静默。 */
+    static void logDiagLine(String body) {
+        if (!reserveLogLine()) {
             return;
         }
-        for (Runnable runnable : sPending) {
-            handler.removeCallbacks(runnable);
-        }
-        sPending = new Runnable[0];
+        XposedBridge.log(TAG + ": DIAG " + body);
     }
 
     private static void emitSample(int sampleNo) {
