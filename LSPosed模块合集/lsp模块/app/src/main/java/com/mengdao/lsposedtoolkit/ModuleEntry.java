@@ -4,6 +4,7 @@ import com.mengdao.lsposedtoolkit.gallery.GalleryHooks;
 import com.mengdao.lsposedtoolkit.gallery.aicr.AicrHooks;
 import com.mengdao.lsposedtoolkit.hook.ContentExtensionHooks;
 import com.mengdao.lsposedtoolkit.hook.SystemUiHooks;
+import com.mengdao.lsposedtoolkit.hook.systemserver.NoSwipeToKillHook;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
@@ -33,6 +34,7 @@ public final class ModuleEntry implements IXposedHookLoadPackage, IXposedHookZyg
     static final String PKG_SYSTEM_UI = "com.android.systemui";
     static final String PKG_GALLERY = "com.miui.gallery";
     static final String PKG_AICR = "com.xiaomi.aicr";
+    static final String PKG_ANDROID = "android";
 
     @Override
     public void handleLoadPackage(LoadPackageParam lpparam) {
@@ -64,6 +66,12 @@ public final class ModuleEntry implements IXposedHookLoadPackage, IXposedHookZyg
                         lpparam.classLoader, sModulePath);
             } catch (Throwable t) {
                 XposedBridge.log(TAG + ": aicr group failed: " + t);
+            }
+        } else if (PKG_ANDROID.equals(pkg)) {
+            try {
+                NoSwipeToKillHook.install(lpparam.classLoader);
+            } catch (Throwable t) {
+                XposedBridge.log(TAG + ": noswipetokill group failed: " + t);
             }
         }
     }

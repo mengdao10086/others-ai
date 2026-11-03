@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- LSPosed 推荐作用域：传送门 + 系统界面 + 相册内容分析（相册与 AI 引擎） -->
+    <!-- LSPosed 推荐作用域：传送门 + 系统界面 + 相册内容分析（相册与 AI 引擎）+ system_server -->
     <string-array name="xposed_scope">
         <item>com.miui.contentextension</item>
         <item>com.android.systemui</item>
         <item>com.miui.gallery</item>
         <item>com.xiaomi.aicr</item>
+        <item>android</item>
     </string-array>
 </resources>
