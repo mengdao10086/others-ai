@@ -178,6 +178,10 @@ final class AicrProgressDiagnostics {
         XposedBridge.log(line);
         // 同一采样点追加流水线落点行；单独一行，避免主行超长被截断。
         logDiagLine("stage-write " + StageWriteProbe.describe());
+        // 全表 GROUP BY 只做一次，避免每 30 秒扫库。
+        if (sampleNo == 1) {
+            DbStateSnapshot.queryOnce(sClassLoader);
+        }
     }
 
     private static String buildLine(int n) {
