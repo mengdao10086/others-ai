@@ -7,6 +7,8 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.os.Build;
 
+import com.mengdao.lsposedtoolkit.gallery.aicr.RecentsLock;
+
 import de.robv.android.xposed.XposedBridge;
 
 /**
@@ -33,6 +35,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
     private static volatile long sStartedAt;
     private static volatile long sUpdatedAt;
     private static volatile boolean sRegistered;
+    private static volatile boolean sWhitelistFailed;
 
     private AicrStateReceiver() {
     }
@@ -75,8 +78,18 @@ final class AicrStateReceiver extends BroadcastReceiver {
         sStatus = intent.getIntExtra(AicrProtocol.EXTRA_STATUS, 0);
         sProgress = intent.getIntExtra(AicrProtocol.EXTRA_PROGRESS, -1);
         sStartedAt = intent.getLongExtra(AicrProtocol.EXTRA_STARTED_AT, 0L);
+        sWhitelistFailed = intent.getIntExtra(RecentsLock.EXTRA_WHITELIST_FAILED, 0) == 1;
         sUpdatedAt = System.currentTimeMillis();
         persist(context);
+        if (sStatus > 0 && DozeWhitelist.manualStartRecent()) {
+            DozeWhitelist.acquire(context);
+        } else if (sStatus == 0) {
+            DozeWhitelist.release(context, "aicr_idle");
+        }
+    }
+
+    static boolean whitelistFailed() {
+        return sWhitelistFailed;
     }
 
     /** 把最新状态落盘，供相册进程下次启动时立即恢复。 */

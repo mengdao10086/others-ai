@@ -81,6 +81,7 @@ public final class GalleryHooks {
                 try {
                     if (param.thisObject instanceof Context) {
                         AicrStateReceiver.init((Context) param.thisObject);
+                        DozeWhitelist.init((Context) param.thisObject);
                     }
                 } catch (Throwable t) {
                     XposedBridge.log(TAG + ": aicr state init failed: " + t);

@@ -72,6 +72,13 @@ public final class AicrHooks {
             XposedBridge.log(TAG + ": AicrWindowEndGuard failed: " + t);
         }
 
+        try {
+            RecentsLock.recoverOnProcessStart(null);
+            appendInstalled(installed, "RecentsLock");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": RecentsLock failed: " + t);
+        }
+
         if (installed.length() > 0) {
             XposedBridge.log(TAG + ": hooks installed in " + processName + ": " + installed);
         }

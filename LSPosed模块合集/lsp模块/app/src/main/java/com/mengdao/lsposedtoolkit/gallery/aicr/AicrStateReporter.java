@@ -78,15 +78,21 @@ final class AicrStateReporter {
                 stopLoop();
                 // 分析停止：退出大核模式并绑回 0-3
                 AicrCpuAffinity.stopManual();
+                RecentsLock.onRunStopped(context());
                 report(STATUS_IDLE, -1);
                 return;
             }
             if (previous == STATUS_IDLE) {
                 // 空闲 → 运行：只有手动启动走大核，其余分析走小核
-                if (AicrCpuAffinity.consumeManualStart()) {
+                boolean cpuManual = AicrCpuAffinity.consumeManualStart();
+                boolean recentsManual = RecentsLock.consumeManualRequested();
+                if (cpuManual) {
                     AicrCpuAffinity.startManual();
                 } else {
                     AicrCpuAffinity.bindSmall();
+                }
+                if (recentsManual) {
+                    RecentsLock.onManualRunStarted(context());
                 }
             }
             sLastProgressBroadcastAt = 0L;
@@ -226,6 +232,8 @@ final class AicrStateReporter {
             intent.putExtra(AicrProtocol.EXTRA_STATUS, status);
             intent.putExtra(AicrProtocol.EXTRA_PROGRESS, progress);
             intent.putExtra(AicrProtocol.EXTRA_STARTED_AT, runningStartTime());
+            intent.putExtra(RecentsLock.EXTRA_WHITELIST_FAILED,
+                    RecentsLock.whitelistFailed() ? 1 : 0);
             context.sendBroadcast(intent);
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": state broadcast failed: " + t);

@@ -42,6 +42,10 @@ final class AicrTriggerDispatcher {
     static void dispatch(Context fallback, String action, String source) {
         if (AicrProtocol.ACTION_QUERY.equals(action)) {
             XposedBridge.log(TAG + ": aicr state query from " + source);
+            Context context = appContext(fallback);
+            if (context != null) {
+                RecentsLock.recoverIfIdle(context);
+            }
             AicrStateReporter.reportNow();
             return;
         }
@@ -59,6 +63,7 @@ final class AicrTriggerDispatcher {
             }
             if (start) {
                 // 手动启动：大核 4-6，并在分析期间每 3 秒重绑；状态转运行时会再确认一次。
+                RecentsLock.markManualRequested();
                 AicrCpuAffinity.markManualStart();
                 AicrCpuAffinity.startManual();
             }
@@ -72,7 +77,14 @@ final class AicrTriggerDispatcher {
                     method, "", extras);
             XposedBridge.log(TAG + ": aicr provider call " + method
                     + " from " + source + " result=" + result);
+            if (start && AicrStateReporter.isRunningNow()) {
+                // 用户点启动时分析本来就在跑，不会再走 IDLE→运行，直接补一次锁。
+                RecentsLock.onManualRunStarted(context);
+            }
         } catch (Throwable t) {
+            if (start) {
+                RecentsLock.clearManualRequested();
+            }
             XposedBridge.log(TAG + ": aicr provider call failed (" + action
                     + " from " + source + "): " + t);
         } finally {

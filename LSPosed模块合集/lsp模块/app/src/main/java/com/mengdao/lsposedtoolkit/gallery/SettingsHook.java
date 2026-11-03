@@ -138,7 +138,7 @@ final class SettingsHook {
         Class<?> rowClass = preference.getClass();
         Reflect.findMethod(rowClass, "setKey", String.class).invoke(preference, KEY);
         setTitle(preference, "AI 内容分析");
-        setSummary(preference, AnalyzeControl.statusText());
+        setSummary(preference, summaryText());
         Reflect.findMethod(rowClass, "setPersistent", boolean.class).invoke(preference, false);
         setSelectable(preference, true);
 
@@ -152,8 +152,10 @@ final class SettingsHook {
                         String name = method.getName();
                         if ("onPreferenceClick".equals(name)) {
                             if (AnalyzeControl.isRunning()) {
+                                DozeWhitelist.onManualStopRequested();
                                 AnalyzeControl.stop();
                             } else {
+                                DozeWhitelist.markManualStart();
                                 AnalyzeControl.start();
                             }
                             return true;
@@ -257,12 +259,14 @@ final class SettingsHook {
             start.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
+                    DozeWhitelist.markManualStart();
                     AnalyzeControl.start();
                 }
             });
             stop.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
+                    DozeWhitelist.onManualStopRequested();
                     AnalyzeControl.stop();
                 }
             });
@@ -301,8 +305,10 @@ final class SettingsHook {
                 @Override
                 public void onClick(View v) {
                     if (AnalyzeControl.isRunning()) {
+                        DozeWhitelist.onManualStopRequested();
                         AnalyzeControl.stop();
                     } else {
+                        DozeWhitelist.markManualStart();
                         AnalyzeControl.start();
                     }
                 }
@@ -315,7 +321,7 @@ final class SettingsHook {
         }
 
         // 降级 2：行点击切换，summary 提示（selectable 已在 addRow 里设好，绑定期不能再动）
-        setSummary(preference, AnalyzeControl.statusText() + "（点按切换）");
+        setSummary(preference, summaryText() + "（点按切换）");
     }
 
     private static Button makeButton(Context context, String text) {
@@ -398,14 +404,14 @@ final class SettingsHook {
         if (itemView != null) {
             updateControls(itemView, preference);
         } else {
-            setSummary(preference, AnalyzeControl.statusText());
+            setSummary(preference, summaryText());
         }
     }
 
     private static void updateControls(View itemView, Object preference) throws Exception {
         boolean running = AnalyzeControl.isRunning();
         boolean canceled = running && AnalyzeControl.isCanceled();
-        setSummary(preference, AnalyzeControl.statusText());
+        setSummary(preference, summaryText());
 
         View controls = itemView.findViewWithTag(CONTROLS_TAG);
         if (controls instanceof LinearLayout) {
@@ -452,6 +458,14 @@ final class SettingsHook {
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": setTitle failed: " + t);
         }
+    }
+
+    private static String summaryText() {
+        String text = AnalyzeControl.statusText();
+        if (DozeWhitelist.failureSuffix().length() > 0 || AicrStateReceiver.whitelistFailed()) {
+            text += "（白名单未生效）";
+        }
+        return text;
     }
 
     private static void setSummary(Object preference, String text) {
