@@ -66,7 +66,7 @@ app/src/main/java/com/mengdao/lsposedtoolkit/
       ├─ AisearchTriggerReceiverHook.java   # 备用通道：显式广播
       ├─ AicrTriggerDispatcher.java         # 两条通道共用的 provider 调用
       ├─ AicrStateReporter.java             # 状态/进度回传相册
-      ├─ AicrWindowEndGuard.java            # 06:00 收尾停一次
+      ├─ AicrWindowEndGuard.java            # 06:00 后亮屏/未充电时收尾停一次
       └─ AisearchTaskDiagnosticHook.java    # 只读诊断
 ```
 
