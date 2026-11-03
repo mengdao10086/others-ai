@@ -43,7 +43,6 @@ final class AicrCpuAffinity {
     private static Handler sHandler;
     private static boolean sThreadInitialized;
     private static int sLastResult = Integer.MIN_VALUE;
-    private static int sLastObservedMask = Integer.MIN_VALUE;
     /** -2 = 还没见过目标线程，-1 = 已消失，>=0 = 当前 tid。 */
     private static int sLastTid = -2;
 
@@ -69,7 +68,6 @@ final class AicrCpuAffinity {
     /** 手动模式：立即绑 4-6，并每 3 秒检查/重绑一次，抵消 aicr 的 shieldCPU 或 cpuset 变化。 */
     static void startManual() {
         sManualActive = true;
-        sLastObservedMask = Integer.MIN_VALUE;
         sLastTid = -2;
         Handler handler = handler();
         if (handler != null) {
@@ -83,7 +81,6 @@ final class AicrCpuAffinity {
     /** 退出手动模式并绑回 0-3。 */
     static void stopManual() {
         sManualActive = false;
-        sLastObservedMask = Integer.MIN_VALUE;
         sLastTid = -2;
         Handler handler = sHandler;
         if (handler != null) {
@@ -112,7 +109,8 @@ final class AicrCpuAffinity {
 
     /**
      * 读目标线程的真实亲和性，和 4-6 不一致就重绑。
-     * 掩码变化各记一条：被改成 0-3 记一条，重绑回 4-6 再记一条。
+     * 只有重绑失败才记日志，成功路径静默：aicr 会周期性把线程改回低核，
+     * 每次成功重绑都记会让日志被同一事实刷满。
      */
     private static void monitorAndRebind() {
         if (!load()) {
@@ -143,13 +141,6 @@ final class AicrCpuAffinity {
         int tid = state[0];
         int mask = state[1];
         sLastTid = tid;
-        if (mask != sLastObservedMask) {
-            sLastObservedMask = mask;
-            if (mask != MASK_BIG) {
-                XposedBridge.log(TAG + ": affinity lost 4-6, now 0x"
-                        + Integer.toHexString(mask));
-            }
-        }
         if (mask == MASK_BIG) {
             return;
         }
@@ -159,10 +150,7 @@ final class AicrCpuAffinity {
         if (nativeThreadState(TARGET_THREAD, state) == 0) {
             after = state[1];
         }
-        if (after == MASK_BIG) {
-            sLastObservedMask = MASK_BIG;
-            XposedBridge.log(TAG + ": affinity restored to 4-6");
-        } else {
+        if (after != MASK_BIG) {
             int errno = applied < 0 ? -applied : EINVAL;
             logOnce(errno == EINVAL
                     ? "cpu affinity blocked by cpuset (errno=22)"
