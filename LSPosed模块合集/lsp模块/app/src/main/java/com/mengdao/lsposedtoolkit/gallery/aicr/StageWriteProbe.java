@@ -16,7 +16,7 @@ import de.robv.android.xposed.XposedHelpers;
  * 只计数、不判断业务；hook 回调里不做耗时操作，输出由 AicrProgressDiagnostics
  * 每 30 秒采样时带一行（stage-write ...）。类找不到时静默跳过，不影响 aicr。
  *
- * 四个探针点（均在 :searchDataService）：
+ * 四个探针点（探针装到 aicr 所有进程，实际执行进程由 DIAG 行 proc= 确认）：
  *  - face：FaceManager.analyticCluster(ArrayList)，批量聚类并回写 face_state
  *  - pet ：PetManager.analyzeCluster(List, String)，批量聚类并回写 pet_state
  *  - tag ：TagManager.analyticImage(String, Bitmap)，逐图打标；批次结束由
@@ -53,8 +53,9 @@ final class StageWriteProbe {
     private static final Stage PET = new Stage();
 
     private static ClassLoader sClassLoader;
+    private static String sProcessName = "?";
     private static volatile String sWorkId;
-    private static volatile int sHookCount;
+    private static volatile boolean sInstalled;
     private static boolean sFailureLogged;
     private static Object sFaceManager;
     private static Object sPetManager;
@@ -62,8 +63,13 @@ final class StageWriteProbe {
     private StageWriteProbe() {
     }
 
-    static void install(ClassLoader classLoader) {
+    static void install(ClassLoader classLoader, String processName) {
+        if (sInstalled) {
+            return;
+        }
+        sInstalled = true;
         sClassLoader = classLoader;
+        sProcessName = processName == null ? "?" : processName;
         try {
             hookFace(classLoader);
         } catch (Throwable t) {
@@ -91,12 +97,14 @@ final class StageWriteProbe {
         }
     }
 
-    /** 采样器每 30 秒取一次；never 表示本进程启动以来从未命中。 */
+    /**
+     * 采样器每 30 秒取一次。
+     * 状态：xxx=---[missing] 类/方法没找到；xxx=never/0[hooked] 已装但未调用；
+     * xxx=12s/34[hooked] 正常。proc= 标明是哪一进程的探针在报。
+     */
     static String describe() {
-        if (sHookCount == 0) {
-            return "uninstalled";
-        }
-        return "face=" + FACE.describe()
+        return "proc=" + sProcessName
+                + " face=" + FACE.describe()
                 + " ocr=" + OCR.describe()
                 + " tag=" + TAG_STAGE.describe()
                 + " pet=" + PET.describe();
@@ -110,7 +118,7 @@ final class StageWriteProbe {
         sFaceManager = XposedHelpers.getStaticObjectField(cls, "INSTANCE");
         XposedHelpers.findAndHookMethod(cls, "analyticCluster", ArrayList.class,
                 new CounterHook(FACE));
-        sHookCount++;
+        FACE.markHooked();
     }
 
     private static void hookPet(ClassLoader classLoader) {
@@ -121,7 +129,7 @@ final class StageWriteProbe {
         sPetManager = XposedHelpers.getStaticObjectField(cls, "INSTANCE");
         XposedHelpers.findAndHookMethod(cls, "analyzeCluster", List.class, String.class,
                 new CounterHook(PET));
-        sHookCount++;
+        PET.markHooked();
     }
 
     private static void hookTag(ClassLoader classLoader) {
@@ -131,7 +139,7 @@ final class StageWriteProbe {
         }
         XposedHelpers.findAndHookMethod(cls, "analyticImage", String.class, Bitmap.class,
                 new CounterHook(TAG_STAGE));
-        sHookCount++;
+        TAG_STAGE.markHooked();
     }
 
     private static void hookOcr(ClassLoader classLoader) {
@@ -142,7 +150,7 @@ final class StageWriteProbe {
         }
         XposedHelpers.findAndHookMethod(cls, "getOcrResult", Bitmap.class, entityCls,
                 new CounterHook(OCR));
-        sHookCount++;
+        OCR.markHooked();
     }
 
     private static void hookGalleryOperation(ClassLoader classLoader) {
@@ -168,7 +176,6 @@ final class StageWriteProbe {
                         maybeFlushEarly(param);
                     }
                 });
-        sHookCount++;
     }
 
     /**
@@ -252,8 +259,13 @@ final class StageWriteProbe {
     }
 
     private static final class Stage {
+        private boolean hooked;
         private long lastElapsedMs;
         private int count;
+
+        synchronized void markHooked() {
+            hooked = true;
+        }
 
         synchronized void record() {
             lastElapsedMs = SystemClock.elapsedRealtime();
@@ -261,14 +273,17 @@ final class StageWriteProbe {
         }
 
         synchronized String describe() {
+            if (!hooked) {
+                return "---[missing]";
+            }
             if (count == 0) {
-                return "never/0";
+                return "never/0[hooked]";
             }
             long deltaMs = SystemClock.elapsedRealtime() - lastElapsedMs;
             if (deltaMs < 0) {
                 deltaMs = 0;
             }
-            return (deltaMs / 1000) + "s/" + count + "次";
+            return (deltaMs / 1000) + "s/" + count + "[hooked]";
         }
     }
 }

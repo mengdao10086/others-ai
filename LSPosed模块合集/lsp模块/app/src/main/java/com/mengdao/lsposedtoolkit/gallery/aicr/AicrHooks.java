@@ -7,9 +7,10 @@ import de.robv.android.xposed.XposedBridge;
 /**
  * aicr 侧 hook 装配。
  *
- * aicr 有十余个进程，只有 :searchDataService 同时承载 AiCrSearchDataBaseService、
- * AISearchStaticReceiver 和 SearchDataBaseProvider，其余进程直接跳过，避免无意义注入。
- * 每组独立 try/catch，任何失败都不得影响 aicr 自身逻辑。
+ * aicr 有十余个进程。心跳、落点探针和进度采样装到所有进程，用于确认分析实际在哪个
+ * 进程执行；其余业务 hook 仍只装 :searchDataService（承载 AiCrSearchDataBaseService、
+ * AISearchStaticReceiver 和 SearchDataBaseProvider）。每组独立 try/catch，任何失败都
+ * 不得影响 aicr 自身逻辑。
  */
 public final class AicrHooks {
 
@@ -25,14 +26,26 @@ public final class AicrHooks {
             return;
         }
 
-        // doRemoteWork 心跳只在「实际执行 AISearchDataTask 的进程」可见；该进程不一定是
-        // :searchDataService，所以这条只读 hook 装到 aicr 所有进程，其余 hook 仍只装服务进程。
-        // 注意：心跳只证明启动任务跑过（0.9 秒返回即成功），不证明相册分析在跑，
-        // 分析卡住时它仍可能正常；判断流水线是否在动要看 DIAG stage-write。
+        // doRemoteWork 心跳只证明启动任务跑过，不证明分析在跑；它装在 aicr 所有进程。
+        // 实测诊断包在 :searchDataService 装上了探针却全 never/0，说明分析可能落在别的
+        // 进程，因此 StageWriteProbe 与进度采样也改为装到所有 aicr 进程。
         try {
             AisearchTaskDiagnosticHook.install(classLoader);
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": AisearchTaskDiagnosticHook failed: " + t);
+        }
+
+        try {
+            StageWriteProbe.install(classLoader, processName);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": StageWriteProbe failed: " + t);
+        }
+
+        // 采样器跟随 RunningStatus 变化，哪个进程真正跑分析就由哪个进程出 DIAG 行。
+        try {
+            AicrProgressDiagnostics.install(classLoader);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": AicrProgressDiagnostics failed: " + t);
         }
 
         if (!processName.endsWith(SERVICE_PROCESS_SUFFIX)) {
@@ -61,22 +74,6 @@ public final class AicrHooks {
             appendInstalled(installed, "AicrStateReporter");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": AicrStateReporter failed: " + t);
-        }
-
-        try {
-            AicrProgressDiagnostics.install(classLoader);
-            appendInstalled(installed, "AicrProgressDiagnostics");
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + ": AicrProgressDiagnostics failed: " + t);
-        }
-
-        // 相册分析实际在 :searchDataService 的 SearchDataBaseProvider 里执行
-        // （AISearchOperation.doWork → GalleryOperation.calculate），探针只装这里。
-        try {
-            StageWriteProbe.install(classLoader);
-            appendInstalled(installed, "StageWriteProbe");
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + ": StageWriteProbe failed: " + t);
         }
 
         try {
