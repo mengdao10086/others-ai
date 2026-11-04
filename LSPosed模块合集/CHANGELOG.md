@@ -2,6 +2,12 @@
 
 ## 2.2.0 — 2026-11-03
 
+### 2026-11-04 写回失败原因（`-写回诊断.apk`，只读诊断）
+
+- tick 行新增 `reason=<write_fail_reason>`（截断 60 字符，无则 `-`）与 `paths=[前 2 条 invalid_paths/传入路径]`（各截断 80 字符）
+- `wb` 计数按相册实际协议修正：face writer 不返回 `write_success_path_list`，改为结合 `write_face_result`/`invalid_paths` 与请求路径数推算成功条数
+- 静态结论：相册逐条校验只认 `gallery_cloud` 的 `realPath`（localFile/thumbnailFile/microthumbfile）并叠加 localGroupId/localFlag/serverStatus 过滤；`face_executed` 不是拒收条件
+
 ### 2026-11-04 聚类与写回计数（`-聚类计数.apk`，只读诊断）
 
 - tick 行新增 `cluster=N/lastPaths=N`：`analyticCluster` 本窗口调用次数与传入路径数

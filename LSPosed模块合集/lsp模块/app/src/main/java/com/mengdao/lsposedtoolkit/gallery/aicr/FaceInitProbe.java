@@ -25,7 +25,7 @@ import de.robv.android.xposed.XposedHelpers;
  *   2) checkInit 通过与否，卡在 isModelReady / loadModelSo / initCluster 哪一步；
  *   3) traversalPic / calculate / batchPic 是否真被调用，扫到的人脸状态分布如何；
  *   4) analyticImage 是否被调用、是否全部返回 null；
- *   5) analyticCluster 是否触发、写回 SUB_DATA provider 的成功/失败分布。
+ *   5) analyticCluster 是否触发、写回 SUB_DATA provider 的成功/失败分布与失败原因。
  *
  * 一次性 FACEINIT 行记录初始化状态；之后每进程每 60 秒最多一行 FACEINIT tick，
  * 输出上一个窗口的计数。每个 hook 独立 try/catch，任何失败只记
@@ -118,6 +118,8 @@ final class FaceInitProbe {
     private static int wWbOk;
     private static int wWbFail;
     private static int wWbEmpty;
+    private static String sLastWbReason;
+    private static String sLastWbPaths;
 
     // ---------------------------------------------------- 最近一次状态快照
     private static int sLastMigrated = UNKNOWN;              // -1 未知 / 0 否 / 1 是
@@ -514,21 +516,53 @@ final class FaceInitProbe {
                             int ok = 0;
                             int fail = 0;
                             int empty = 0;
+                            String reason = null;
+                            String pathsSample = null;
+                            int requestPaths = 0;
+                            java.util.ArrayList<String> requestList = null;
+                            try {
+                                if (param.args.length > 3 && param.args[3] instanceof Bundle) {
+                                    requestList = ((Bundle) param.args[3])
+                                            .getStringArrayList("paths");
+                                    requestPaths = requestList == null ? 0 : requestList.size();
+                                }
+                            } catch (Throwable ignored) {
+                            }
                             Object result = param.getResult();
                             if (param.hasThrowable() || !(result instanceof Bundle)) {
                                 empty = 1;
                             } else {
+                                Bundle bundle = (Bundle) result;
                                 try {
-                                    Bundle bundle = (Bundle) result;
+                                    reason = bundle.getString("write_fail_reason");
+                                } catch (Throwable ignored) {
+                                }
+                                try {
                                     java.util.ArrayList<String> success =
                                             bundle.getStringArrayList("write_success_path_list");
                                     java.util.ArrayList<String> invalid =
                                             bundle.getStringArrayList("invalid_paths");
-                                    ok = success == null ? 0 : success.size();
-                                    fail = invalid == null ? 0 : invalid.size();
-                                    if (success == null || success.isEmpty()) {
+                                    String flag = null;
+                                    try {
+                                        flag = bundle.getString("write_face_result");
+                                    } catch (Throwable ignored) {
+                                    }
+                                    if (success != null && !success.isEmpty()) {
+                                        ok = success.size();
+                                        if (invalid != null) {
+                                            fail = invalid.size();
+                                        }
+                                    } else if ("success".equals(flag)) {
+                                        ok = requestPaths;
+                                    } else if (invalid != null && !invalid.isEmpty()) {
+                                        fail = invalid.size();
+                                        ok = Math.max(0, requestPaths - fail);
+                                    } else {
                                         empty = 1;
                                     }
+                                    pathsSample = buildPathSample(
+                                            invalid != null && !invalid.isEmpty()
+                                                    ? invalid : requestList);
                                 } catch (Throwable t) {
                                     empty = 1;
                                 }
@@ -538,6 +572,8 @@ final class FaceInitProbe {
                                 wWbOk += ok;
                                 wWbFail += fail;
                                 wWbEmpty += empty;
+                                sLastWbReason = truncate(reason, 60);
+                                sLastWbPaths = pathsSample;
                             }
                             sPipelineActive = true;
                         } catch (Throwable ignored) {
@@ -679,6 +715,8 @@ final class FaceInitProbe {
         int wbOk;
         int wbFail;
         int wbEmpty;
+        String wbReason;
+        String wbPaths;
         int migrated;
         int isVector;
         long pictureCount;
@@ -705,6 +743,8 @@ final class FaceInitProbe {
             wbOk = wWbOk;
             wbFail = wWbFail;
             wbEmpty = wWbEmpty;
+            wbReason = sLastWbReason;
+            wbPaths = sLastWbPaths;
             migrated = sLastMigrated;
             isVector = sLastIsVector;
             pictureCount = sLastPictureCount;
@@ -769,6 +809,10 @@ final class FaceInitProbe {
                     .append("/fail:").append(wbFail)
                     .append("/empty:").append(wbEmpty);
         }
+        sb.append(" reason=")
+                .append(wbReason == null || wbReason.isEmpty() ? "-" : wbReason)
+                .append(" paths=")
+                .append(wbPaths == null || wbPaths.isEmpty() ? "-" : "[" + wbPaths + "]");
         sb.append(" alias=").append(ENABLE_FACE_KEY_ALIAS ? "on" : "off");
 
         XposedBridge.log(sb.toString());
@@ -932,6 +976,32 @@ final class FaceInitProbe {
             return "off";
         }
         return "?";
+    }
+
+    /** 取前 2 条路径，每条截断到 80 字符；换行替换为空格。 */
+    private static String buildPathSample(List<?> list) {
+        if (list == null || list.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        int count = Math.min(2, list.size());
+        for (int i = 0; i < count; i++) {
+            if (i > 0) {
+                sb.append(" | ");
+            }
+            Object item = list.get(i);
+            String path = item == null ? "null" : String.valueOf(item);
+            path = path.replace('\n', ' ').replace('\r', ' ');
+            sb.append(path.length() > 80 ? path.substring(0, 80) : path);
+        }
+        return sb.toString();
+    }
+
+    private static String truncate(String value, int max) {
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
+        return value.length() > max ? value.substring(0, max) : value;
     }
 
     private static String hookedCount() {
