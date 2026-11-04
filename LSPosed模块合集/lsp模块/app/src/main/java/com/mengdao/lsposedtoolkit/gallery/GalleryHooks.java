@@ -49,6 +49,15 @@ public final class GalleryHooks {
             XposedBridge.log(TAG + ": WriteBackProbe failed: " + t);
         }
 
+        // 必须在 WriteBackProbe 之后注册：Xposed 的 after hook 后注册先执行，
+        // 这样 alias 先改写返回值，探针能直接看到修复后的 map。
+        try {
+            WriteBackPathAliasHook.install(classLoader);
+            appendInstalled(installed, "WriteBackPathAliasHook");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": WriteBackPathAliasHook failed: " + t);
+        }
+
         try {
             ExecDirectlyLogHook.install(classLoader);
             appendInstalled(installed, "ExecDirectlyLogHook");

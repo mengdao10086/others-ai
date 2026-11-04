@@ -2,6 +2,12 @@
 
 ## 2.2.0 — 2026-11-03
 
+### 2026-11-04 写回路径别名修复（`-别名修复.apk`）
+
+- 根因：相册查询 `COLLATE NOCASE` 命中，但 `saveFaceResult` 用大小写敏感 `HashMap.get`，只差大小写的路径逐条 miss
+- 新增 `WriteBackPathAliasHook`：`getMediaFeatureListByPath` 返回后按 `equalsIgnoreCase` 为输入路径补别名键，`ENABLE_PATH_ALIAS=false` 可关闭
+- 探针先注册、alias 后注册，利用 Xposed after 后注册先执行，让探针看到修复后的 map；异常保持原返回值
+
 ### 2026-11-04 写回键比对（`-键比对.apk`，只读诊断）
 
 - map 非空时 `writeback probe` 追加 `in=[#1 输入路径 | #2 ...]` 与 `key=[#1 map 键 | #2 ...]`，各截断 120 字符，用于逐字比对
