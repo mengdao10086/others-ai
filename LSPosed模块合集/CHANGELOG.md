@@ -2,6 +2,12 @@
 
 ## 2.2.0 — 2026-11-03
 
+### 2026-11-04 相册写回探针（`-相册写回探测.apk`，只读诊断）
+
+- 去掉 `StageWriteProbe` 测试期的 face/pet 阈值 50 提前冲刷：删除 `DEBUG_BATCH_THRESHOLD`、batchPic 提前调聚类与清空入参逻辑，只保留四个落点计数
+- 相册侧新增 `WriteBackProbe`：hook `AlgoUtils.getMediaFeatureListByPath` 与其 cursor 处理器，输出 `req/rows/map/sample`，map 为空时用前 2 条请求路径做 loose/filtered 只读查询
+- 样本含 `realPath/localFile/thumbnailFile/microthumbfile`（各截断 100 字符）；每进程每 60 秒最多一行
+
 ### 2026-11-04 写回失败原因（`-写回诊断.apk`，只读诊断）
 
 - tick 行新增 `reason=<write_fail_reason>`（截断 60 字符，无则 `-`）与 `paths=[前 2 条 invalid_paths/传入路径]`（各截断 80 字符）

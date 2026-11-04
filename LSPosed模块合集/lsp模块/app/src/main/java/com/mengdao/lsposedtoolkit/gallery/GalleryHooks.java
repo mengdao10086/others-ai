@@ -43,6 +43,13 @@ public final class GalleryHooks {
         }
 
         try {
+            WriteBackProbe.install(classLoader);
+            appendInstalled(installed, "WriteBackProbe");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": WriteBackProbe failed: " + t);
+        }
+
+        try {
             ExecDirectlyLogHook.install(classLoader);
             appendInstalled(installed, "ExecDirectlyLogHook");
         } catch (Throwable t) {
