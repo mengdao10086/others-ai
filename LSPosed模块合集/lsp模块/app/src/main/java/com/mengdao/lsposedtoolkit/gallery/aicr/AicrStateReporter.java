@@ -21,7 +21,7 @@ import de.robv.android.xposed.XposedHelpers;
  *
  * 相册设置页原先只读自己进程里的 isRunning，aicr 在 :searchDataService 里算多久都显示「空闲」。
  * 这里 hook RunningStatus.setRunningStatus：状态变化立即广播；运行期间每 1 秒巡检状态、
- * 每 30 秒重算一次进度、每 5 秒用缓存值发一次心跳。只读，不改变任何状态。
+ * 每 60 秒重算一次进度、每 10 秒用缓存值发一次心跳。只读，不改变任何状态。
  *
  * 进度读取必须离开主线程：ManagerDataBase 未开 allowMainThreadQueries，主线程访问 QueryDao
  * 会抛 IllegalStateException，被 getRealProgressFromAI 吞掉后返回 0，再把 0 写回
@@ -38,9 +38,9 @@ final class AicrStateReporter {
     private static final String PROGRESS_THREAD_NAME = "mengdao-aicr-progress";
     /** 状态巡检周期：只读静态状态，不做任何 Room 查询，保证停止能被 1 秒发现。 */
     private static final long STATUS_TICK_MS = 1000L;
-    private static final long BROADCAST_INTERVAL_MS = 5000L;
-    /** 进度重算周期：每次都要查 Room，放宽到 30 秒。 */
-    private static final long PROGRESS_READ_INTERVAL_MS = 30000L;
+    private static final long BROADCAST_INTERVAL_MS = 10000L;
+    /** 进度重算周期：每次都要查 Room，放宽到 60 秒（小于接收端 20 秒新鲜期的两倍）。 */
+    private static final long PROGRESS_READ_INTERVAL_MS = 60000L;
     private static final int STATUS_IDLE = 0;
 
     private static final String MANAGER_DATABASE_CLASS =
@@ -197,7 +197,7 @@ final class AicrStateReporter {
         }
     };
 
-    /** 只在需要时重算进度（30 秒一次或状态切换），其余查询/心跳复用缓存。 */
+    /** 只在需要时重算进度（60 秒一次或状态切换），其余查询/心跳复用缓存。 */
     private static void refreshProgress(boolean force) {
         long now = SystemClock.elapsedRealtime();
         if (!force && sLastProgressReadAt > 0
@@ -236,8 +236,8 @@ final class AicrStateReporter {
     }
 
     /**
-     * 每 1 秒只看静态状态（停止不被拖慢）；进度每 30 秒重算一次，
-     * 广播仍每 5 秒一次但复用缓存值，保证接收端 20 秒新鲜度。
+     * 每 1 秒只看静态状态（停止不被拖慢）；进度每 60 秒重算一次，
+     * 广播仍每 10 秒一次但复用缓存值，保证接收端 20 秒新鲜度。
      */
     private static final Runnable LOOP = new Runnable() {
         @Override

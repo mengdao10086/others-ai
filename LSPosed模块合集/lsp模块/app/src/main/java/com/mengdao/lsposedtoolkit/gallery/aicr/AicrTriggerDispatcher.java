@@ -41,7 +41,6 @@ final class AicrTriggerDispatcher {
 
     static void dispatch(Context fallback, String action, String source) {
         if (AicrProtocol.ACTION_QUERY.equals(action)) {
-            XposedBridge.log(TAG + ": aicr state query from " + source);
             Context context = appContext(fallback);
             if (context != null) {
                 RecentsLock.recoverIfIdle(context);
@@ -72,11 +71,9 @@ final class AicrTriggerDispatcher {
                     : AicrProtocol.METHOD_STOP;
             Bundle extras = new Bundle();
             extras.putInt(AicrProtocol.EXTRA_SCOPE, AicrProtocol.SCOPE_GALLERY);
-            Bundle result = context.getContentResolver().call(
+            context.getContentResolver().call(
                     Uri.parse("content://" + AicrProtocol.PROVIDER_AUTHORITY),
                     method, "", extras);
-            XposedBridge.log(TAG + ": aicr provider call " + method
-                    + " from " + source + " result=" + result);
             if (start && AicrStateReporter.isRunningNow()) {
                 // 用户点启动时分析本来就在跑，不会再走 IDLE→运行，直接补一次锁。
                 RecentsLock.onManualRunStarted(context);

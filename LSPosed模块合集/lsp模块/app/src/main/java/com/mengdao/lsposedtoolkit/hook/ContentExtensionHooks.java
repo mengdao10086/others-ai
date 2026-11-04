@@ -17,31 +17,16 @@ public final class ContentExtensionHooks {
     }
 
     public static void install(ClassLoader classLoader) {
-        StringBuilder installed = new StringBuilder();
-
         try {
             TaplusSaveFormatHook.install(classLoader);
-            appendInstalled(installed, "TaplusSaveFormatHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": TaplusSaveFormatHook failed: " + t);
         }
 
         try {
             TaplusRaceFixHook.install(classLoader);
-            appendInstalled(installed, "TaplusRaceFixHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": TaplusRaceFixHook failed: " + t);
         }
-
-        if (installed.length() > 0) {
-            XposedBridge.log(TAG + ": hooks installed: " + installed);
-        }
-    }
-
-    private static void appendInstalled(StringBuilder installed, String name) {
-        if (installed.length() > 0) {
-            installed.append(", ");
-        }
-        installed.append(name);
     }
 }

@@ -239,7 +239,6 @@ final class AicrCpuAffinity {
         try {
             System.load(zipPath);
             sAvailable = true;
-            XposedBridge.log(TAG + ": cpu affinity lib loaded from apk");
             return true;
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": cpu affinity lib load from apk failed: " + t);
@@ -248,7 +247,6 @@ final class AicrCpuAffinity {
             File lib = new File(new File(apk).getParentFile(), "lib/" + ABI + "/" + LIB_NAME);
             System.load(lib.getAbsolutePath());
             sAvailable = true;
-            XposedBridge.log(TAG + ": cpu affinity lib loaded from dir");
             return true;
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": cpu affinity lib unavailable: " + t);

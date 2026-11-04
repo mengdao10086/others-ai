@@ -171,6 +171,9 @@ final class AicrProgressDiagnostics {
 
     /** 任务心跳等外部 DIAG 行：与采样共享 40 行上限，超出后静默。 */
     static void logDiagLine(String body) {
+        if (!ENABLED) {
+            return;
+        }
         if (!reserveLogLine()) {
             return;
         }

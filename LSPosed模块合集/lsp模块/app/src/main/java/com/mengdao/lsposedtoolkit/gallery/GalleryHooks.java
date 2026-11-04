@@ -19,32 +19,27 @@ public final class GalleryHooks {
 
     public static void install(ClassLoader classLoader) {
         AnalyzeControl.init(classLoader);
-        StringBuilder installed = new StringBuilder();
 
         try {
             hookAppCreate(classLoader);
-            appendInstalled(installed, "GalleryApp.onCreate");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": GalleryApp.onCreate hook failed: " + t);
         }
 
         try {
             SettingsHook.install(classLoader);
-            appendInstalled(installed, "SettingsHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": SettingsHook failed: " + t);
         }
 
         try {
             SearchProgressPinHook.install(classLoader);
-            appendInstalled(installed, "SearchProgressPinHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": SearchProgressPinHook failed: " + t);
         }
 
         try {
             WriteBackProbe.install(classLoader);
-            appendInstalled(installed, "WriteBackProbe");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": WriteBackProbe failed: " + t);
         }
@@ -53,45 +48,26 @@ public final class GalleryHooks {
         // 这样 alias 先改写返回值，探针能直接看到修复后的 map。
         try {
             WriteBackPathAliasHook.install(classLoader);
-            appendInstalled(installed, "WriteBackPathAliasHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": WriteBackPathAliasHook failed: " + t);
         }
 
         try {
             ExecDirectlyLogHook.install(classLoader);
-            appendInstalled(installed, "ExecDirectlyLogHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": ExecDirectlyLogHook failed: " + t);
         }
 
         try {
             PowerGateHook.install(classLoader);
-            appendInstalled(installed, "PowerGateHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": PowerGateHook failed: " + t);
         }
 
         try {
             LegacyNightWorkCleanupHook.install(classLoader);
-            appendInstalled(installed, "LegacyNightWorkCleanupHook");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": LegacyNightWorkCleanupHook failed: " + t);
-        }
-
-        logInstalled(installed);
-    }
-
-    private static void appendInstalled(StringBuilder installed, String name) {
-        if (installed.length() > 0) {
-            installed.append(", ");
-        }
-        installed.append(name);
-    }
-
-    private static void logInstalled(StringBuilder installed) {
-        if (installed.length() > 0) {
-            XposedBridge.log(TAG + ": hooks installed: " + installed);
         }
     }
 

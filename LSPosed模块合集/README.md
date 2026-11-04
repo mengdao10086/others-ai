@@ -25,6 +25,8 @@ JAVA_HOME=D:/tools/jdk-17.0.2 ./gradlew :app:assembleRelease
 
 产物：`lsp模块/app/build/outputs/apk/release/app-release.apk`
 
+诊断探针放在独立 source set，release 包不含这些类；需要时构建 `:app:assembleDiag`（`src/diag/java`，不混淆）。
+
 ## 安装与验证
 
 设备侧操作由用户自行处理。参考步骤：
@@ -77,15 +79,20 @@ app/src/main/java/com/mengdao/lsposedtoolkit/
       ├─ RecentsLock.java                   # 分析期间最近任务锁定
       ├─ AicrCpuAffinity.java               # 分析线程 CPU 亲和
       ├─ PendingQueryTrimHook.java          # 摘掉 pet/iaa/crop 恒 -1 条件
-      ├─ AicrWindowEndGuard.java            # 06:00 后亮屏/未充电时收尾停一次
-      ├─ AisearchTaskDiagnosticHook.java    # 只读心跳诊断
-      ├─ AicrProgressDiagnostics.java       # 进度采样诊断（默认关闭）
-      ├─ StageWriteProbe.java               # 阶段写入探针（默认关闭）
-      ├─ FaceInitProbe.java                 # 人脸初始化探针（默认关闭）
-      └─ DbStateSnapshot.java               # 数据库状态分布快照（诊断）
+      └─ AicrWindowEndGuard.java            # 06:00 后亮屏/未充电时收尾停一次
 ```
 
-`WriteBackProbe`、`StageWriteProbe`、`FaceInitProbe`、`AicrProgressDiagnostics` 等探针默认关闭（`ENABLED=false`），需要时改 `true` 重新编译。
+```
+app/src/diag/java/com/mengdao/lsposedtoolkit/gallery/aicr/   # 仅 diag 构建
+├─ DiagnosticsBootstrap.java        # 反射入口，release 中不存在
+├─ AisearchTaskDiagnosticHook.java  # 只读心跳诊断
+├─ AicrProgressDiagnostics.java     # 进度采样诊断
+├─ StageWriteProbe.java             # 阶段写入探针
+├─ FaceInitProbe.java               # 人脸初始化探针
+└─ DbStateSnapshot.java             # 数据库状态分布快照
+```
+
+`WriteBackProbe`、`StageWriteProbe`、`FaceInitProbe`、`AicrProgressDiagnostics` 等探针默认关闭（`ENABLED=false`），需要时改 `true` 后用 diag 构建。
 
 ## 变更
 

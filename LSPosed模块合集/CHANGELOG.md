@@ -1,5 +1,13 @@
 # 变更记录
 
+## 2.3.1 — 2026-11-04
+
+- 运行时降耗：窗口收尾轮询自适应（运行 3s／空闲 60s）并缓存 Context、系统服务与反射结果；状态广播 5s→10s、进度重算 30s→60s；相册侧落盘改为状态变化即写、否则 30s 节流
+- 设置页轮询 1s→2s，`setSummary` 文本未变时跳过；蓝牙解锁 Toast 按 resId 缓存判定
+- 写回路径别名改为一次性构建小写键表后 O(1) 查找，无命中不拷贝原 map
+- 诊断类移入 `src/diag/java` 与 `diag` 构建类型，release 通过反射可选加载，不再打包；`AicrProgressDiagnostics.logDiagLine` 与 `AisearchTaskDiagnosticHook` 增加 `ENABLED` 早退
+- 精简安装成功、例行注入与每次查询成功的噪声日志，保留错误、失败与生命周期日志
+
 ## 2.3.0 — 2026-11-04
 
 - 写回路径大小写别名修复：`getMediaFeatureListByPath` 返回后按 `equalsIgnoreCase` 为输入路径补别名键，修复只差大小写导致的逐条 miss（`WriteBackPathAliasHook`，默认开启）

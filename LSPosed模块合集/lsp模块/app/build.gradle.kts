@@ -10,8 +10,8 @@ android {
         applicationId = "com.mengdao.lsposedtoolkit"
         minSdk = 29          // Android 10 — 两个旧模块的最低版本
         targetSdk = 34
-        versionCode = 23000
-        versionName = "2.3.0"
+        versionCode = 23100
+        versionName = "2.3.1"
     }
 
     signingConfigs {
@@ -31,6 +31,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
+        }
+        // 诊断构建：额外编入 src/diag/java 下的探针类，release 包不含这些类。
+        create("diag") {
+            initWith(getByName("release"))
+            isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("release")
         }
     }

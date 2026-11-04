@@ -22,6 +22,8 @@ final class AicrStateReceiver extends BroadcastReceiver {
 
     private static final String TAG = "GalleryAnalyze";
     private static final long FRESH_MS = 20_000L;
+    /** 状态无变化时的最小落盘间隔。 */
+    private static final long PERSIST_INTERVAL_MS = 30_000L;
     private static final String PREFS = "mengdao_gallery_analyze_state";
     private static final String KEY_STATUS = "status";
     private static final String KEY_PROGRESS = "progress";
@@ -38,6 +40,11 @@ final class AicrStateReceiver extends BroadcastReceiver {
     private static volatile long sUpdatedAt;
     private static volatile boolean sRegistered;
     private static volatile boolean sWhitelistFailed;
+    private static long sLastPersistAt;
+    private static int sPersistedStatus;
+    private static int sPersistedProgress = Integer.MIN_VALUE;
+    private static String sPersistedDetail = "";
+    private static long sPersistedStartedAt;
 
     private AicrStateReceiver() {
     }
@@ -66,7 +73,6 @@ final class AicrStateReceiver extends BroadcastReceiver {
                 context.registerReceiver(INSTANCE, filter);
             }
             sRegistered = true;
-            XposedBridge.log(TAG + ": aicr state receiver registered");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": register state receiver failed: " + t);
         }
@@ -98,18 +104,33 @@ final class AicrStateReceiver extends BroadcastReceiver {
         return sWhitelistFailed;
     }
 
-    /** 把最新状态落盘，供相册进程下次启动时立即恢复。 */
+    /** 把最新状态落盘，供相册进程下次启动时立即恢复；无变化时最多每 30 秒写一次。 */
     private static void persist(Context context) {
         try {
+            long now = System.currentTimeMillis();
+            String detail = sDetail == null ? "" : sDetail;
+            boolean changed = sStatus != sPersistedStatus
+                    || sProgress != sPersistedProgress
+                    || sStartedAt != sPersistedStartedAt
+                    || !detail.equals(sPersistedDetail);
+            if (!changed && sLastPersistAt > 0
+                    && now - sLastPersistAt < PERSIST_INTERVAL_MS) {
+                return;
+            }
             SharedPreferences preferences =
                     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             preferences.edit()
                     .putInt(KEY_STATUS, sStatus)
                     .putInt(KEY_PROGRESS, sProgress)
-                    .putString(KEY_DETAIL, sDetail)
+                    .putString(KEY_DETAIL, detail)
                     .putLong(KEY_STARTED_AT, sStartedAt)
                     .putLong(KEY_SAVED_AT, sUpdatedAt)
                     .apply();
+            sLastPersistAt = now;
+            sPersistedStatus = sStatus;
+            sPersistedProgress = sProgress;
+            sPersistedDetail = detail;
+            sPersistedStartedAt = sStartedAt;
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": state persist failed: " + t);
         }

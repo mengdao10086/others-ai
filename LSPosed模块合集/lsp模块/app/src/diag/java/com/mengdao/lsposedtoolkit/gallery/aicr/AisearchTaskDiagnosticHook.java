@@ -16,6 +16,9 @@ import de.robv.android.xposed.XposedHelpers;
 final class AisearchTaskDiagnosticHook {
 
     private static final String TAG = "GalleryAnalyze";
+
+    /** 诊断开关；false 时不装 hook、不输出任何 task-enter/exit 行。 */
+    static final boolean ENABLED = false;
     private static final String TASK_CLASS = "com.xiaomi.aicr.searchpro.worker.AISearchDataTask";
     private static final String CONTINUATION_CLASS = "kotlin.coroutines.Continuation";
     private static final String RUNNING_STATUS_CLASS =
@@ -29,6 +32,10 @@ final class AisearchTaskDiagnosticHook {
     }
 
     static void install(ClassLoader classLoader) {
+        if (!ENABLED) {
+            XposedBridge.log(TAG + ": AisearchTaskDiagnosticHook disabled");
+            return;
+        }
         sClassLoader = classLoader;
         Class<?> taskClass = XposedHelpers.findClassIfExists(TASK_CLASS, classLoader);
         Class<?> continuationClass = XposedHelpers.findClassIfExists(

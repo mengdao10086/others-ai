@@ -1,7 +1,5 @@
 package com.mengdao.lsposedtoolkit.gallery.aicr;
 
-import android.os.Process;
-
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
@@ -75,7 +73,6 @@ final class PendingQueryTrimHook {
                             }
                         }
                     });
-            XposedBridge.log(TAG + ": pending trim install pid=" + Process.myPid());
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": pending trim hook failed: " + t);
         }

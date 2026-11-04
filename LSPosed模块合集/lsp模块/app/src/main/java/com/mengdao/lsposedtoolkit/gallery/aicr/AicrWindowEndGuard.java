@@ -1,6 +1,7 @@
 package com.mengdao.lsposedtoolkit.gallery.aicr;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.BatteryManager;
 import android.os.Handler;
 import android.os.Looper;
@@ -34,9 +35,11 @@ final class AicrWindowEndGuard {
 
     private static final int WINDOW_START_HOUR = 6;
     private static final int WINDOW_END_HOUR = 20;
-    /** 窗口内且当天未处理：3 秒看一次亮屏/充电状态。 */
-    private static final long TICK_ACTIVE_MS = 3000L;
-    /** 其余情况：5 分钟看一次是否进入下一个窗口。 */
+    /** 窗口内且 aicr 运行中：3 秒看一次亮屏/充电状态。 */
+    private static final long TICK_RUNNING_MS = 3000L;
+    /** 窗口内但 aicr 空闲：60 秒看一次，运行结束后最多 60 秒完成收尾。 */
+    private static final long TICK_IDLE_IN_WINDOW_MS = 60000L;
+    /** 窗口外或当天已处理：5 分钟看一次是否进入下一个窗口。 */
     private static final long TICK_IDLE_MS = 5L * 60L * 1000L;
     private static final int CONTEXT_MISS_LOG_TICKS = 5;
 
@@ -48,6 +51,16 @@ final class AicrWindowEndGuard {
     private static int sContextMissTicks;
     private static boolean sContextMissLogged;
     private static boolean sMarkFailureLogged;
+
+    /** 进程内缓存：Context、系统服务与已查到的类，避免每轮重查/反射。 */
+    private static Context sContext;
+    private static SharedPreferences sPrefs;
+    private static PowerManager sPowerManager;
+    private static BatteryManager sBatteryManager;
+    private static Class<?> sRunningStatusClass;
+    private static Object sRunningStatusInstance;
+    private static Class<?> sOperationClass;
+    private static Object sOperationInstance;
 
     private AicrWindowEndGuard() {
     }
@@ -101,7 +114,7 @@ final class AicrWindowEndGuard {
         Context context = context();
         if (context == null) {
             noteContextMissing();
-            return inWindow ? TICK_ACTIVE_MS : TICK_IDLE_MS;
+            return inWindow ? TICK_IDLE_IN_WINDOW_MS : TICK_IDLE_MS;
         }
         noteContextAvailable();
 
@@ -121,35 +134,42 @@ final class AicrWindowEndGuard {
                 return TICK_IDLE_MS;
             }
             logMarkFailure(today);
-            return TICK_ACTIVE_MS;
+            return activeDelay();
         }
 
         String reason = stopTrigger(context);
         if (reason == null) {
-            return TICK_ACTIVE_MS;
+            return activeDelay();
         }
         if (!markHandled(context, today)) {
             logMarkFailure(today);
-            return TICK_ACTIVE_MS;
+            return activeDelay();
         }
         XposedBridge.log(TAG + ": window-end: marked " + today + " handled");
         stopIfRunning(reason);
         return TICK_IDLE_MS;
     }
 
+    /** aicr 运行中保持 3 秒，空闲时退到 60 秒。 */
+    private static long activeDelay() {
+        return runStatus() > 0 ? TICK_RUNNING_MS : TICK_IDLE_IN_WINDOW_MS;
+    }
+
     /** 命中「屏幕亮」或「未充电」时返回原因，否则返回 null。 */
     private static String stopTrigger(Context context) {
         boolean interactive = false;
         boolean notCharging = false;
-        PowerManager powerManager =
-                (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-        if (powerManager != null) {
-            interactive = powerManager.isInteractive();
+        if (sPowerManager == null) {
+            sPowerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         }
-        BatteryManager batteryManager =
-                (BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
-        if (batteryManager != null) {
-            notCharging = !batteryManager.isCharging();
+        if (sPowerManager != null) {
+            interactive = sPowerManager.isInteractive();
+        }
+        if (sBatteryManager == null) {
+            sBatteryManager = (BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
+        }
+        if (sBatteryManager != null) {
+            notCharging = !sBatteryManager.isCharging();
         }
         if (!interactive && !notCharging) {
             return null;
@@ -172,28 +192,47 @@ final class AicrWindowEndGuard {
                     + reason);
             return;
         }
-        Class<?> operationClass = XposedHelpers.findClassIfExists(OPERATION_CLASS, sClassLoader);
+        Class<?> operationClass = operationClass();
         if (operationClass == null) {
             XposedBridge.log(TAG + ": window-end: AISearchOperation not found, stop skipped, reason="
                     + reason);
             return;
         }
-        Object operation = XposedHelpers.getStaticObjectField(operationClass, "INSTANCE");
+        Object operation = operationInstance(operationClass);
         XposedHelpers.callMethod(operation, "unlimitedStop", AicrProtocol.SCOPE_GALLERY);
         XposedBridge.log(TAG + ": window-end: stopped aicr, reason=" + reason
                 + ", status=" + status);
     }
 
+    private static Class<?> operationClass() {
+        if (sOperationClass == null) {
+            sOperationClass = XposedHelpers.findClassIfExists(OPERATION_CLASS, sClassLoader);
+        }
+        return sOperationClass;
+    }
+
+    private static Object operationInstance(Class<?> operationClass) {
+        if (sOperationInstance == null) {
+            sOperationInstance = XposedHelpers.getStaticObjectField(operationClass, "INSTANCE");
+        }
+        return sOperationInstance;
+    }
+
     /** 进程内实时值；SharedPreferences 里的 getRunningStatus() 开机会带出旧值。 */
     private static int runStatus() {
         try {
-            Class<?> statusClass = XposedHelpers.findClassIfExists(
-                    RUNNING_STATUS_CLASS, sClassLoader);
-            if (statusClass == null) {
+            if (sRunningStatusClass == null) {
+                sRunningStatusClass = XposedHelpers.findClassIfExists(
+                        RUNNING_STATUS_CLASS, sClassLoader);
+            }
+            if (sRunningStatusClass == null) {
                 return -1;
             }
-            Object status = XposedHelpers.getStaticObjectField(statusClass, "INSTANCE");
-            return (Integer) XposedHelpers.callMethod(status, "getRunStatus");
+            if (sRunningStatusInstance == null) {
+                sRunningStatusInstance =
+                        XposedHelpers.getStaticObjectField(sRunningStatusClass, "INSTANCE");
+            }
+            return (Integer) XposedHelpers.callMethod(sRunningStatusInstance, "getRunStatus");
         } catch (Throwable t) {
             return -1;
         }
@@ -211,8 +250,7 @@ final class AicrWindowEndGuard {
 
     private static boolean alreadyHandled(Context context, String today) {
         try {
-            String handled = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    .getString(KEY_HANDLED_DATE, "");
+            String handled = prefs(context).getString(KEY_HANDLED_DATE, "");
             return today.equals(handled);
         } catch (Throwable t) {
             return false;
@@ -221,8 +259,7 @@ final class AicrWindowEndGuard {
 
     private static boolean markHandled(Context context, String today) {
         try {
-            boolean ok = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    .edit()
+            boolean ok = prefs(context).edit()
                     .putString(KEY_HANDLED_DATE, today)
                     .commit();
             if (ok) {
@@ -258,14 +295,25 @@ final class AicrWindowEndGuard {
         sContextMissLogged = false;
     }
 
+    private static SharedPreferences prefs(Context context) {
+        if (sPrefs == null) {
+            sPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        }
+        return sPrefs;
+    }
+
     private static Context context() {
+        if (sContext != null) {
+            return sContext;
+        }
         try {
             Class<?> util = XposedHelpers.findClassIfExists(
                     "com.xiaomi.aicr.common.ContextUtil", sClassLoader);
             if (util != null) {
                 Object context = XposedHelpers.callStaticMethod(util, "getApplicationContext");
                 if (context instanceof Context) {
-                    return (Context) context;
+                    sContext = (Context) context;
+                    return sContext;
                 }
             }
         } catch (Throwable ignored) {
@@ -275,11 +323,11 @@ final class AicrWindowEndGuard {
             Object application =
                     XposedHelpers.callStaticMethod(activityThread, "currentApplication");
             if (application instanceof Context) {
-                return (Context) application;
+                sContext = (Context) application;
             }
         } catch (Throwable ignored) {
         }
-        return null;
+        return sContext;
     }
 
     private static Handler handler() {

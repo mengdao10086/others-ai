@@ -7,6 +7,7 @@ import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -26,6 +27,10 @@ public final class BleUnlockToastHook {
     /** 已判定为蓝牙解锁提示的 Toast；show 时吞掉。弱引用，避免长期持有。 */
     private static final Set<Toast> BLE_TOASTS =
             Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+
+    /** resId → 是否蓝牙解锁文案；资源 id 在本包内稳定，判定一次即可。 */
+    private static final ConcurrentHashMap<Integer, Boolean> BLE_RES_IDS =
+            new ConcurrentHashMap<>();
 
     private BleUnlockToastHook() {
     }
@@ -68,12 +73,18 @@ public final class BleUnlockToastHook {
                 || !(args[0] instanceof Context) || !(args[1] instanceof Integer)) {
             return false;
         }
-        try {
-            String name = ((Context) args[0]).getResources()
-                    .getResourceName((Integer) args[1]);
-            return name != null && name.endsWith(BLE_TOAST_RES_SUFFIX);
-        } catch (Throwable t) {
-            return false;
+        int resId = (Integer) args[1];
+        Boolean cached = BLE_RES_IDS.get(resId);
+        if (cached != null) {
+            return cached;
         }
+        boolean ble = false;
+        try {
+            String name = ((Context) args[0]).getResources().getResourceName(resId);
+            ble = name != null && name.endsWith(BLE_TOAST_RES_SUFFIX);
+        } catch (Throwable ignored) {
+        }
+        BLE_RES_IDS.put(resId, ble);
+        return ble;
     }
 }

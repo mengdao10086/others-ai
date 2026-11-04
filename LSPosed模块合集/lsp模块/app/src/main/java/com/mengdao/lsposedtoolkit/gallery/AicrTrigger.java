@@ -74,14 +74,12 @@ final class AicrTrigger {
         intent.setComponent(new ComponentName(AicrProtocol.PACKAGE, AicrProtocol.SERVICE_CLASS));
         try {
             context.startForegroundService(intent);
-            XposedBridge.log(TAG + ": aicr service started (foreground): " + action);
             return true;
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": startForegroundService failed: " + t);
         }
         try {
             context.startService(intent);
-            XposedBridge.log(TAG + ": aicr service started: " + action);
             return true;
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": startService failed: " + t);
@@ -96,7 +94,6 @@ final class AicrTrigger {
                     AicrProtocol.PACKAGE, AicrProtocol.RECEIVER_CLASS));
             intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             context.sendBroadcast(intent);
-            XposedBridge.log(TAG + ": aicr broadcast sent: " + action);
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": aicr broadcast failed (" + action + "): " + t);
         }
