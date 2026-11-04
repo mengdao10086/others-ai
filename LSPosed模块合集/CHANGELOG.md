@@ -2,6 +2,11 @@
 
 ## 2.2.0 — 2026-11-03
 
+### 2026-11-04 写回键比对（`-键比对.apk`，只读诊断）
+
+- map 非空时 `writeback probe` 追加 `in=[#1 输入路径 | #2 ...]` 与 `key=[#1 map 键 | #2 ...]`，各截断 120 字符，用于逐字比对
+- 保留原有 `req/rows/map/sample`、空 map 的 `paths/diag` 与每进程 60 秒限流
+
 ### 2026-11-04 相册写回探针（`-相册写回探测.apk`，只读诊断）
 
 - 去掉 `StageWriteProbe` 测试期的 face/pet 阈值 50 提前冲刷：删除 `DEBUG_BATCH_THRESHOLD`、batchPic 提前调聚类与清空入参逻辑，只保留四个落点计数

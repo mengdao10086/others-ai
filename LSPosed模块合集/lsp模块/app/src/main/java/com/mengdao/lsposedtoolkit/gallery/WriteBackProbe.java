@@ -21,9 +21,10 @@ import de.robv.android.xposed.XposedHelpers;
  * 仅诊断：相册侧人脸写回路径匹配探针。
  *
  * hook {@code AlgoUtils.getMediaFeatureListByPath} 与其内部的 cursor 处理器，
- * 记录请求条数、查询行数、返回 map 大小与命中样本的 realPath/localFile/
- * thumbnailFile/microthumbfile；map 为空时用请求的前 2 条路径补一次只读查询，
- * 区分「路径不在相册库」/「realPath 选错列」/「被可见性条件过滤」。
+ * 记录请求条数、查询行数、返回 map 大小、输入路径与 map 键的前 2 条逐字样本，
+ * 以及命中样本的 realPath/localFile/thumbnailFile/microthumbfile；map 为空时用
+ * 请求的前 2 条路径补一次只读查询，区分「路径不在相册库」/「realPath 选错列」/
+ * 「被可见性条件过滤」。
  *
  * 每进程每 60 秒最多一行；所有 hook 独立 try/catch，失败只记
  * {@code writeback probe hook failed: <name>}，不影响相册行为。
@@ -180,7 +181,9 @@ final class WriteBackProbe {
             sb.append(" err");
         }
         if (map != null && !map.isEmpty()) {
-            sb.append(" sample=[").append(sampleFromMap(map)).append("]");
+            sb.append(" in=[").append(formatTwo(call.paths, 120)).append("]")
+                    .append(" key=[").append(formatTwoKeys(map, 120)).append("]")
+                    .append(" sample=[").append(sampleFromMap(map)).append("]");
         } else {
             sb.append(" paths=[").append(formatPaths(call.paths, 100)).append("]")
                     .append(" diag=").append(diagnose(call.paths));
@@ -306,6 +309,45 @@ final class WriteBackProbe {
             }
             Object path = paths.get(i);
             sb.append(truncate(path == null ? null : String.valueOf(path), max));
+        }
+        return sb.toString();
+    }
+
+    /** 前 2 条，带 #序号，用于 in= 逐字比对。 */
+    private static String formatTwo(List<?> list, int max) {
+        if (list == null || list.isEmpty()) {
+            return "-";
+        }
+        StringBuilder sb = new StringBuilder();
+        int count = Math.min(2, list.size());
+        for (int i = 0; i < count; i++) {
+            if (i > 0) {
+                sb.append(" | ");
+            }
+            Object item = list.get(i);
+            sb.append('#').append(i + 1).append(' ')
+                    .append(truncate(item == null ? null : String.valueOf(item), max));
+        }
+        return sb.toString();
+    }
+
+    /** map keySet 前 2 条，带 #序号，用于 key= 逐字比对。 */
+    private static String formatTwoKeys(Map<?, ?> map, int max) {
+        if (map == null || map.isEmpty()) {
+            return "-";
+        }
+        StringBuilder sb = new StringBuilder();
+        int count = 0;
+        for (Object key : map.keySet()) {
+            if (count >= 2) {
+                break;
+            }
+            if (count > 0) {
+                sb.append(" | ");
+            }
+            sb.append('#').append(count + 1).append(' ')
+                    .append(truncate(key == null ? null : String.valueOf(key), max));
+            count++;
         }
         return sb.toString();
     }
