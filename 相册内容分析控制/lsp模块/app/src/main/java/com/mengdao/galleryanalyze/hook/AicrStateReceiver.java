@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.os.Build;
 
 import de.robv.android.xposed.XposedBridge;
@@ -19,6 +20,14 @@ final class AicrStateReceiver extends BroadcastReceiver {
 
     private static final String TAG = "GalleryAnalyze";
     private static final long FRESH_MS = 20_000L;
+    /** 状态无变化时的最小落盘间隔。 */
+    private static final long PERSIST_INTERVAL_MS = 30_000L;
+    private static final String PREFS = "mengdao_gallery_analyze_state";
+    private static final String KEY_STATUS = "status";
+    private static final String KEY_PROGRESS = "progress";
+    private static final String KEY_DETAIL = "detail";
+    private static final String KEY_STARTED_AT = "started_at";
+    private static final String KEY_SAVED_AT = "saved_at";
 
     private static final AicrStateReceiver INSTANCE = new AicrStateReceiver();
 
@@ -28,6 +37,12 @@ final class AicrStateReceiver extends BroadcastReceiver {
     private static volatile long sStartedAt;
     private static volatile long sUpdatedAt;
     private static volatile boolean sRegistered;
+    private static volatile boolean sRestored;
+    private static long sLastPersistAt;
+    private static int sPersistedStatus;
+    private static int sPersistedProgress = Integer.MIN_VALUE;
+    private static String sPersistedDetail = "";
+    private static long sPersistedStartedAt;
 
     private AicrStateReceiver() {
     }
@@ -44,10 +59,10 @@ final class AicrStateReceiver extends BroadcastReceiver {
                 context.registerReceiver(INSTANCE, filter);
             }
             sRegistered = true;
-            XposedBridge.log(TAG + ": aicr state receiver registered");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": register state receiver failed: " + t);
         }
+        restore(context);
     }
 
     @Override
@@ -63,6 +78,65 @@ final class AicrStateReceiver extends BroadcastReceiver {
         }
         sStartedAt = intent.getLongExtra(AicrProtocol.EXTRA_STARTED_AT, 0L);
         sUpdatedAt = System.currentTimeMillis();
+        persist(context);
+    }
+
+    /** 把最新状态落盘，供相册进程下次启动时立即恢复；无变化时最多每 30 秒写一次。 */
+    private static void persist(Context context) {
+        if (context == null) {
+            return;
+        }
+        try {
+            long now = System.currentTimeMillis();
+            String detail = sDetail == null ? "" : sDetail;
+            boolean changed = sStatus != sPersistedStatus
+                    || sProgress != sPersistedProgress
+                    || sStartedAt != sPersistedStartedAt
+                    || !detail.equals(sPersistedDetail);
+            if (!changed && sLastPersistAt > 0
+                    && now - sLastPersistAt < PERSIST_INTERVAL_MS) {
+                return;
+            }
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .edit()
+                    .putInt(KEY_STATUS, sStatus)
+                    .putInt(KEY_PROGRESS, sProgress)
+                    .putString(KEY_DETAIL, detail)
+                    .putLong(KEY_STARTED_AT, sStartedAt)
+                    .putLong(KEY_SAVED_AT, sUpdatedAt)
+                    .apply();
+            sLastPersistAt = now;
+            sPersistedStatus = sStatus;
+            sPersistedProgress = sProgress;
+            sPersistedDetail = detail;
+            sPersistedStartedAt = sStartedAt;
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 恢复 20 秒内的落盘状态；已有实时值时不覆盖。 */
+    private static void restore(Context context) {
+        if (sRestored || sUpdatedAt > 0 || context == null) {
+            return;
+        }
+        sRestored = true;
+        try {
+            SharedPreferences preferences =
+                    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            long savedAt = preferences.getLong(KEY_SAVED_AT, 0L);
+            if (savedAt <= 0L || System.currentTimeMillis() - savedAt >= FRESH_MS) {
+                return;
+            }
+            sStatus = preferences.getInt(KEY_STATUS, 0);
+            sProgress = preferences.getInt(KEY_PROGRESS, -1);
+            sDetail = preferences.getString(KEY_DETAIL, "");
+            if (sDetail == null) {
+                sDetail = "";
+            }
+            sStartedAt = preferences.getLong(KEY_STARTED_AT, 0L);
+            sUpdatedAt = savedAt;
+        } catch (Throwable ignored) {
+        }
     }
 
     static boolean isRunning() {

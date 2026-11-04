@@ -6,6 +6,7 @@ import android.os.SystemClock;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import de.robv.android.xposed.XC_MethodHook;
@@ -110,8 +111,16 @@ final class WriteBackPathAliasHook {
             return;
         }
 
-        List<Object> keys = new ArrayList<>(original.keySet());
-        HashMap<Object, Object> copy = new HashMap<>(original);
+        // 一次性建「小写键 → 值」，把原先每条路径扫全键的 O(n²) 降到 O(n)。
+        HashMap<String, Object> lowerKeys = new HashMap<>(original.size() * 2);
+        for (Map.Entry<?, ?> entry : original.entrySet()) {
+            if (entry.getKey() instanceof String) {
+                lowerKeys.putIfAbsent(
+                        ((String) entry.getKey()).toLowerCase(Locale.ROOT), entry.getValue());
+            }
+        }
+
+        HashMap<Object, Object> aliases = null;
         int hit = 0;
         int aliased = 0;
         StringBuilder samples = null;
@@ -120,34 +129,35 @@ final class WriteBackPathAliasHook {
             if (path == null) {
                 continue;
             }
-            if (copy.get(path) != null) {
+            if (original.containsKey(path)
+                    || (aliases != null && aliases.containsKey(path))) {
                 hit++;
                 continue;
             }
-            Object matchedKey = null;
-            for (Object key : keys) {
-                if (key instanceof String && ((String) key).equalsIgnoreCase(path)) {
-                    matchedKey = key;
-                    break;
-                }
+            String lowerPath = path.toLowerCase(Locale.ROOT);
+            if (!lowerKeys.containsKey(lowerPath)) {
+                continue;
             }
-            if (matchedKey != null) {
-                copy.put(path, original.get(matchedKey));
-                aliased++;
-                if (aliased <= 2) {
-                    if (samples == null) {
-                        samples = new StringBuilder();
-                    } else {
-                        samples.append(" | ");
-                    }
-                    samples.append(truncate(path, 120))
-                            .append(" -> ")
-                            .append(truncate(String.valueOf(matchedKey), 120));
+            Object matched = lowerKeys.get(lowerPath);
+            if (aliases == null) {
+                aliases = new HashMap<>();
+            }
+            aliases.put(path, matched);
+            aliased++;
+            if (aliased <= 2) {
+                if (samples == null) {
+                    samples = new StringBuilder();
+                } else {
+                    samples.append(" | ");
                 }
+                samples.append(truncate(path, 120));
             }
         }
 
-        if (aliased > 0) {
+        // 没有别名命中时不拷贝原 map。
+        if (aliases != null) {
+            HashMap<Object, Object> copy = new HashMap<>(original);
+            copy.putAll(aliases);
             param.setResult(copy);
         }
         maybeLog(paths.size(), hit, aliased, samples == null ? "-" : samples.toString());

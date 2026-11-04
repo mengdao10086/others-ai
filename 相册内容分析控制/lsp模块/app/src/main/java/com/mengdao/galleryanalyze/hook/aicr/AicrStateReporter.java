@@ -20,7 +20,7 @@ import de.robv.android.xposed.XposedHelpers;
  *
  * 相册设置页原先只读自己进程里的 isRunning，aicr 在 :searchDataService 里算多久都显示「空闲」。
  * 这里 hook RunningStatus.setRunningStatus：状态变化立即广播；非空闲期间每秒检查一次进度，
- * 最多每 5 秒广播一次。进度明细查询较重，单独缓存 30 秒。只读，不改变任何状态。
+ * 最多每 10 秒广播一次。进度明细查询较重，单独缓存 60 秒。只读，不改变任何状态。
  *
  * 进度读取必须离开主线程：ManagerDataBase 未开 allowMainThreadQueries，主线程访问 QueryDao
  * 会抛 IllegalStateException，被 getRealProgressFromAI 吞掉后返回 0，再把 0 写回
@@ -36,9 +36,9 @@ final class AicrStateReporter {
             "com.xiaomi.aicr.searchpro.monitor.ProgressMonitor";
     private static final String PROGRESS_THREAD_NAME = "mengdao-aicr-progress";
     private static final long POLL_INTERVAL_MS = 1000L;
-    private static final long BROADCAST_INTERVAL_MS = 5000L;
-    /** 明细查询每阶段要查两次 Room，缓存 30 秒，避免 5 秒一次的重查询。 */
-    private static final long DETAIL_READ_INTERVAL_MS = 30000L;
+    private static final long BROADCAST_INTERVAL_MS = 10000L;
+    /** 明细查询每阶段要查两次 Room，缓存 60 秒，避免 10 秒一次的重查询。 */
+    private static final long DETAIL_READ_INTERVAL_MS = 60000L;
     private static final int STATUS_IDLE = 0;
 
     private static final String MANAGER_DATABASE_CLASS =
@@ -61,7 +61,6 @@ final class AicrStateReporter {
     private static volatile long sLastProgressBroadcastAt;
     private static volatile boolean sProgressFailureLogged;
     private static volatile boolean sDetailFailureLogged;
-    private static volatile boolean sDetailTimingLogged;
     private static volatile boolean sSkipFailureCounts;
     private static volatile boolean sClipMismatchLogged;
     /** 明细查询超过该耗时后，下次降级为旧 3 段（不再查失败计数）。 */
@@ -501,15 +500,10 @@ final class AicrStateReporter {
     }
 
     private static void logDetailTiming(long elapsedMs) {
-        if (elapsedMs > DETAIL_SLOW_MS) {
-            if (!sSkipFailureCounts) {
-                sSkipFailureCounts = true;
-                XposedBridge.log(TAG + ": detail query slow " + elapsedMs
-                        + "ms, fallback to legacy detail");
-            }
-        } else if (!sDetailTimingLogged) {
-            sDetailTimingLogged = true;
-            XposedBridge.log(TAG + ": detail query took " + elapsedMs + "ms");
+        if (elapsedMs > DETAIL_SLOW_MS && !sSkipFailureCounts) {
+            sSkipFailureCounts = true;
+            XposedBridge.log(TAG + ": detail query slow " + elapsedMs
+                    + "ms, fallback to legacy detail");
         }
     }
 

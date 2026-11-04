@@ -18,42 +18,36 @@ public final class GalleryHooks {
 
         try {
             SettingsHook.install(classLoader);
-            XposedBridge.log(TAG + ": SettingsHook installed");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": SettingsHook failed: " + t);
         }
 
         try {
             SearchProgressPinHook.install(classLoader);
-            XposedBridge.log(TAG + ": SearchProgressPinHook installed");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": SearchProgressPinHook failed: " + t);
         }
 
         try {
             WriteBackPathAliasHook.install(classLoader);
-            XposedBridge.log(TAG + ": WriteBackPathAliasHook installed");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": WriteBackPathAliasHook failed: " + t);
         }
 
         try {
             ExecDirectlyLogHook.install(classLoader);
-            XposedBridge.log(TAG + ": ExecDirectlyLogHook installed");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": ExecDirectlyLogHook failed: " + t);
         }
 
         try {
             PowerGateHook.install(classLoader);
-            XposedBridge.log(TAG + ": PowerGateHook installed");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": PowerGateHook failed: " + t);
         }
 
         try {
             LegacyNightWorkCleanupHook.install(classLoader);
-            XposedBridge.log(TAG + ": LegacyNightWorkCleanupHook installed");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": LegacyNightWorkCleanupHook failed: " + t);
         }

@@ -63,7 +63,7 @@ final class SettingsHook {
             }
             Handler handler = sHandler;
             if (sPolling && handler != null) {
-                handler.postDelayed(this, 1000L);
+                handler.postDelayed(this, 2000L);
             }
         }
     };
@@ -152,7 +152,6 @@ final class SettingsHook {
         Reflect.findMethod(category.getClass(), "addPreference", preferenceClass)
                 .invoke(category, preference);
         sPreference = new WeakReference<>(preference);
-        XposedBridge.log(TAG + ": settings row added to 'others' as " + rowClass.getName());
     }
 
     /** 优先用 miuix 的通用行，外观与相册其他条目一致；不可用时退回 androidx 的 Preference。 */
@@ -267,7 +266,6 @@ final class SettingsHook {
             setOnPreferenceClickListener(preference, null);
             itemView.setOnClickListener(v -> toggleAnalyze());
             updateControls(itemView, preference);
-            XposedBridge.log(TAG + ": controls injected into widget_frame");
             return;
         }
 
@@ -288,7 +286,6 @@ final class SettingsHook {
                     dp(context, BUTTON_HEIGHT_DP)));
             setOnPreferenceClickListener(preference, createRowClickListener(sClassLoader));
             updateControls(itemView, preference);
-            XposedBridge.log(TAG + ": single toggle button injected");
             return;
         }
 
@@ -504,6 +501,14 @@ final class SettingsHook {
 
     private static void setSummary(Object preference, String text) {
         try {
+            Method getSummary = Reflect.findMethodOrNull(preference.getClass(), "getSummary");
+            if (getSummary != null) {
+                Object current = getSummary.invoke(preference);
+                if (current instanceof CharSequence
+                        && text.contentEquals((CharSequence) current)) {
+                    return;
+                }
+            }
             Reflect.findMethod(preference.getClass(), "setSummary", CharSequence.class)
                     .invoke(preference, text);
         } catch (Throwable t) {

@@ -32,7 +32,6 @@ public final class GalleryAnalyzeModule implements IXposedHookLoadPackage {
     private static void installGalleryHooks(LoadPackageParam lpparam) {
         try {
             GalleryHooks.install(lpparam.classLoader);
-            XposedBridge.log(TAG + ": gallery hooks installed");
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": gallery hook install failed: " + t);
         }
@@ -41,7 +40,6 @@ public final class GalleryAnalyzeModule implements IXposedHookLoadPackage {
     private static void installAicrHooks(LoadPackageParam lpparam) {
         try {
             AicrHooks.install(lpparam.packageName, lpparam.processName, lpparam.classLoader);
-            XposedBridge.log(TAG + ": aicr hook group handled for " + lpparam.processName);
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": aicr hook install failed: " + t);
         }

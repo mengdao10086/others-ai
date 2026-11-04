@@ -10,8 +10,8 @@ android {
         applicationId = "com.mengdao.galleryanalyze"
         minSdk = 29          // Android 10
         targetSdk = 34
-        versionCode = 16
-        versionName = "2.1.0"
+        versionCode = 17
+        versionName = "2.1.1"
     }
 
     signingConfigs {
@@ -26,12 +26,25 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
+        }
+        // 诊断构建：额外编入 src/diag/java 下的探针类，release 包不含这些类。
+        create("diag") {
+            initWith(getByName("release"))
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
+    // classes.dex 默认 Stored；改回 deflate 压缩以缩小 APK。
+    packaging {
+        dex {
+            useLegacyPackaging = true
         }
     }
 
