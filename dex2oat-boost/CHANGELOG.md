@@ -2,6 +2,14 @@
 
 > 当前仅保留 Magisk 方案（原方案 C）。原 LSPosed 方案（方案 A）的变更记录见下。
 
+## Magisk 方案（方案 C）
+
+### [2.1] - 2026-11-04
+
+- 轮询改为自适应：队列为空且无倒计时时用 `POLL_INTERVAL_IDLE`（默认 30 秒），有任务或倒计时时用 `POLL_INTERVAL`（默认 5 秒）。
+- 发现同包新版本目录时删除队列中的旧版本键，避免旧键在就绪门禁中空转 `PENDING_MAX_CYCLES` 轮。
+- 新增配置项 `POLL_INTERVAL_IDLE`。
+
 ## 原 LSPosed 方案（方案 A）
 
 > 以下为原 LSPosed 方案（方案 A）的变更记录，该方案已于 2026-11-04 移除。

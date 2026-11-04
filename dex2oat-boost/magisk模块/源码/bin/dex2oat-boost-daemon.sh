@@ -12,6 +12,7 @@ fi
 [ -n "$MODDIR" ] || MODDIR="."
 
 POLL_INTERVAL=5
+POLL_INTERVAL_IDLE=30
 APP_ROOT=/data/app
 WORKDIR="$MODDIR/bin"
 CACHE_DIR=/cache
@@ -46,6 +47,7 @@ ONESHOT="${D2O_ONESHOT:-$ONESHOT}"
 PM_BIN="${D2O_PM_BIN:-$PM_BIN}"
 COMPILE_BIN="${D2O_COMPILE_BIN:-$COMPILE_BIN}"
 POLL_INTERVAL="${D2O_POLL_INTERVAL:-$POLL_INTERVAL}"
+POLL_INTERVAL_IDLE="${D2O_POLL_INTERVAL_IDLE:-$POLL_INTERVAL_IDLE}"
 START_DELAY_CYCLES="${D2O_START_DELAY_CYCLES:-$START_DELAY_CYCLES}"
 MAX_CYCLES="${D2O_MAX_CYCLES:-$MAX_CYCLES}"
 
@@ -152,6 +154,19 @@ queue_set() {
     mv "$TMP/q" "$QUEUE_FILE"
 }
 queue_field() { awk -v k="$1" -v f="$2" '$1==k{print $f; exit}' "$QUEUE_FILE" 2>/dev/null; }
+# 同包出现新版本键时，删除队列中的旧版本键，避免旧键在就绪门禁里空转 PENDING_MAX_CYCLES 轮
+queue_prune_stale() {
+    [ -f "$QUEUE_FILE" ] || return 0
+    _keep="$1"
+    _kp="${_keep##*/}"
+    _kp="${_kp%%-*}"
+    awk -v keep="$_keep" -v pkg="$_kp" '
+        {
+            leaf=$1; sub(/.*\//, "", leaf); sub(/-.*/, "", leaf)
+            if (leaf == pkg && $1 != keep) next
+            print
+        }' "$QUEUE_FILE" > "$TMP/q" 2>/dev/null && mv "$TMP/q" "$QUEUE_FILE"
+}
 
 running_has() {
     for _r in $RUNNING; do
@@ -312,6 +327,7 @@ one_cycle() {
             _added=0
             while IFS= read -r _key; do
                 [ -n "$_key" ] || continue
+                queue_prune_stale "$_key"
                 queue_has "$_key" && continue
                 running_has "$_key" && continue
                 printf '%s 0 0\n' "$_key" >> "$QUEUE_FILE"
@@ -343,5 +359,11 @@ while true; do
     _cycles=$((_cycles + 1))
     [ "$MAX_CYCLES" -gt 0 ] && [ "$_cycles" -ge "$MAX_CYCLES" ] && break
     [ "$ONESHOT" = "1" ] && break
-    sleep "$POLL_INTERVAL"
+    # 队列有活或倒计时中快速轮询，彻底空闲时降频，避免空转扫盘
+    if [ -s "$QUEUE_FILE" ] || [ "$countdown" -gt 0 ]; then
+        _poll="$POLL_INTERVAL"
+    else
+        _poll="$POLL_INTERVAL_IDLE"
+    fi
+    sleep "$_poll"
 done

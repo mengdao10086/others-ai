@@ -1,7 +1,10 @@
 # dex2oat-boost 配置（改完重启生效）
 # 测试用 D2O_ 前缀环境变量可覆盖同名项。
 
+# 有任务（队列非空）或倒计时中的轮询间隔（秒）
 POLL_INTERVAL=5
+# 队列为空且无倒计时时的空闲轮询间隔（秒）
+POLL_INTERVAL_IDLE=30
 APP_ROOT=/data/app
 
 # 持久状态（state.tsv / queue.tsv）默认放在模块 bin/ 下；日志与临时文件放 CACHE_DIR

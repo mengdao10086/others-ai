@@ -20,6 +20,9 @@
 #   T8  空 state.tsv → 按首次处理，建基线且不编译既有包（D2 回归）
 #   T9  state.tsv 含垃圾行 → 仅真正的新增被编译（健壮性）
 #   T10 属性写入走 resetprop -n（直写属性区、跳过 property_service）（D3 回归）
+#   T11 倒计时：3 周期后才编译
+#   T12 队列跨重启保留：未完成的包在下次启动时继续编译
+#   T13 同包出现新版本键时，队列中的旧版本键被删除
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MODULE_DIR="$(cd "$SCRIPT_DIR/../源码" && pwd)"
@@ -165,7 +168,7 @@ _c2="$(grep -c -- ' speed$' "$DLOG2" 2>/dev/null | tr -d ' ')"
 sect "T9 state.tsv 含垃圾行 → 仅真新增被编译"
 mkdir -p "$WORK3"
 printf '%s\n' '~~GARBAGE==/com.demo.one-abc123' '' 'not a key line' > "$WORK3/state.tsv"
-D2O_APP_ROOT="$APP" D2O_WORKDIR="$WORK3" D2O_CACHE_DIR="$WORK3" D2O_DRY_RUN=1 D2O_MAX_CYCLES=12 D2O_START_DELAY_CYCLES=0 D2O_POLL_INTERVAL=0 \
+D2O_APP_ROOT="$APP" D2O_WORKDIR="$WORK3" D2O_CACHE_DIR="$WORK3" D2O_DRY_RUN=1 D2O_MAX_CYCLES=12 D2O_START_DELAY_CYCLES=0 D2O_POLL_INTERVAL=0 D2O_POLL_INTERVAL_IDLE=0 \
 D2O_PM_BIN="$FAKEBIN/pm" D2O_PM_REG="$REG" \
 sh "$DAEMON" "$MODULE_DIR" >> "$OUT" 2>&1
 DLOG3="$WORK3/dex2oat-boost.log"
@@ -211,7 +214,7 @@ register com.demo.six
 ( cd "$APP" && ls -d ~~*/*/ 2>/dev/null | sed 's#/$##' ) | grep -v 'com.demo.six' > "$WORK5/state.tsv"
 _run_cycles() {  # $1=工作目录 $2=周期数
     D2O_APP_ROOT="$APP" D2O_WORKDIR="$1" D2O_CACHE_DIR="$1" D2O_DRY_RUN=1 D2O_MAX_CYCLES="$2" \
-    D2O_START_DELAY_CYCLES=3 D2O_POLL_INTERVAL=0 \
+    D2O_START_DELAY_CYCLES=3 D2O_POLL_INTERVAL=0 D2O_POLL_INTERVAL_IDLE=0 \
     D2O_PM_BIN="$FAKEBIN/pm" D2O_PM_REG="$REG" \
     sh "$DAEMON" "$MODULE_DIR" >> "$OUT" 2>&1
 }
@@ -236,6 +239,22 @@ sh "$DAEMON" "$MODULE_DIR" >> "$OUT" 2>&1
 [ ! -s "$WORK7/queue.tsv" ] && ok "编译完成后队列已清空" || bad "队列仍有残留"
 [ "$(grep -c -- ' com.demo.one speed$' "$WORK7/dex2oat-boost.log" 2>/dev/null | tr -d ' ')" = "1" ] \
     && ok "重启后继续编译遗留包" || bad "遗留包未被编译"
+
+sect "T13 同包新版本键入队时删除旧版本键"
+WORK8="$SANDBOX/work8"; mkdir -p "$WORK8"
+newdir HHH com.demo.stale-new777
+# 基线含除新目录外的当前所有目录，外加一个已不存在的旧版本键
+( cd "$APP" && ls -d ~~*/*/ 2>/dev/null | sed 's#/$##' ) | grep -v 'com.demo.stale-new777' > "$WORK8/state.tsv"
+printf '%s\n' '~~OLD==/com.demo.stale-old111' >> "$WORK8/state.tsv"
+# 队列预置同包旧版本键（模拟更新前遗留），且该包故意不 register → 不会编译
+printf '%s\n' '~~OLD==/com.demo.stale-old111 5 0' > "$WORK8/queue.tsv"
+D2O_APP_ROOT="$APP" D2O_WORKDIR="$WORK8" D2O_CACHE_DIR="$WORK8" D2O_DRY_RUN=1 D2O_ONESHOT=1 D2O_START_DELAY_CYCLES=0 \
+D2O_PM_BIN="$FAKEBIN/pm" D2O_PM_REG="$REG" \
+sh "$DAEMON" "$MODULE_DIR" >> "$OUT" 2>&1
+grep -q 'com.demo.stale-old111' "$WORK8/queue.tsv" 2>/dev/null \
+    && bad "旧版本键仍在队列中" || ok "旧版本键已从队列删除"
+grep -q 'com.demo.stale-new777' "$WORK8/queue.tsv" 2>/dev/null \
+    && ok "新版本键保留在队列中（等待就绪）" || bad "新版本键未入队"
 
 sect "结果"
 say "  通过 $PASS 项，失败 $FAIL 项"
