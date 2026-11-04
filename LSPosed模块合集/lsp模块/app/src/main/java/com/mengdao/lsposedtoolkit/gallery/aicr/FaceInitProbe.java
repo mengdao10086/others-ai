@@ -30,10 +30,21 @@ import de.robv.android.xposed.XposedHelpers;
  * 一次性 FACEINIT 行记录初始化状态；之后每进程每 60 秒最多一行 FACEINIT tick，
  * 输出上一个窗口的计数。每个 hook 独立 try/catch，任何失败只记
  * “faceInit hook failed: <name>”，不影响 aicr 自身逻辑。
+ *
+ * 观察什么：人脸初始化就绪键、checkInit 卡点、traversalPic/calculate/batchPic
+ * 调用次数、batchPic 的 faceState 分布、analyticCluster 与写回结果。
+ * 日志行：{@code GalleryAnalyze: FACEINIT pid=... ck=... readyFace=...}、
+ * {@code GalleryAnalyze: FACEINIT tick pid=... traversal=... calcN=... scan={...} ...}，
+ * 以及 hook 缺失时的 {@code faceInit hook failed: <name>}。
+ * 何时打开：排查人脸模型未就绪、分析不启动或写回全失败时。
+ * 怎么打开：把 {@link #ENABLED} 改为 true 重新编译；默认关闭。
  */
 final class FaceInitProbe {
 
     private static final String TAG = "GalleryAnalyze";
+
+    /** 诊断总开关；false 时不安装任何 hook，install() 只打一行 disabled。 */
+    static final boolean ENABLED = false;
 
     private static final String MODEL_DOWNLOADER_CLASS =
             "com.xiaomi.aicr.common.download.ModelDownloader";
@@ -137,6 +148,10 @@ final class FaceInitProbe {
     }
 
     static void install(ClassLoader classLoader) {
+        if (!ENABLED) {
+            XposedBridge.log(TAG + ": FaceInitProbe disabled");
+            return;
+        }
         if (sInstalled) {
             return;
         }

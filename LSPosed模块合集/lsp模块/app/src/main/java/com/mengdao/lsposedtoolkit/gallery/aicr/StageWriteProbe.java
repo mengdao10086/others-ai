@@ -22,10 +22,21 @@ import de.robv.android.xposed.XposedHelpers;
  *  - tag ：TagManager.analyticImage(String, Bitmap)，逐图打标；批次结束由
  *          GalleryOperation.batchPic 的 updateGalleryState 统一落库
  *  - ocr ：OcrUserManager.getOcrResult(Bitmap, GalleryEntity)，逐图 OCR；同上落库
+ *
+ * 观察什么：四条 AI 流水线最后一次被调用的时间与次数，以及人脸初始化状态。
+ * 日志行：不单独输出；由 AicrProgressDiagnostics 的
+ * {@code GalleryAnalyze: DIAG stage-write proc=... face=... ocr=... tag=... pet=... faceInit=...}
+ * 每 30 秒带出。{@code ---[missing]} 表示类/方法没找到，{@code never/0[hooked]}
+ * 表示已装未调用，{@code 12s/34[hooked]} 表示正常。
+ * 何时打开：需要确认分析实际落在哪个进程、某条流水线是否被调用时。
+ * 怎么打开：把 {@link #ENABLED} 改为 true 重新编译；默认关闭。
  */
 final class StageWriteProbe {
 
     private static final String TAG = "GalleryAnalyze";
+
+    /** 诊断总开关；false 时不安装任何 hook，install() 只打一行 disabled。 */
+    static final boolean ENABLED = false;
 
     private static final String FACE_MANAGER_CLASS =
             "com.xiaomi.aicr.searchpro.gallery.FaceManager";
@@ -51,6 +62,10 @@ final class StageWriteProbe {
     }
 
     static void install(ClassLoader classLoader, String processName) {
+        if (!ENABLED) {
+            XposedBridge.log(TAG + ": StageWriteProbe disabled");
+            return;
+        }
         if (sInstalled) {
             return;
         }

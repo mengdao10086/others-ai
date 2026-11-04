@@ -10,8 +10,8 @@ android {
         applicationId = "com.mengdao.lsposedtoolkit"
         minSdk = 29          // Android 10 — 两个旧模块的最低版本
         targetSdk = 34
-        versionCode = 22000
-        versionName = "2.2.0"
+        versionCode = 23000
+        versionName = "2.3.0"
     }
 
     signingConfigs {

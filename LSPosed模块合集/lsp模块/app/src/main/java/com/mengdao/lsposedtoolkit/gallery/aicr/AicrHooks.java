@@ -55,6 +55,13 @@ public final class AicrHooks {
             XposedBridge.log(TAG + ": AicrProgressDiagnostics failed: " + t);
         }
 
+        // 待处理查询改写：摘掉恒为 -1 的 pet/iaa/crop 条件，缩小每轮候选集。
+        try {
+            PendingQueryTrimHook.install(classLoader);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": PendingQueryTrimHook failed: " + t);
+        }
+
         if (!processName.endsWith(SERVICE_PROCESS_SUFFIX)) {
             return;
         }

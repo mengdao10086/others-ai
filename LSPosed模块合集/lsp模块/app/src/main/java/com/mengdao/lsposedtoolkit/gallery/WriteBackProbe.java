@@ -28,10 +28,22 @@ import de.robv.android.xposed.XposedHelpers;
  *
  * 每进程每 60 秒最多一行；所有 hook 独立 try/catch，失败只记
  * {@code writeback probe hook failed: <name>}，不影响相册行为。
+ *
+ * 观察什么：写回请求条数、相册查询行数、返回 map 大小，以及输入路径与
+ * map 键的逐字样本；map 为空时区分「路径不在库」「realPath 选错列」
+ * 「被可见性条件过滤」。
+ * 日志行：{@code GalleryAnalyze: writeback probe pid=... req=... rows=... map=...}
+ * （map 非空追加 in/key/sample；为空追加 paths/diag），以及 hook 缺失时的
+ * {@code writeback probe hook failed: <name>}。
+ * 何时打开：排查相册侧写回大面积 miss 或路径匹配异常时。
+ * 怎么打开：把 {@link #ENABLED} 改为 true 重新编译；默认关闭。
  */
 final class WriteBackProbe {
 
     private static final String TAG = "GalleryAnalyze";
+
+    /** 诊断总开关；false 时不安装任何 hook，install() 只打一行 disabled。 */
+    static final boolean ENABLED = false;
 
     private static final String ALGO_UTILS_CLASS =
             "com.miui.gallery.assistant.utils.AlgoUtils";
@@ -81,6 +93,10 @@ final class WriteBackProbe {
     }
 
     static void install(ClassLoader classLoader) {
+        if (!ENABLED) {
+            XposedBridge.log(TAG + ": WriteBackProbe disabled");
+            return;
+        }
         if (sInstalled) {
             return;
         }

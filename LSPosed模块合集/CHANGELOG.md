@@ -1,5 +1,14 @@
 # 变更记录
 
+## 2.3.0 — 2026-11-04
+
+- 写回路径大小写别名修复：`getMediaFeatureListByPath` 返回后按 `equalsIgnoreCase` 为输入路径补别名键，修复只差大小写导致的逐条 miss（`WriteBackPathAliasHook`，默认开启）
+- 设置页三段式进度：显示「分析中／已完成 x · 待处理 y · 失败 z」，明细 30 秒重算并复用缓存
+- 搜索页进度常驻：进度满值不再隐藏提示条，显示「本地分析已完成」
+- 设置页按钮宽度按文字实测，去掉行尾箭头
+- 待处理查询改写：`ManagerDao_Impl.calculate` 摘掉恒为 -1 的 `pet/iaa/crop` 条件，缩小每轮候选集（`ENABLE_PENDING_TRIM`，默认开启）
+- 诊断探针默认关闭：`StageWriteProbe`、`FaceInitProbe`、`WriteBackProbe`、`AicrProgressDiagnostics` 各加 `ENABLED=false`，保留代码，改 true 重新编译即可打开
+
 ## 2.2.0 — 2026-11-03
 
 ### 2026-11-04 写回路径别名修复（`-别名修复.apk`）

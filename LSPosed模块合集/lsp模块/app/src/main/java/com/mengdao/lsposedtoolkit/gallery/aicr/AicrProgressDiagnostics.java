@@ -22,10 +22,21 @@ import de.robv.android.xposed.XposedHelpers;
  *
  * RunningStatus.setRunningStatus 变为 &gt;0 时开始：立即采一行，之后每 30 秒一行；
  * 期间状态回到 0 时补采一行即停。总日志上限 40 行（含 doWork 心跳与 stage-write）。
+ *
+ * 观察什么：RunningStatus/ProgressMonitor 各进度字段、SharedPreferences 进度、
+ * QueryDao 各阶段计数，并汇聚 StageWriteProbe 与 {@link DbStateSnapshot} 的
+ * 一次性全表分布（DbStateSnapshot 只在本采样器内使用，随本开关一起关闭）。
+ * 日志行：{@code GalleryAnalyze: DIAG n=... status=... face=... calcAI=...}、
+ * {@code GalleryAnalyze: DIAG stage-write ...}、{@code GalleryAnalyze: DIAG unavailable: <类名>}。
+ * 何时打开：排查分析进度停滞、各阶段计数与真实落库不一致时。
+ * 怎么打开：把 {@link #ENABLED} 改为 true 重新编译；默认关闭。
  */
 final class AicrProgressDiagnostics {
 
     private static final String TAG = "GalleryAnalyze";
+
+    /** 诊断总开关；false 时不装 hook、不起线程，install() 只打一行 disabled。 */
+    static final boolean ENABLED = false;
 
     private static final String RUNNING_STATUS_CLASS =
             "com.xiaomi.aicr.searchpro.monitor.RunningStatus";
@@ -63,6 +74,10 @@ final class AicrProgressDiagnostics {
     }
 
     static void install(ClassLoader classLoader) {
+        if (!ENABLED) {
+            XposedBridge.log(TAG + ": AicrProgressDiagnostics disabled");
+            return;
+        }
         sClassLoader = classLoader;
         Class<?> statusClass = XposedHelpers.findClassIfExists(RUNNING_STATUS_CLASS, classLoader);
         if (statusClass == null) {
