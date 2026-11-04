@@ -41,6 +41,13 @@ public final class AicrHooks {
             XposedBridge.log(TAG + ": StageWriteProbe failed: " + t);
         }
 
+        // 人脸初始化预检：只读记录，不改变 aicr 行为；装到所有进程以覆盖分析落点。
+        try {
+            FaceInitProbe.install(classLoader);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": FaceInitProbe failed: " + t);
+        }
+
         // 采样器跟随 RunningStatus 变化，哪个进程真正跑分析就由哪个进程出 DIAG 行。
         try {
             AicrProgressDiagnostics.install(classLoader);

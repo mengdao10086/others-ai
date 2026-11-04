@@ -2,6 +2,7 @@
 
 ## 2.2.0 — 2026-11-03
 
+- 人脸初始化预检（`-人脸预检.apk`，只读诊断，不改变行为）：记录 `face`/`face_config` 就绪键、`checkInit` 结果、模型路径长度、`loadModelSo`/`initCluster` 返回码、`analyticImage` 调用与 null 计数；DIAG 行追加 `faceInit=` 字段
 - 并入「屏蔽最近任务上滑杀后台」：省电策略为无限制的应用在 system_server 的 `killOnce` 处跳过；内存策略未命中时回退查询 powerkeeper provider，结果缓存 30 秒；默认启用，新增作用域 `android`
 - 相册分析进度：负载过高/等待恢复状态显示为暂停；进度改 30 秒重算、状态仍 1 秒巡检；展示改为「已处理 x / y 张 · 阶段」，无明细时退回一位小数百分比；新增分析任务进出心跳日志
 

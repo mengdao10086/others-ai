@@ -107,7 +107,16 @@ final class StageWriteProbe {
                 + " face=" + FACE.describe()
                 + " ocr=" + OCR.describe()
                 + " tag=" + TAG_STAGE.describe()
-                + " pet=" + PET.describe();
+                + " pet=" + PET.describe()
+                + " faceInit=" + faceInitDescribe();
+    }
+
+    private static String faceInitDescribe() {
+        try {
+            return FaceInitProbe.describe();
+        } catch (Throwable t) {
+            return "err";
+        }
     }
 
     private static void hookFace(ClassLoader classLoader) {
