@@ -9,6 +9,9 @@ import android.os.SystemClock;
 
 import com.mengdao.lsposedtoolkit.gallery.AicrProtocol;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
@@ -66,6 +69,16 @@ final class AicrStateReporter {
     private static volatile boolean sClipMismatchLogged;
     /** 明细查询超过该耗时后，下次降级为旧 3 段（不再查失败计数）。 */
     private static final long DETAIL_SLOW_MS = 2000L;
+    /**
+     * 某阶段 state=-1 占到全库总行数该比例时，判定该阶段在本机「不适用」。
+     * 典型例子：deviceType != 1 时宠物分支不执行，pet_state 被批量写成 -1，
+     * 全库 96% 都是这个「不适用」标记，不能当失败统计。
+     */
+    private static final int UNSUPPORTED_RATIO_NUM = 9;
+    private static final int UNSUPPORTED_RATIO_DEN = 10;
+    /** 已打过「阶段不适用」日志的阶段，每阶段只打一次，避免每 30 秒刷屏。 */
+    private static final Set<String> sExcludedStagesLogged = ConcurrentHashMap.newKeySet();
+    private static volatile boolean sAllExcludedLogged;
 
     private AicrStateReporter() {
     }
@@ -343,10 +356,13 @@ final class AicrStateReporter {
      * 分阶段明细：「已完成|总数|最慢阶段|待处理|失败」。拿不到返回空串，调用方退回百分比。
      *
      * 状态口径：1=完成/迁移标记，10=跳过/不适用，-1=失败，0=未处理。
-     * 已完成 = 图片各阶段 (state!=0 计数 - state=-1 计数) 的最小值
+     * 某阶段的 state=-1 若占到全库总行数 90% 以上，判定该阶段在本机「不适用」
+     * （如 deviceType != 1 时宠物分支不执行，pet_state 全是 -1），整体不参与三段统计；
+     * 宠物阶段仍叠加原有的 isPetSupported() 静态判断，任一判定不支持即排除。
+     * 已完成 = 剩余图片阶段 (state!=0 计数 - state=-1 计数) 的最小值
      *        + min(视频 clip 已完成, totalVid)；
-     * 失败 = 图片各阶段 state=-1 的最大值 + 视频 clip 的 state=-1（图片/视频两域不相交）；
-     * 待处理 = 总数 - 已完成 - 失败，clamp 到 0。
+     * 失败 = 剩余图片阶段 state=-1 的最大值 + 视频 clip 的 state=-1（图片/视频两域不相交）；
+     * 待处理 = 总数 - 已完成 - 失败，clamp 到 0。若所有阶段都被排除则退回旧口径。
      *
      * 失败计数需要每阶段多查一次；查询超过 DETAIL_SLOW_MS 后降级为旧 3 段明细。
      */
@@ -435,42 +451,66 @@ final class AicrStateReporter {
                 logClipMismatch(clipPicAll, clipVidAll, clipPicFailed, clipVidFailed);
             }
 
-            int picDone = completedCount(faceAll, faceFailed);
-            String doneStage = "face";
-            int ocrDone = completedCount(ocrAll, ocrFailed);
-            int tagDone = completedCount(tagAll, tagFailed);
-            int clipPicDone = completedCount(clipPicAll, clipPicFailed);
-            if (ocrDone < picDone) {
-                picDone = ocrDone;
-                doneStage = "ocr";
-            }
-            if (tagDone < picDone) {
-                picDone = tagDone;
-                doneStage = "tag";
-            }
-            if (petSupported) {
-                int petDone = completedCount(petAll, petFailed);
-                if (petDone < picDone) {
-                    picDone = petDone;
-                    doneStage = "pet";
+            // 动态判定各阶段在本机是否「不适用」：-1 占全库 90% 以上即排除。
+            // 宠物阶段再与静态 isPetSupported() 取「与」。
+            boolean faceExcluded = isStageUnsupported("face", faceFailed, total);
+            boolean ocrExcluded = isStageUnsupported("ocr", ocrFailed, total);
+            boolean tagExcluded = isStageUnsupported("tag", tagFailed, total);
+            boolean clipPicExcluded = isStageUnsupported("clip", clipPicFailed, total);
+            boolean clipVidExcluded = isStageUnsupported("clip_video", clipVidFailed, total);
+            boolean petExcluded = !petSupported
+                    || isStageUnsupported("pet", petFailed, total);
+
+            if (allStagesExcluded(faceExcluded, ocrExcluded, tagExcluded,
+                    petSupported, petExcluded, clipPicExcluded, clipVidExcluded)) {
+                // 极端情况：所有阶段都不适用，退回旧口径，避免三段全是 0。
+                if (!sAllExcludedLogged) {
+                    sAllExcludedLogged = true;
+                    XposedBridge.log(TAG + ": detail all stages excluded, fallback to legacy counts");
                 }
+                faceExcluded = false;
+                ocrExcluded = false;
+                tagExcluded = false;
+                clipPicExcluded = false;
+                clipVidExcluded = false;
+                petExcluded = !petSupported;
             }
-            if (clipPicDone < picDone) {
-                picDone = clipPicDone;
+
+            String[] stageNames = {"face", "ocr", "tag", "pet", "clip"};
+            int[] stageAll = {faceAll, ocrAll, tagAll,
+                    petSupported ? petAll : 0, clipPicAll};
+            int[] stageFailed = {faceFailed, ocrFailed, tagFailed,
+                    petSupported ? petFailed : 0, clipPicFailed};
+            boolean[] stageExcluded = {faceExcluded, ocrExcluded, tagExcluded,
+                    petExcluded, clipPicExcluded};
+
+            int picDone = Integer.MAX_VALUE;
+            String doneStage = "face";
+            int picFailed = 0;
+            for (int i = 0; i < stageNames.length; i++) {
+                if (stageExcluded[i]) {
+                    continue;
+                }
+                int done = completedCount(stageAll[i], stageFailed[i]);
+                if (done < picDone) {
+                    picDone = done;
+                    doneStage = stageNames[i];
+                }
+                picFailed = Math.max(picFailed, stageFailed[i]);
+            }
+            if (picDone == Integer.MAX_VALUE) {
+                // 图片阶段全部排除时，图片域不贡献已完成/失败。
+                picDone = 0;
                 doneStage = "clip";
             }
 
-            int picFailed = Math.max(faceFailed, ocrFailed);
-            picFailed = Math.max(picFailed, tagFailed);
-            if (petSupported) {
-                picFailed = Math.max(picFailed, petFailed);
-            }
-            picFailed = Math.max(picFailed, clipPicFailed);
-
+            int clipVidDone = clipVidExcluded
+                    ? 0 : completedCount(clipVidAll, clipVidFailed);
+            int clipVidFailedCount = clipVidExcluded ? 0 : clipVidFailed;
             int rawCompleted = Math.min(picDone, totalPic)
-                    + Math.min(completedCount(clipVidAll, clipVidFailed), totalVid);
+                    + Math.min(clipVidDone, totalVid);
             int rawFailed = Math.min(picFailed, totalPic)
-                    + Math.min(clipVidFailed, totalVid);
+                    + Math.min(clipVidFailedCount, totalVid);
             if (rawCompleted + rawFailed > total) {
                 XposedBridge.log(TAG + ": detail counts overflow completed=" + rawCompleted
                         + " failed=" + rawFailed + " total=" + total + " stage=" + doneStage);
@@ -513,6 +553,30 @@ final class AicrStateReporter {
 
     private static int completedCount(int all, int failed) {
         return Math.max(0, all - failed);
+    }
+
+    /**
+     * state=-1 的行数占全库总行数 >= 90% 时判定该阶段在本机不适用，
+     * 每阶段只记一次日志（total 为 totalPic + totalVid）。
+     */
+    private static boolean isStageUnsupported(String stage, int failed, int total) {
+        if (total <= 0
+                || (long) failed * UNSUPPORTED_RATIO_DEN
+                        < (long) total * UNSUPPORTED_RATIO_NUM) {
+            return false;
+        }
+        if (sExcludedStagesLogged.add(stage)) {
+            XposedBridge.log(TAG + ": detail stage " + stage + " excluded (failed="
+                    + failed + " total=" + total + ")");
+        }
+        return true;
+    }
+
+    /** 所有阶段都被判定为不适用（宠物阶段含静态 isPetSupported() 判断）。 */
+    private static boolean allStagesExcluded(boolean face, boolean ocr, boolean tag,
+                                             boolean petSupported, boolean pet,
+                                             boolean clipPic, boolean clipVid) {
+        return face && ocr && tag && clipPic && clipVid && (!petSupported || pet);
     }
 
     private static void logDetailTiming(long elapsedMs) {
