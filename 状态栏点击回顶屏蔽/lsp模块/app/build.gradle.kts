@@ -10,8 +10,8 @@ android {
         applicationId = "com.mengdao.statusbarclickblock"
         minSdk = 29
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.0.1"
     }
 
     signingConfigs {
@@ -26,7 +26,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -38,6 +38,13 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    // dex 以 deflate 压缩进 APK（默认 store 不压缩），模块体积显著减小
+    packaging {
+        dex {
+            useLegacyPackaging = true
+        }
     }
 
     // LSPosed 模块不需要 Activity，忽略无 Activity 的 lint 警告
