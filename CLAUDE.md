@@ -99,7 +99,7 @@
 | `相册内容分析控制/` | 归档 | 已并入 `LSPosed模块合集/`（2.1.0 起），保留旧 `lsp模块/` 源码、`设计方案.md`、`_分析/report.md` 技术底稿；独立包 `com.mengdao.galleryanalyze` 不再发布 |
 | `小米传送门增强/` | 模块 | 传送门增强旧独立工程：`lsp模块/` 源码、`分析/` 内运行逻辑与 LSPosed 可行性文档、GitHub Actions 构建、项目级 `CLAUDE.md`/`AGENTS.md` |
 | `状态栏点击回顶屏蔽/` | 模块 | MIUI/HyperOS 状态栏单击/双击自动回顶屏蔽；`lsp模块/` 单入口 hook `StatusBarClickTool.invokeInputManager`，兜底 `MiuiInputManager.scrollToTop()` |
-| `dex2oat-boost/` | 模块 | 双路线：`lsp模块/`（安装期降 verify + 装完 speed 重编译）、`magisk模块/`（纯 root 轮询 `/data/app`）；含上机指南、真机验证清单、测试脚本与结果 |
+| `dex2oat-boost/` | 模块 | 纯 root Magisk 模块：7 个 `pm.dexopt.*` 降为 `skip` + 轮询 `/data/app` 装后补编译 `speed`，CPU 负载动态并行；含上机指南、测试脚本与结果 |
 | `MIUI动态温控/` | 模块 | Magisk 模块 `MiuiVariableThermal`（20230324）：利用 MIUI 云温控按充电/游戏/普通场景切档，可配旁路供电、锁刷新率 |
 | `PID充电分析/` | 模块 | Magisk 模块 `PID_CHG_MOD` 4.4：`magisk模块/` 本体 + 根目录字符串笔记、内阻计算脚本、内测热更新脚本与说明图 |
 | `刷新率增强分析/` | 上游存档 | 第三方模块 Refresh Rate Enhancer 2026.08.29.5：`magisk模块/` 原包 zip，`_分析/解压产物/` 为解包脚本、thermal ini、`Global165HzHook.apk`；无自有分析报告 |

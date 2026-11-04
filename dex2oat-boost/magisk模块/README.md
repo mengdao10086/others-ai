@@ -158,4 +158,3 @@ su -c 'cmd package dump <包名> | grep -i filter'
 - **未做真机验证**：离线自测（34 项）覆盖逻辑与路径解析，但真机上的属性写入权限、`/data/app` 解析、`cmd package compile` 并发行为均需按〈七、验证〉复核。
 - **并行未必生效**：见 §四「动态并行的边界」。
 - 依赖 KernelSU / Magisk 的 `service.sh` 开机执行机制；换 root 方案或 OTA 后需重新部署。
-- 本模块与同项目的 **LSPosed 版（`../lsp模块/`）相互独立**；两者同时启用会对同一个包各编译一次（幂等、无害、浪费 CPU/IO），建议二选一。
