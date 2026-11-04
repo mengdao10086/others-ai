@@ -2,6 +2,14 @@
 
 ## 2.2.0 — 2026-11-03
 
+### 2026-11-04 分析链路计数（`-计数.apk`，只读诊断）
+
+- 新增 `traversalPic` 进入计数，并记录 `migrated`、`pictureCount`、`isVector` 当前值
+- 新增 `ManagerDao_Impl.calculate` 返回列表大小（`calcRows`）与调用次数
+- 新增 `batchPic` 实体采样：`faceState` 的 -1/0/1/10 分布、`uriId` 范围、`wouldFace`；字段反射失败只报列表大小
+- `FACEINIT tick` 改为每进程每 60 秒最多一行窗口汇总；一次性 `FACEINIT` 行保留
+- hook 缺失统一记 `faceInit hook failed: <name>`，不改变 aicr 行为
+
 ### 2026-11-04 预检常驻（`-预检常驻.apk`）
 
 - 搜索页 AI 分析进度常驻：进度满值（100%）时不再隐藏提示条，显示「本地分析已完成」；只拦截「满值导致隐藏」这一种情况，进度未满、CTA 未确认、能力不支持时行为不变；hook 失效自动退回现状
