@@ -1,6 +1,8 @@
 package com.mengdao.lsposedtoolkit.gallery.aicr;
 
+import android.content.ContentResolver;
 import android.graphics.Bitmap;
+import android.os.Bundle;
 import android.os.Process;
 
 import java.lang.reflect.Field;
@@ -22,7 +24,8 @@ import de.robv.android.xposed.XposedHelpers;
  *   1) 就绪键 face / face_config 各自是什么值；
  *   2) checkInit 通过与否，卡在 isModelReady / loadModelSo / initCluster 哪一步；
  *   3) traversalPic / calculate / batchPic 是否真被调用，扫到的人脸状态分布如何；
- *   4) analyticImage 是否被调用、是否全部返回 null。
+ *   4) analyticImage 是否被调用、是否全部返回 null；
+ *   5) analyticCluster 是否触发、写回 SUB_DATA provider 的成功/失败分布。
  *
  * 一次性 FACEINIT 行记录初始化状态；之后每进程每 60 秒最多一行 FACEINIT tick，
  * 输出上一个窗口的计数。每个 hook 独立 try/catch，任何失败只记
@@ -69,6 +72,8 @@ final class FaceInitProbe {
     private static volatile boolean sTraversalHooked;
     private static volatile boolean sCalculateHooked;
     private static volatile boolean sBatchPicHooked;
+    private static volatile boolean sClusterHooked;
+    private static volatile boolean sWriteBackHooked;
 
     private static volatile int sCheckInitResult = UNKNOWN;   // -1 未知 / 0 false / 1 true
     private static volatile int sReadyFace = UNKNOWN;
@@ -107,6 +112,12 @@ final class FaceInitProbe {
     private static int wUriMax = Integer.MIN_VALUE;
     private static int wImgCalls;
     private static int wImgNulls;
+    private static int wClusterCalls;
+    private static int wClusterLastPaths = -1;
+    private static int wWbCalls;
+    private static int wWbOk;
+    private static int wWbFail;
+    private static int wWbEmpty;
 
     // ---------------------------------------------------- 最近一次状态快照
     private static int sLastMigrated = UNKNOWN;              // -1 未知 / 0 否 / 1 是
@@ -186,11 +197,25 @@ final class FaceInitProbe {
         } catch (Throwable t) {
             logHookFailure("batchPic");
         }
+        try {
+            if (!hookAnalyticCluster(classLoader)) {
+                logHookFailure("analyticCluster");
+            }
+        } catch (Throwable t) {
+            logHookFailure("analyticCluster");
+        }
+        try {
+            if (!hookFaceWriteBack()) {
+                logHookFailure("method_face_write_back");
+            }
+        } catch (Throwable t) {
+            logHookFailure("method_face_write_back");
+        }
 
         startTickThread();
 
         XposedBridge.log(TAG + ": FACEINIT install pid=" + Process.myPid()
-                + " hooked=" + hookedCount() + "/8"
+                + " hooked=" + hookedCount() + "/10"
                 + " alias=" + (ENABLE_FACE_KEY_ALIAS ? "on" : "off")
                 + " diagOnly=" + FACE_DIAG_ONLY);
     }
@@ -441,6 +466,88 @@ final class FaceInitProbe {
         return true;
     }
 
+    /** 统计 analyticCluster 本窗口调用次数与传入路径列表大小。 */
+    private static boolean hookAnalyticCluster(ClassLoader classLoader) {
+        Class<?> cls = XposedHelpers.findClassIfExists(FACE_MANAGER_CLASS, classLoader);
+        if (cls == null) {
+            return false;
+        }
+        XposedHelpers.findAndHookMethod(cls, "analyticCluster", java.util.ArrayList.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        try {
+                            int paths = -1;
+                            if (param.args.length > 0 && param.args[0] instanceof List) {
+                                paths = ((List<?>) param.args[0]).size();
+                            }
+                            synchronized (STATS_LOCK) {
+                                wClusterCalls++;
+                                if (paths >= 0) {
+                                    wClusterLastPaths = paths;
+                                }
+                            }
+                            sPipelineActive = true;
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                });
+        sClusterHooked = true;
+        return true;
+    }
+
+    /**
+     * 统计 FaceManager 调 SUB_DATA provider 的 method_face_write_back 结果。
+     * 在调用方进程 hook ContentResolver.call，读取返回 Bundle 中的成功/失败路径。
+     */
+    private static boolean hookFaceWriteBack() {
+        XposedHelpers.findAndHookMethod(ContentResolver.class, "call",
+                android.net.Uri.class, String.class, String.class, Bundle.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        try {
+                            if (param.args.length < 2 || !(param.args[1] instanceof String)
+                                    || !"method_face_write_back".equals(param.args[1])) {
+                                return;
+                            }
+                            int ok = 0;
+                            int fail = 0;
+                            int empty = 0;
+                            Object result = param.getResult();
+                            if (param.hasThrowable() || !(result instanceof Bundle)) {
+                                empty = 1;
+                            } else {
+                                try {
+                                    Bundle bundle = (Bundle) result;
+                                    java.util.ArrayList<String> success =
+                                            bundle.getStringArrayList("write_success_path_list");
+                                    java.util.ArrayList<String> invalid =
+                                            bundle.getStringArrayList("invalid_paths");
+                                    ok = success == null ? 0 : success.size();
+                                    fail = invalid == null ? 0 : invalid.size();
+                                    if (success == null || success.isEmpty()) {
+                                        empty = 1;
+                                    }
+                                } catch (Throwable t) {
+                                    empty = 1;
+                                }
+                            }
+                            synchronized (STATS_LOCK) {
+                                wWbCalls++;
+                                wWbOk += ok;
+                                wWbFail += fail;
+                                wWbEmpty += empty;
+                            }
+                            sPipelineActive = true;
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                });
+        sWriteBackHooked = true;
+        return true;
+    }
+
     // ------------------------------------------------------------- one-shot
 
     /**
@@ -566,6 +673,12 @@ final class FaceInitProbe {
         int uriMax;
         int imgCalls;
         int imgNulls;
+        int clusterCalls;
+        int clusterLastPaths;
+        int wbCalls;
+        int wbOk;
+        int wbFail;
+        int wbEmpty;
         int migrated;
         int isVector;
         long pictureCount;
@@ -586,6 +699,12 @@ final class FaceInitProbe {
             uriMax = wUriMax;
             imgCalls = wImgCalls;
             imgNulls = wImgNulls;
+            clusterCalls = wClusterCalls;
+            clusterLastPaths = wClusterLastPaths;
+            wbCalls = wWbCalls;
+            wbOk = wWbOk;
+            wbFail = wWbFail;
+            wbEmpty = wWbEmpty;
             migrated = sLastMigrated;
             isVector = sLastIsVector;
             pictureCount = sLastPictureCount;
@@ -605,6 +724,12 @@ final class FaceInitProbe {
             wUriMax = Integer.MIN_VALUE;
             wImgCalls = 0;
             wImgNulls = 0;
+            wClusterCalls = 0;
+            wClusterLastPaths = -1;
+            wWbCalls = 0;
+            wWbOk = 0;
+            wWbFail = 0;
+            wWbEmpty = 0;
         }
 
         String idRange = uriMin == Integer.MAX_VALUE
@@ -629,8 +754,22 @@ final class FaceInitProbe {
                 .append(" wouldFace=").append(wouldFace)
                 .append(" rows=").append(batchRows)
                 .append(" bad=").append(batchBad)
-                .append(" img=").append(imgCalls).append("/null:").append(imgNulls)
-                .append(" alias=").append(ENABLE_FACE_KEY_ALIAS ? "on" : "off");
+                .append(" img=").append(imgCalls).append("/null:").append(imgNulls);
+        if (clusterCalls == 0) {
+            sb.append(" cluster=0");
+        } else {
+            sb.append(" cluster=").append(clusterCalls)
+                    .append("/lastPaths=")
+                    .append(clusterLastPaths < 0 ? "?" : String.valueOf(clusterLastPaths));
+        }
+        if (wbCalls == 0) {
+            sb.append(" wb=-");
+        } else {
+            sb.append(" wb=ok:").append(wbOk)
+                    .append("/fail:").append(wbFail)
+                    .append("/empty:").append(wbEmpty);
+        }
+        sb.append(" alias=").append(ENABLE_FACE_KEY_ALIAS ? "on" : "off");
 
         XposedBridge.log(sb.toString());
     }
@@ -805,6 +944,8 @@ final class FaceInitProbe {
         if (sTraversalHooked) count++;
         if (sCalculateHooked) count++;
         if (sBatchPicHooked) count++;
+        if (sClusterHooked) count++;
+        if (sWriteBackHooked) count++;
         return String.valueOf(count);
     }
 

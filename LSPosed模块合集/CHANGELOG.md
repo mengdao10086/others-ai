@@ -2,6 +2,12 @@
 
 ## 2.2.0 — 2026-11-03
 
+### 2026-11-04 聚类与写回计数（`-聚类计数.apk`，只读诊断）
+
+- tick 行新增 `cluster=N/lastPaths=N`：`analyticCluster` 本窗口调用次数与传入路径数
+- tick 行新增 `wb=ok:N/fail:N/empty:N`：`method_face_write_back` 返回的成功/失败路径条数与空/异常次数；在调用方 hook `ContentResolver.call` 取返回 Bundle
+- 未调用时输出 `cluster=0` / `wb=-`；hook 缺失仍只记 `faceInit hook failed: <name>`
+
 ### 2026-11-04 失败口径修正（`-UI2.apk`）
 
 - 三段式统计中某阶段 `state=-1` 占全库 ≥90% 时判为「不适用」并整体排除（如 pet 分支不执行时的批量 -1），排除阶段每阶段只记一次日志；全部排除时退回旧口径
