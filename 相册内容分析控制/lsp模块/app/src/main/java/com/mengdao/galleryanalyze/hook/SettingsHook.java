@@ -34,6 +34,10 @@ final class SettingsHook {
     private static final String TAG = "GalleryAnalyze";
     private static final String KEY = "mengdao_ai_content_analyze";
     private static final String CONTROLS_TAG = "mengdao_gallery_analyze_controls";
+    private static final int BUTTON_HEIGHT_DP = 32;
+    private static final int BUTTON_GAP_DP = 6;
+    /** 圆角半径是高度的一半，文本两侧各留半个高度后语义上就贴住圆角。 */
+    private static final int BUTTON_TEXT_SLACK_DP = 2;
     private static final String FRAGMENT_CLASS = "com.miui.gallery.ui.GallerySettingsFragment";
     private static final String[] PREFERENCE_CLASSES = {
             "miuix.preference.BasePreference",
@@ -142,36 +146,8 @@ final class SettingsHook {
         Reflect.findMethod(rowClass, "setPersistent", boolean.class).invoke(preference, false);
         setSelectable(preference, true);
 
-        // 行点击兜底：启动/停止切换（按钮可用时由按钮消费点击）
-        Class<?> listenerClass = XposedHelpers.findClass(
-                "androidx.preference.Preference$OnPreferenceClickListener", cl);
-        Object listener = Proxy.newProxyInstance(cl, new Class[]{listenerClass},
-                new InvocationHandler() {
-                    @Override
-                    public Object invoke(Object proxy, Method method, Object[] args) {
-                        String name = method.getName();
-                        if ("onPreferenceClick".equals(name)) {
-                            if (AnalyzeControl.isRunning()) {
-                                AnalyzeControl.stop();
-                            } else {
-                                AnalyzeControl.start();
-                            }
-                            return true;
-                        }
-                        if ("toString".equals(name)) {
-                            return "MengdaoGalleryAnalyzeClick";
-                        }
-                        if ("hashCode".equals(name)) {
-                            return System.identityHashCode(proxy);
-                        }
-                        if ("equals".equals(name)) {
-                            return proxy == (args != null && args.length > 0 ? args[0] : null);
-                        }
-                        return null;
-                    }
-                });
-        Reflect.findMethod(rowClass, "setOnPreferenceClickListener", listenerClass)
-                .invoke(preference, listener);
+        // 行点击兜底：启动/停止切换（按钮可用时会改由 itemView 承接，见 injectControls）
+        setOnPreferenceClickListener(preference, createRowClickListener(cl));
 
         Reflect.findMethod(category.getClass(), "addPreference", preferenceClass)
                 .invoke(category, preference);
@@ -267,12 +243,12 @@ final class SettingsHook {
                 }
             });
 
-            int buttonWidth = dp(context, 72);
-            int buttonHeight = dp(context, 32);
-            row.addView(start, new LinearLayout.LayoutParams(buttonWidth, buttonHeight));
+            int buttonHeight = dp(context, BUTTON_HEIGHT_DP);
+            row.addView(start, new LinearLayout.LayoutParams(
+                    measureButtonWidth(context, start, "启动"), buttonHeight));
             LinearLayout.LayoutParams stopParams = new LinearLayout.LayoutParams(
-                    buttonWidth, buttonHeight);
-            stopParams.setMargins(dp(context, 6), 0, 0, 0);
+                    measureButtonWidth(context, stop, "停止"), buttonHeight);
+            stopParams.setMargins(dp(context, BUTTON_GAP_DP), 0, 0, 0);
             row.addView(stop, stopParams);
 
             if (frame instanceof FrameLayout) {
@@ -286,6 +262,10 @@ final class SettingsHook {
                         ViewGroup.LayoutParams.WRAP_CONTENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT));
             }
+            // 按钮可用时去掉 Preference 级点击：miuix 的 isArrowRightVisible 据此隐藏行尾箭头；
+            // 行点击改由 itemView 承接，启动/停止切换行为不变。
+            setOnPreferenceClickListener(preference, null);
+            itemView.setOnClickListener(v -> toggleAnalyze());
             updateControls(itemView, preference);
             XposedBridge.log(TAG + ": controls injected into widget_frame");
             return;
@@ -300,21 +280,20 @@ final class SettingsHook {
             single.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    if (AnalyzeControl.isRunning()) {
-                        AnalyzeControl.stop();
-                    } else {
-                        AnalyzeControl.start();
-                    }
+                    toggleAnalyze();
                 }
             });
             root.addView(single, new ViewGroup.LayoutParams(
-                    dp(context, 72), dp(context, 32)));
+                    measureButtonWidth(context, single, "启动"),
+                    dp(context, BUTTON_HEIGHT_DP)));
+            setOnPreferenceClickListener(preference, createRowClickListener(sClassLoader));
             updateControls(itemView, preference);
             XposedBridge.log(TAG + ": single toggle button injected");
             return;
         }
 
         // 降级 2：行点击切换，summary 提示（selectable 已在 addRow 里设好，绑定期不能再动）
+        setOnPreferenceClickListener(preference, createRowClickListener(sClassLoader));
         setSummary(preference, AnalyzeControl.statusText() + "（点按切换）");
     }
 
@@ -331,6 +310,75 @@ final class SettingsHook {
         button.setMinimumHeight(0);
         button.setPadding(0, 0, 0, 0);
         return button;
+    }
+
+    /**
+     * 宽度 = 文本宽 + 高度：胶囊两端的圆角各占半个高度，文本正好夹在两个圆角之间。
+     * 不再用固定 72dp，避免左右各多出十几 dp 的空白；高度保持 32dp，点击区域不变。
+     */
+    private static int measureButtonWidth(Context context, Button button, String text) {
+        int height = dp(context, BUTTON_HEIGHT_DP);
+        int textWidth = (int) Math.ceil(button.getPaint().measureText(text));
+        return Math.max(height, textWidth + height + dp(context, BUTTON_TEXT_SLACK_DP));
+    }
+
+    private static void setButtonText(Button button, String text) {
+        CharSequence current = button.getText();
+        if (current != null && text.contentEquals(current)) {
+            return;
+        }
+        button.setText(text);
+        ViewGroup.LayoutParams params = button.getLayoutParams();
+        if (params != null) {
+            params.width = measureButtonWidth(button.getContext(), button, text);
+            button.setLayoutParams(params);
+        }
+    }
+
+    private static void toggleAnalyze() {
+        if (AnalyzeControl.isRunning()) {
+            AnalyzeControl.stop();
+        } else {
+            AnalyzeControl.start();
+        }
+    }
+
+    private static Object createRowClickListener(ClassLoader classLoader) {
+        Class<?> listenerClass = XposedHelpers.findClass(
+                "androidx.preference.Preference$OnPreferenceClickListener", classLoader);
+        return Proxy.newProxyInstance(classLoader, new Class[]{listenerClass},
+                new InvocationHandler() {
+                    @Override
+                    public Object invoke(Object proxy, Method method, Object[] args) {
+                        String name = method.getName();
+                        if ("onPreferenceClick".equals(name)) {
+                            toggleAnalyze();
+                            return true;
+                        }
+                        if ("toString".equals(name)) {
+                            return "MengdaoGalleryAnalyzeClick";
+                        }
+                        if ("hashCode".equals(name)) {
+                            return System.identityHashCode(proxy);
+                        }
+                        if ("equals".equals(name)) {
+                            return proxy == (args != null && args.length > 0 ? args[0] : null);
+                        }
+                        return null;
+                    }
+                });
+    }
+
+    private static void setOnPreferenceClickListener(Object preference, Object listener) {
+        try {
+            Class<?> listenerClass = XposedHelpers.findClass(
+                    "androidx.preference.Preference$OnPreferenceClickListener", sClassLoader);
+            Reflect.findMethod(preference.getClass(),
+                    "setOnPreferenceClickListener", listenerClass)
+                    .invoke(preference, new Object[]{listener});
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": set row click listener failed: " + t);
+        }
     }
 
     private static int dp(Context context, int value) {
@@ -414,21 +462,21 @@ final class SettingsHook {
                 View first = row.getChildAt(0);
                 View second = row.getChildAt(1);
                 if (first instanceof Button) {
-                    ((Button) first).setText("启动");
+                    setButtonText((Button) first, "启动");
                     ((Button) first).setEnabled(!running);
                 }
                 if (second instanceof Button) {
-                    ((Button) second).setText(canceled ? "正在停止" : "停止");
+                    setButtonText((Button) second, canceled ? "正在停止" : "停止");
                     ((Button) second).setEnabled(running && !canceled);
                 }
             }
         } else if (controls instanceof Button) {
             Button single = (Button) controls;
             if (running) {
-                single.setText(canceled ? "正在停止" : "停止");
+                setButtonText(single, canceled ? "正在停止" : "停止");
                 single.setEnabled(!canceled);
             } else {
-                single.setText("启动");
+                setButtonText(single, "启动");
                 single.setEnabled(true);
             }
         }

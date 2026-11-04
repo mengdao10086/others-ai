@@ -24,6 +24,20 @@ public final class GalleryHooks {
         }
 
         try {
+            SearchProgressPinHook.install(classLoader);
+            XposedBridge.log(TAG + ": SearchProgressPinHook installed");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": SearchProgressPinHook failed: " + t);
+        }
+
+        try {
+            WriteBackPathAliasHook.install(classLoader);
+            XposedBridge.log(TAG + ": WriteBackPathAliasHook installed");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": WriteBackPathAliasHook failed: " + t);
+        }
+
+        try {
             ExecDirectlyLogHook.install(classLoader);
             XposedBridge.log(TAG + ": ExecDirectlyLogHook installed");
         } catch (Throwable t) {

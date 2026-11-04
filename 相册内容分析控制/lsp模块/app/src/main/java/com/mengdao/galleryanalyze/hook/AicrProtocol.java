@@ -30,6 +30,8 @@ public final class AicrProtocol {
     public static final String EXTRA_STATUS = "status";
     public static final String EXTRA_PROGRESS = "progress";
     public static final String EXTRA_STARTED_AT = "started_at";
+    /** 进度明细：已完成｜总数｜最慢阶段｜待处理｜失败（拿不到时为空串）。 */
+    public static final String EXTRA_DETAIL = "detail";
 
     /** 与 SearchDataBaseProvider 的 Manifest authority 一致（exported=false，仅同进程/同 UID 可用）。 */
     public static final String PROVIDER_AUTHORITY = "provider.SearchDataBaseProvider";

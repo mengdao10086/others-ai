@@ -10,8 +10,8 @@ android {
         applicationId = "com.mengdao.galleryanalyze"
         minSdk = 29          // Android 10
         targetSdk = 34
-        versionCode = 15
-        versionName = "2.0.6"
+        versionCode = 16
+        versionName = "2.1.0"
     }
 
     signingConfigs {

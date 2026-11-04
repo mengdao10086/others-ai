@@ -206,11 +206,14 @@ if (getScope() != 1 && !GalleryMigrate.isSupport()) {
 
 1. **取图**：`DataUtils.getDocumentsForMigrate` 查 MediaStore（`external` 文件表 / Images / Video），条件 `_data NOT LIKE '%/.%'`，projection `_id, datetaken, _display_name, _size, _data, mime_type, date_modified`（`DataUtils.java:640-680`、`DataCollection.java:18-21`）。
 2. **入库**：`GalleryUtils.getPictures/getAllPictures/getVideo` 把 MediaStore 行转成 `GalleryEntity`，`ManagerDao.insertGallery` 每 100 条写一次（`GalleryUtils.java:338-442, 560-651`）。
-3. **状态位**：每个 `GalleryEntity` 有 `tagState/faceState/clipState/ocrState/qualityState/cardState/petState/iaaState/cropState`。约定（从代码使用推断）：
+3. **状态位**：每个 `GalleryEntity` 有 `tagState/faceState/clipState/ocrState/qualityState/cardState/petState/iaaState/cropState`。约定：
    - `0` = 未处理；
-   - `-1` = 失败/待重试；
-   - `>0` = 已完成，数值为模型版本；
-   - `10` = 跳过/不适用（非法图、截图、尺寸异常等）。
+   - `1` = 完成（人脸：迁移写入或聚类写回成功都会写 `1`；OCR 等部分能力写模型版本号，`>0` 视为完成）；
+   - `-1` = 失败/待重试（宠物连续失败另有 `-2`）；
+   - `10` = 跳过/不适用（非法图、截图、尺寸异常等）；
+   - **设备分支**：`deviceType != 1` 时 `GalleryOperation.batchPic` 直接写 `petState = iaaState = cropState = -1`，不调用对应算法（`GalleryOperation.java` 的 `deviceType == 1` 分支）；
+   - **`face_state = 1` 的两条来源**：`GalleryMigrate.getFace()` 迁移写入（`GalleryMigrate.java:387`）、聚类写回成功（`FaceManager.java:110`）。
+   - 写回卡点的完整证据见 [相册分析进度停滞-分析.md](../LSPosed模块合集/_分析/相册分析进度停滞-分析.md)。
 4. **跳过规则**（`GalleryUtils.isValidImage`、`GalleryOperation.batchPic`）：
    - MIME 不在 `image/jpeg,png,x-ms-bmp,webp,vnd.wap.wbmp,heif,heic` → 全部 state=10；非可裁剪类型 → `cropState=10`（`GalleryUtils.java:119-150`）。
    - 宽或高 ≤5、或 >10000 → 全部 state=10（`GalleryOperation.java:208-233`）。
@@ -402,7 +405,7 @@ if (getScope() != 1 && !GalleryMigrate.isSupport()) {
 
 ### 5.2 回写相册
 
-- **人脸聚类**：`FaceManager.analyticCluster` 把人脸聚类二进制写 PFD，调 `SUB_DATA method_face_write_back`，按返回的 `write_success_path_list` 更新 aicr 的 `faceState`；失败/非法路径更新为 -1（`FaceManager.java:75-160`）。
+- **人脸聚类**：`FaceManager.analyticCluster` 把人脸聚类二进制写 PFD，调 `SUB_DATA method_face_write_back`，按返回的 `write_success_path_list` 更新 aicr 的 `faceState`；失败/非法路径更新为 -1（`FaceManager.java:75-160`）。本机写回卡在路径大小写不匹配，详见 [相册分析进度停滞-分析.md](../LSPosed模块合集/_分析/相册分析进度停滞-分析.md)。
 - **宠物聚类**：`PetManager` 把 `featurePfd`/`stockInfoPfd` 传给 `SUB_DATA method_pet_write_back`，再按 `write_success_path_list` 更新 `petState`（`PetManager.java:413-490`）。
 - **进度完成/数据更新通知**：`method_notify_progress_complete` 与 `method_notifyForAlgorithmData`（见 4.1.B）。
 - **OCR/TAG/QUALITY**：未发现 aicr 主动回写相册的 provider 调用；它们保存在 aicr 库，并通过 aicr 的搜索/语义接口对外。相册如何读取这些结果**无法从本 APK 验证**（见 8.8）。

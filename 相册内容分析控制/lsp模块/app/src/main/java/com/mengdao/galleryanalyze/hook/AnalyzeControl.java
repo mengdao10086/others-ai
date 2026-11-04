@@ -62,6 +62,13 @@ final class AnalyzeControl {
     static String statusText() {
         AicrStateReceiver.ensureRegistered(appContext());
         if (AicrStateReceiver.isRunning()) {
+            String detail = AicrStateReceiver.detail();
+            if (detail.length() > 0) {
+                String statusLine = statusFromDetail(detail);
+                if (statusLine != null) {
+                    return statusLine;
+                }
+            }
             int progress = AicrStateReceiver.progress();
             if (progress > 0) {
                 return "分析中 " + progress + "%";
@@ -77,6 +84,23 @@ final class AnalyzeControl {
             return "空闲";
         }
         return isCanceled() ? "正在停止" : "分析中";
+    }
+
+    /**
+     * 明细格式（由 AicrStateReporter 产生）：
+     * 5 段「已完成|总数|最慢阶段|待处理|失败」；3 段为旧格式「已处理|总数|阶段」。
+     */
+    private static String statusFromDetail(String detail) {
+        String[] parts = detail.split("\\|");
+        if (parts.length == 5) {
+            return "分析中 已完成 " + parts[0] + " · 待处理 " + parts[3]
+                    + " · 失败 " + parts[4];
+        }
+        if (parts.length == 3) {
+            return "分析中 已处理 " + parts[0] + " / " + parts[1]
+                    + " 张 · 阶段：" + parts[2];
+        }
+        return null;
     }
 
     static void start() {

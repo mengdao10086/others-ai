@@ -24,6 +24,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
 
     private static volatile int sStatus = 0;
     private static volatile int sProgress = -1;
+    private static volatile String sDetail = "";
     private static volatile long sStartedAt;
     private static volatile long sUpdatedAt;
     private static volatile boolean sRegistered;
@@ -56,6 +57,10 @@ final class AicrStateReceiver extends BroadcastReceiver {
         }
         sStatus = intent.getIntExtra(AicrProtocol.EXTRA_STATUS, 0);
         sProgress = intent.getIntExtra(AicrProtocol.EXTRA_PROGRESS, -1);
+        sDetail = intent.getStringExtra(AicrProtocol.EXTRA_DETAIL);
+        if (sDetail == null) {
+            sDetail = "";
+        }
         sStartedAt = intent.getLongExtra(AicrProtocol.EXTRA_STARTED_AT, 0L);
         sUpdatedAt = System.currentTimeMillis();
     }
@@ -67,6 +72,11 @@ final class AicrStateReceiver extends BroadcastReceiver {
     /** 0~100；拿不到或为 0 都返回 -1（aicr 的进度在迁移后会回落成 0，不能当真实进度显示）。 */
     static int progress() {
         return isFresh() && sProgress > 0 ? sProgress : -1;
+    }
+
+    /** 进度明细「已完成|总数|最慢阶段|待处理|失败」；拿不到或过期返回空串。 */
+    static String detail() {
+        return isFresh() && sDetail != null ? sDetail : "";
     }
 
     /** 本轮开始时间（epoch ms）；未知返回 0。 */
