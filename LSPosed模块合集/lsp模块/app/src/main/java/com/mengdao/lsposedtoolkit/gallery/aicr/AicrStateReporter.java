@@ -61,6 +61,11 @@ final class AicrStateReporter {
     private static volatile long sLastBroadcastAt;
     private static volatile boolean sProgressFailureLogged;
     private static volatile boolean sDetailFailureLogged;
+    private static volatile boolean sDetailTimingLogged;
+    private static volatile boolean sSkipFailureCounts;
+    private static volatile boolean sClipMismatchLogged;
+    /** 明细查询超过该耗时后，下次降级为旧 3 段（不再查失败计数）。 */
+    private static final long DETAIL_SLOW_MS = 2000L;
 
     private AicrStateReporter() {
     }
@@ -162,7 +167,7 @@ final class AicrStateReporter {
             if (handler != null) {
                 startLoop(handler);
             }
-            refreshProgress();
+            refreshProgress(false);
             shortCircuitBroadcast(status);
         }
     };
@@ -174,16 +179,21 @@ final class AicrStateReporter {
             if (status == STATUS_IDLE) {
                 return;
             }
-            refreshProgress();
+            refreshProgress(true);
             shortCircuitBroadcast(status);
         }
     };
 
-    /** 只在需要时重算进度（30 秒一次或状态切换），其余心跳复用缓存。 */
-    private static void refreshProgress() {
+    /** 只在需要时重算进度（30 秒一次或状态切换），其余查询/心跳复用缓存。 */
+    private static void refreshProgress(boolean force) {
+        long now = SystemClock.elapsedRealtime();
+        if (!force && sLastProgressReadAt > 0
+                && now - sLastProgressReadAt < PROGRESS_READ_INTERVAL_MS) {
+            return;
+        }
         sCachedProgress = currentProgress();
         sCachedDetail = currentDetail();
-        sLastProgressReadAt = SystemClock.elapsedRealtime();
+        sLastProgressReadAt = now;
     }
 
     private static void shortCircuitBroadcast(int status) {
@@ -230,7 +240,7 @@ final class AicrStateReporter {
                 }
                 long now = SystemClock.elapsedRealtime();
                 if (now - sLastProgressReadAt >= PROGRESS_READ_INTERVAL_MS) {
-                    refreshProgress();
+                    refreshProgress(true);
                 }
                 if (now - sLastBroadcastAt >= BROADCAST_INTERVAL_MS) {
                     report(status, sCachedProgress, sCachedDetail);
@@ -330,13 +340,18 @@ final class AicrStateReporter {
     }
 
     /**
-     * 分阶段明细：「已处理张数|总张数|最慢阶段」。拿不到返回空串，调用方退回百分比。
+     * 分阶段明细：「已完成|总数|最慢阶段|待处理|失败」。拿不到返回空串，调用方退回百分比。
      *
-     * 口径与 aicr 的分子一致：图片的 face/ocr/tag/pet/clip 任一状态非 0 即计数；
-     * 只有这些阶段都完成才算一张图片处理完，所以取各阶段计数的最小值作为图片下界；
-     * 视频只参与 clip，已完成数取 min(clipVid, totalVid)。
+     * 状态口径：1=完成/迁移标记，10=跳过/不适用，-1=失败，0=未处理。
+     * 已完成 = 图片各阶段 (state!=0 计数 - state=-1 计数) 的最小值
+     *        + min(视频 clip 已完成, totalVid)；
+     * 失败 = 图片各阶段 state=-1 的最大值 + 视频 clip 的 state=-1（图片/视频两域不相交）；
+     * 待处理 = 总数 - 已完成 - 失败，clamp 到 0。
+     *
+     * 失败计数需要每阶段多查一次；查询超过 DETAIL_SLOW_MS 后降级为旧 3 段明细。
      */
     private static String currentDetail() {
+        long startedAt = SystemClock.elapsedRealtime();
         try {
             Class<?> dbClass = XposedHelpers.findClassIfExists(
                     MANAGER_DATABASE_CLASS, sClassLoader);
@@ -347,13 +362,18 @@ final class AicrStateReporter {
             }
             Object db = XposedHelpers.callStaticMethod(dbClass, "getInstance");
             Object dao = XposedHelpers.callMethod(db, "queryDao");
-            int face = callInt(dao, "getGalleryFaceStateCount");
-            int ocr = callInt(dao, "getGalleryOcrStateCount");
-            int tag = callInt(dao, "getGalleryTagStateCount");
-            int pet = callInt(dao, "getGalleryPetCount");
-            int clipPic = callInt(dao, "getGalleryClipStateCount", "PICTURE");
-            int clipVid = callInt(dao, "getGalleryClipStateCount", "VIDEO");
             boolean petSupported = isPetSupported();
+
+            Integer faceAll = count(dao, "getGalleryFaceStateCount");
+            Integer ocrAll = count(dao, "getGalleryOcrStateCount");
+            Integer tagAll = count(dao, "getGalleryTagStateCount");
+            Integer petAll = petSupported ? count(dao, "getGalleryPetStateCount") : null;
+            Integer clipPicAll = count(dao, "getGalleryClipStateCount", "PICTURE");
+            Integer clipVidAll = count(dao, "getGalleryClipStateCount", "VIDEO");
+            if (!allPresent(faceAll, ocrAll, tagAll, clipPicAll, clipVidAll)
+                    || (petSupported && petAll == null)) {
+                return "";
+            }
 
             Class<?> monitorClass = XposedHelpers.findClassIfExists(
                     GALLERY_PROGRESS_MONITOR_CLASS, sClassLoader);
@@ -371,35 +391,96 @@ final class AicrStateReporter {
             if (totalPic <= 0) {
                 return "";
             }
-
-            int processedPic = face;
-            String stage = "face";
-            if (ocr < processedPic) {
-                processedPic = ocr;
-                stage = "ocr";
-            }
-            if (tag < processedPic) {
-                processedPic = tag;
-                stage = "tag";
-            }
-            if (petSupported && pet < processedPic) {
-                processedPic = pet;
-                stage = "pet";
-            }
-            if (clipPic < processedPic) {
-                processedPic = clipPic;
-                stage = "clip";
-            }
-            if (processedPic < 0) {
-                return "";
-            }
-            int processedVid = Math.max(0, Math.min(clipVid, totalVid));
-            int processed = Math.max(0, Math.min(processedPic, totalPic)) + processedVid;
             int total = totalPic + totalVid;
             if (total <= 0) {
                 return "";
             }
-            return processed + "|" + total + "|" + stage;
+
+            int processedPic = faceAll;
+            String processedStage = "face";
+            if (ocrAll < processedPic) {
+                processedPic = ocrAll;
+                processedStage = "ocr";
+            }
+            if (tagAll < processedPic) {
+                processedPic = tagAll;
+                processedStage = "tag";
+            }
+            if (petSupported && petAll < processedPic) {
+                processedPic = petAll;
+                processedStage = "pet";
+            }
+            if (clipPicAll < processedPic) {
+                processedPic = clipPicAll;
+                processedStage = "clip";
+            }
+            int processedVid = Math.max(0, Math.min(clipVidAll, totalVid));
+            if (sSkipFailureCounts) {
+                logDetailTiming(SystemClock.elapsedRealtime() - startedAt);
+                return legacyDetail(processedPic, processedVid, totalPic, totalVid,
+                        processedStage);
+            }
+
+            Integer faceFailed = count(dao, "getGalleryFaceStateCount", -1);
+            Integer ocrFailed = count(dao, "getGalleryOcrStateCount", -1);
+            Integer tagFailed = count(dao, "getGalleryTagStateCount", -1);
+            Integer petFailed = petSupported ? count(dao, "getGalleryPetStateCount", -1) : null;
+            Integer clipPicFailed = count(dao, "getGalleryClipStateCount", "PICTURE", -1);
+            Integer clipVidFailed = count(dao, "getGalleryClipStateCount", "VIDEO", -1);
+            if (!allPresent(faceFailed, ocrFailed, tagFailed, clipPicFailed, clipVidFailed)
+                    || (petSupported && petFailed == null)) {
+                return "";
+            }
+            if (clipPicAll < clipPicFailed || clipVidAll < clipVidFailed) {
+                logClipMismatch(clipPicAll, clipVidAll, clipPicFailed, clipVidFailed);
+            }
+
+            int picDone = completedCount(faceAll, faceFailed);
+            String doneStage = "face";
+            int ocrDone = completedCount(ocrAll, ocrFailed);
+            int tagDone = completedCount(tagAll, tagFailed);
+            int clipPicDone = completedCount(clipPicAll, clipPicFailed);
+            if (ocrDone < picDone) {
+                picDone = ocrDone;
+                doneStage = "ocr";
+            }
+            if (tagDone < picDone) {
+                picDone = tagDone;
+                doneStage = "tag";
+            }
+            if (petSupported) {
+                int petDone = completedCount(petAll, petFailed);
+                if (petDone < picDone) {
+                    picDone = petDone;
+                    doneStage = "pet";
+                }
+            }
+            if (clipPicDone < picDone) {
+                picDone = clipPicDone;
+                doneStage = "clip";
+            }
+
+            int picFailed = Math.max(faceFailed, ocrFailed);
+            picFailed = Math.max(picFailed, tagFailed);
+            if (petSupported) {
+                picFailed = Math.max(picFailed, petFailed);
+            }
+            picFailed = Math.max(picFailed, clipPicFailed);
+
+            int rawCompleted = Math.min(picDone, totalPic)
+                    + Math.min(completedCount(clipVidAll, clipVidFailed), totalVid);
+            int rawFailed = Math.min(picFailed, totalPic)
+                    + Math.min(clipVidFailed, totalVid);
+            if (rawCompleted + rawFailed > total) {
+                XposedBridge.log(TAG + ": detail counts overflow completed=" + rawCompleted
+                        + " failed=" + rawFailed + " total=" + total + " stage=" + doneStage);
+            }
+            int completed = Math.min(Math.max(0, rawCompleted), total);
+            int failed = Math.min(Math.max(0, rawFailed), total - completed);
+            int pending = Math.max(0, total - completed - failed);
+
+            logDetailTiming(SystemClock.elapsedRealtime() - startedAt);
+            return completed + "|" + total + "|" + doneStage + "|" + pending + "|" + failed;
         } catch (Throwable t) {
             if (!sDetailFailureLogged) {
                 sDetailFailureLogged = true;
@@ -409,9 +490,52 @@ final class AicrStateReporter {
         }
     }
 
-    private static int callInt(Object target, String method, Object... args) {
-        Object value = XposedHelpers.callMethod(target, method, args);
-        return value instanceof Integer ? (Integer) value : -1;
+    private static String legacyDetail(int processedPic, int processedVid,
+                                       int totalPic, int totalVid, String stage) {
+        int processed = Math.max(0, Math.min(processedPic, totalPic))
+                + Math.max(0, Math.min(processedVid, totalVid));
+        return processed + "|" + (totalPic + totalVid) + "|" + stage;
+    }
+
+    private static Integer count(Object dao, String method, Object... args) {
+        Object value = XposedHelpers.callMethod(dao, method, args);
+        return value instanceof Integer ? (Integer) value : null;
+    }
+
+    private static boolean allPresent(Integer... values) {
+        for (Integer value : values) {
+            if (value == null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int completedCount(int all, int failed) {
+        return Math.max(0, all - failed);
+    }
+
+    private static void logDetailTiming(long elapsedMs) {
+        if (elapsedMs > DETAIL_SLOW_MS) {
+            if (!sSkipFailureCounts) {
+                sSkipFailureCounts = true;
+                XposedBridge.log(TAG + ": detail query slow " + elapsedMs
+                        + "ms, fallback to legacy detail");
+            }
+        } else if (!sDetailTimingLogged) {
+            sDetailTimingLogged = true;
+            XposedBridge.log(TAG + ": detail query took " + elapsedMs + "ms");
+        }
+    }
+
+    private static void logClipMismatch(int picAll, int vidAll, int picFailed, int vidFailed) {
+        if (sClipMismatchLogged) {
+            return;
+        }
+        sClipMismatchLogged = true;
+        XposedBridge.log(TAG + ": clip count mismatch all=" + picAll + "/" + vidAll
+                + " failed=" + picFailed + "/" + vidFailed
+                + " (failed query lacks store_state filter)");
     }
 
     private static boolean isPetSupported() {

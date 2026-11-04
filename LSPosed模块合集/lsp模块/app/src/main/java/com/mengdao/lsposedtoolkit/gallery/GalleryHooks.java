@@ -36,6 +36,13 @@ public final class GalleryHooks {
         }
 
         try {
+            SearchProgressPinHook.install(classLoader);
+            appendInstalled(installed, "SearchProgressPinHook");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": SearchProgressPinHook failed: " + t);
+        }
+
+        try {
             ExecDirectlyLogHook.install(classLoader);
             appendInstalled(installed, "ExecDirectlyLogHook");
         } catch (Throwable t) {
