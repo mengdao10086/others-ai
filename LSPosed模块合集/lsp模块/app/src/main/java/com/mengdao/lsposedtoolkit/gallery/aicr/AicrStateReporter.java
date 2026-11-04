@@ -164,6 +164,16 @@ final class AicrStateReporter {
         QUERY_REPORT.run();
     }
 
+    /** 状态字段变化（如绑核）后立即回报：复用缓存值，不读 Room、不改运行状态。 */
+    static void reportCurrentNow() {
+        try {
+            report(sStatus, sCachedProgress, sCachedDetail);
+            sLastBroadcastAt = SystemClock.elapsedRealtime();
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": immediate report failed: " + t);
+        }
+    }
+
     private static final Runnable QUERY_REPORT = new Runnable() {
         @Override
         public void run() {
@@ -302,6 +312,8 @@ final class AicrStateReporter {
                 intent.putExtra(AicrProtocol.EXTRA_DETAIL, detail);
             }
             intent.putExtra(AicrProtocol.EXTRA_STARTED_AT, runningStartTime());
+            intent.putExtra(AicrProtocol.EXTRA_BIG_BOUND,
+                    AicrCpuAffinity.isManualBound() ? 1 : 0);
             intent.putExtra(RecentsLock.EXTRA_WHITELIST_FAILED,
                     RecentsLock.whitelistFailed() ? 1 : 0);
             context.sendBroadcast(intent);

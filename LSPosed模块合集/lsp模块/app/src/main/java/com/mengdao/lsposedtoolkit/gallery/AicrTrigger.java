@@ -35,6 +35,11 @@ final class AicrTrigger {
         send(context, AicrProtocol.ACTION_STOP);
     }
 
+    /** 分析已在运行时只追加绑大核，不重启分析。 */
+    static void sendBindBig(Context context) {
+        send(context, AicrProtocol.ACTION_BIND_BIG);
+    }
+
     /** 只读查询，3 秒内最多一次；aicr 收到后立即回报当前状态。 */
     static void sendQuery(Context context) {
         if (context == null) {

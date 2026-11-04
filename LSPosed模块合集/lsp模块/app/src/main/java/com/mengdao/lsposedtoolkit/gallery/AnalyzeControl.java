@@ -114,9 +114,21 @@ final class AnalyzeControl {
     }
 
     static void start() {
-        AicrStateReceiver.ensureRegistered(appContext());
+        Context context = appContext();
+        AicrStateReceiver.ensureRegistered(context);
+        if (isRunning()) {
+            // 分析已经（自动）跑起来：不重启，只把分析线程绑到 4-6
+            AicrTrigger.sendBindBig(context);
+            return;
+        }
         startExecDirectly();
-        AicrTrigger.sendStart(appContext());
+        AicrTrigger.sendStart(context);
+    }
+
+    /** 分析线程当前是否已绑大核；未运行或状态过期返回 false。 */
+    static boolean isBigBound() {
+        AicrStateReceiver.ensureRegistered(appContext());
+        return AicrStateReceiver.bigBound();
     }
 
     static void stop() {

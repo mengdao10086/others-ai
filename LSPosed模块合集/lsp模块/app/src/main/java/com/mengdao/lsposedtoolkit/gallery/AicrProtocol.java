@@ -25,6 +25,9 @@ public final class AicrProtocol {
     public static final String ACTION_STOP = "com.mengdao.lsposedtoolkit.action.AICR_STOP";
     /** 相册主动问一次当前状态，让设置页首次渲染就有值。 */
     public static final String ACTION_QUERY = "com.mengdao.lsposedtoolkit.action.AICR_QUERY";
+    /** 分析已在运行时，只把分析线程绑到 CPU 4-6，不重启分析。 */
+    public static final String ACTION_BIND_BIG =
+            "com.mengdao.lsposedtoolkit.action.AICR_BIND_BIG";
 
     /** aicr → 相册的状态回报（运行状态 + 进度），相册侧动态注册接收器。 */
     public static final String ACTION_STATE = "com.mengdao.lsposedtoolkit.action.AICR_STATE";
@@ -34,6 +37,8 @@ public final class AicrProtocol {
     public static final String EXTRA_STARTED_AT = "started_at";
     /** 进度明细：已处理张数|总张数|最慢阶段（拿不到时为空串）。 */
     public static final String EXTRA_DETAIL = "detail";
+    /** 分析线程当前是否已绑大核（1=是，0/缺失=否）。 */
+    public static final String EXTRA_BIG_BOUND = "big_bound";
 
     /** 与 aicr RunningStatus.RUNNING_LEVEL_OVERLOAD 一致：设备重载，暂停建库。 */
     public static final int RUNNING_LEVEL_OVERLOAD = 5;

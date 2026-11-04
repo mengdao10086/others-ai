@@ -65,6 +65,11 @@ final class AicrCpuAffinity {
         return at > 0L && SystemClock.elapsedRealtime() - at <= MANUAL_WINDOW_MS;
     }
 
+    /** 当前是否处于手动大核绑定状态；分析停止时由 stopManual 复位。 */
+    static boolean isManualBound() {
+        return sManualActive;
+    }
+
     /** 手动模式：立即绑 4-6，并每 3 秒检查/重绑一次，抵消 aicr 的 shieldCPU 或 cpuset 变化。 */
     static void startManual() {
         sManualActive = true;

@@ -29,6 +29,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
     private static final String KEY_PROGRESS = "progress";
     private static final String KEY_DETAIL = "detail";
     private static final String KEY_STARTED_AT = "started_at";
+    private static final String KEY_BIG_BOUND = "big_bound";
     private static final String KEY_SAVED_AT = "saved_at";
 
     private static final AicrStateReceiver INSTANCE = new AicrStateReceiver();
@@ -37,6 +38,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
     private static volatile int sProgress = -1;
     private static volatile String sDetail = "";
     private static volatile long sStartedAt;
+    private static volatile boolean sBigBound;
     private static volatile long sUpdatedAt;
     private static volatile boolean sRegistered;
     private static volatile boolean sWhitelistFailed;
@@ -45,6 +47,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
     private static int sPersistedProgress = Integer.MIN_VALUE;
     private static String sPersistedDetail = "";
     private static long sPersistedStartedAt;
+    private static boolean sPersistedBigBound;
 
     private AicrStateReceiver() {
     }
@@ -90,6 +93,9 @@ final class AicrStateReceiver extends BroadcastReceiver {
             sDetail = "";
         }
         sStartedAt = intent.getLongExtra(AicrProtocol.EXTRA_STARTED_AT, 0L);
+        // 字段缺失或已停止时按未绑核处理（向前兼容旧版 aicr 侧广播）
+        sBigBound = sStatus > 0
+                && intent.getIntExtra(AicrProtocol.EXTRA_BIG_BOUND, 0) == 1;
         sWhitelistFailed = intent.getIntExtra(RecentsLock.EXTRA_WHITELIST_FAILED, 0) == 1;
         sUpdatedAt = System.currentTimeMillis();
         persist(context);
@@ -112,6 +118,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
             boolean changed = sStatus != sPersistedStatus
                     || sProgress != sPersistedProgress
                     || sStartedAt != sPersistedStartedAt
+                    || sBigBound != sPersistedBigBound
                     || !detail.equals(sPersistedDetail);
             if (!changed && sLastPersistAt > 0
                     && now - sLastPersistAt < PERSIST_INTERVAL_MS) {
@@ -124,6 +131,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
                     .putInt(KEY_PROGRESS, sProgress)
                     .putString(KEY_DETAIL, detail)
                     .putLong(KEY_STARTED_AT, sStartedAt)
+                    .putBoolean(KEY_BIG_BOUND, sBigBound)
                     .putLong(KEY_SAVED_AT, sUpdatedAt)
                     .apply();
             sLastPersistAt = now;
@@ -131,6 +139,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
             sPersistedProgress = sProgress;
             sPersistedDetail = detail;
             sPersistedStartedAt = sStartedAt;
+            sPersistedBigBound = sBigBound;
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": state persist failed: " + t);
         }
@@ -155,6 +164,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
                 sDetail = "";
             }
             sStartedAt = preferences.getLong(KEY_STARTED_AT, 0L);
+            sBigBound = sStatus > 0 && preferences.getBoolean(KEY_BIG_BOUND, false);
             sUpdatedAt = savedAt;
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": state restore failed: " + t);
@@ -183,6 +193,11 @@ final class AicrStateReceiver extends BroadcastReceiver {
     /** 本轮开始时间（epoch ms）；未知返回 0。 */
     static long startedAt() {
         return isFresh() ? sStartedAt : 0L;
+    }
+
+    /** 分析线程当前是否已绑大核；未运行或状态过期返回 false。 */
+    static boolean bigBound() {
+        return isFresh() && sStatus > 0 && sBigBound;
     }
 
     private static boolean isFresh() {

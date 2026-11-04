@@ -453,6 +453,7 @@ final class SettingsHook {
     private static void updateControls(View itemView, Object preference) throws Exception {
         boolean running = AnalyzeControl.isRunning();
         boolean canceled = running && AnalyzeControl.isCanceled();
+        boolean bigBound = running && AnalyzeControl.isBigBound();
         setSummary(preference, summaryText());
 
         View controls = itemView.findViewWithTag(CONTROLS_TAG);
@@ -462,8 +463,10 @@ final class SettingsHook {
                 View first = row.getChildAt(0);
                 View second = row.getChildAt(1);
                 if (first instanceof Button) {
-                    setButtonText((Button) first, "启动");
-                    ((Button) first).setEnabled(!running);
+                    Button startButton = (Button) first;
+                    // 运行中未绑核时保留可点：再点一次只追加绑大核，不重启分析
+                    setButtonText(startButton, bigBound ? "已加速" : "启动");
+                    startButton.setEnabled(!running || (!canceled && !bigBound));
                 }
                 if (second instanceof Button) {
                     setButtonText((Button) second, canceled ? "停止中" : "停止");

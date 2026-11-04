@@ -36,10 +36,15 @@ final class AicrTriggerDispatcher {
     static boolean isTriggerAction(String action) {
         return AicrProtocol.ACTION_START.equals(action)
                 || AicrProtocol.ACTION_STOP.equals(action)
-                || AicrProtocol.ACTION_QUERY.equals(action);
+                || AicrProtocol.ACTION_QUERY.equals(action)
+                || AicrProtocol.ACTION_BIND_BIG.equals(action);
     }
 
     static void dispatch(Context fallback, String action, String source) {
+        if (AicrProtocol.ACTION_BIND_BIG.equals(action)) {
+            bindBigCore(source);
+            return;
+        }
         if (AicrProtocol.ACTION_QUERY.equals(action)) {
             Context context = appContext(fallback);
             if (context != null) {
@@ -89,6 +94,23 @@ final class AicrTriggerDispatcher {
                 // 分析停止：退出手动模式并绑回小核 0-3。
                 AicrCpuAffinity.stopManual();
             }
+        }
+    }
+
+    /** 运行中追加绑核：只调亲和性，不重启分析、不改 RunningStatus。 */
+    private static void bindBigCore(String source) {
+        try {
+            if (!AicrStateReporter.isRunningNow()) {
+                XposedBridge.log(TAG + ": bind big cores ignored, analysis not running ("
+                        + source + ")");
+                return;
+            }
+            AicrCpuAffinity.startManual();
+            XposedBridge.log(TAG + ": aicr bound to big cores 4-6 (" + source + ")");
+            // 绑定状态是进程内静态值，立即回报一次，设置页不必等 10 秒心跳
+            AicrStateReporter.reportCurrentNow();
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": bind big cores failed (" + source + "): " + t);
         }
     }
 
