@@ -97,7 +97,9 @@ final class LegacyNightWorkCleanupHook {
                 }
             }
             sCleaned = true;
-            XposedBridge.log(TAG + ": legacy night work cancelled, count=" + count);
+            if (count > 0) {
+                XposedBridge.log(TAG + ": legacy night work cancelled, count=" + count);
+            }
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": cancel legacy night work failed: " + t);
         }

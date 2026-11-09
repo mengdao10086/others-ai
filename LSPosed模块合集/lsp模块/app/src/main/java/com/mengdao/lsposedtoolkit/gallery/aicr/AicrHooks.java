@@ -21,7 +21,18 @@ public final class AicrHooks {
     private static final String DIAGNOSTICS_BOOTSTRAP =
             "com.mengdao.lsposedtoolkit.gallery.aicr.DiagnosticsBootstrap";
 
+    private static Boolean sDiagBuild;
+
     private AicrHooks() {
+    }
+
+    /** 当前是否 diag 构建：release 包里没有诊断入口类，用于决定诊断日志是否输出。 */
+    static boolean isDiagBuild() {
+        if (sDiagBuild == null) {
+            sDiagBuild = XposedHelpers.findClassIfExists(DIAGNOSTICS_BOOTSTRAP,
+                    AicrHooks.class.getClassLoader()) != null;
+        }
+        return sDiagBuild;
     }
 
     public static void install(String packageName, String processName, ClassLoader classLoader,

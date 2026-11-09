@@ -42,7 +42,7 @@ final class WriteBackProbe {
 
     private static final String TAG = "GalleryAnalyze";
 
-    /** 诊断总开关；false 时不安装任何 hook，install() 只打一行 disabled。 */
+    /** 诊断总开关；false 时不安装任何 hook，也不输出日志。 */
     static final boolean ENABLED = false;
 
     private static final String ALGO_UTILS_CLASS =
@@ -94,7 +94,6 @@ final class WriteBackProbe {
 
     static void install(ClassLoader classLoader) {
         if (!ENABLED) {
-            XposedBridge.log(TAG + ": WriteBackProbe disabled");
             return;
         }
         if (sInstalled) {

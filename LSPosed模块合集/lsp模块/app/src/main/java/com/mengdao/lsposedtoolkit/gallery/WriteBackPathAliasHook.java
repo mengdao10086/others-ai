@@ -41,7 +41,12 @@ final class WriteBackPathAliasHook {
 
     private static volatile boolean sInstalled;
     private static volatile boolean sHooked;
+    private static final Object LOG_LOCK = new Object();
     private static long sLastLogElapsed;
+    private static long sTotalReq;
+    private static long sTotalHit;
+    private static long sTotalAliased;
+    private static boolean sFirstLogDone;
 
     private WriteBackPathAliasHook() {
     }
@@ -120,7 +125,6 @@ final class WriteBackPathAliasHook {
         HashMap<Object, Object> aliases = null;
         int hit = 0;
         int aliased = 0;
-        StringBuilder samples = null;
 
         for (String path : paths) {
             if (path == null) {
@@ -141,14 +145,6 @@ final class WriteBackPathAliasHook {
             }
             aliases.put(path, matched);
             aliased++;
-            if (aliased <= 2) {
-                if (samples == null) {
-                    samples = new StringBuilder();
-                } else {
-                    samples.append(" | ");
-                }
-                samples.append(truncate(path, 120));
-            }
         }
 
         // 没有别名命中时不拷贝原 map。
@@ -157,28 +153,38 @@ final class WriteBackPathAliasHook {
             copy.putAll(aliases);
             param.setResult(copy);
         }
-        maybeLog(paths.size(), hit, aliased, samples == null ? "-" : samples.toString());
+        maybeLog(paths.size(), hit, aliased);
     }
 
-    private static void maybeLog(int req, int hit, int aliased, String sample) {
-        long now = SystemClock.elapsedRealtime();
-        if (now - sLastLogElapsed < LOG_INTERVAL_MS) {
-            return;
+    /**
+     * 每进程首条必打；之后每 60 秒最多一行，且只在本窗口出现补别名时输出。
+     * 输出累计请求/命中/补别名次数，不打印路径样例；静默窗口的计数仍会累计到下次输出。
+     */
+    private static void maybeLog(int req, int hit, int aliased) {
+        long totalReq;
+        long totalHit;
+        long totalAliased;
+        synchronized (LOG_LOCK) {
+            sTotalReq += req;
+            sTotalHit += hit;
+            sTotalAliased += aliased;
+            long now = SystemClock.elapsedRealtime();
+            if (now - sLastLogElapsed < LOG_INTERVAL_MS) {
+                return;
+            }
+            if (sFirstLogDone && aliased == 0) {
+                return;
+            }
+            sFirstLogDone = true;
+            sLastLogElapsed = now;
+            totalReq = sTotalReq;
+            totalHit = sTotalHit;
+            totalAliased = sTotalAliased;
         }
-        sLastLogElapsed = now;
         XposedBridge.log(TAG + ": writeback alias pid=" + Process.myPid()
-                + " req=" + req
-                + " hit=" + hit
-                + " aliased=" + aliased
-                + " sample=[" + sample + "]");
-    }
-
-    private static String truncate(String value, int max) {
-        if (value == null) {
-            return "null";
-        }
-        String oneLine = value.replace('\n', ' ').replace('\r', ' ');
-        return oneLine.length() > max ? oneLine.substring(0, max) : oneLine;
+                + " req=" + totalReq
+                + " hit=" + totalHit
+                + " aliased=" + totalAliased);
     }
 
     private static void logHookFailure() {

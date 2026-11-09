@@ -38,11 +38,6 @@ final class ExecDirectlyLogHook {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) {
                         START_AT.set(System.currentTimeMillis());
-                        try {
-                            logStart((Integer) param.args[2]);
-                        } catch (Throwable t) {
-                            XposedBridge.log(TAG + ": execDirectly log before failed: " + t);
-                        }
                     }
 
                     @Override
@@ -57,17 +52,8 @@ final class ExecDirectlyLogHook {
     }
 
     /**
-     * before 只记录入口参数与电源状态，不触碰 AlgoProgressManager：
-     * 目标方法在「未充电 / 亮屏」等早退分支根本不会初始化它，日志不能抢在目标之前触发类初始化。
-     */
-    private static void logStart(int startState) {
-        XposedBridge.log(TAG + ": execDirectly startState=" + startState + " "
-                + powerText(appContext()));
-    }
-
-    /**
-     * execDirectly 返回时打一行：耗时 + mCanceled + aicr 两个能力位。
-     * 此时目标方法已经执行完，AlgoProgressManager 的初始化时机不会再被日志提前。
+     * execDirectly 返回时打一行：入口参数 + 电源状态 + 耗时 + mCanceled + aicr 两个能力位。
+     * 在目标方法执行完后读取，AlgoProgressManager 的初始化时机不会被日志提前；
      * 用来区分「真的跑完了」和「被取消」——aicr 接管的设备上本地算法大多被跳过，几秒结束属正常。
      */
     private static void logFinish(int startState) {
@@ -83,7 +69,8 @@ final class ExecDirectlyLogHook {
             canceled = XposedHelpers.getStaticBooleanField(workerClass, "mCanceled");
         } catch (Throwable ignored) {
         }
-        XposedBridge.log(TAG + ": execDirectly done in " + seconds + "s canceled=" + canceled
+        XposedBridge.log(TAG + ": execDirectly startState=" + startState + " "
+                + powerText(appContext()) + " done in " + seconds + "s canceled=" + canceled
                 + " " + branchText(startState));
     }
 

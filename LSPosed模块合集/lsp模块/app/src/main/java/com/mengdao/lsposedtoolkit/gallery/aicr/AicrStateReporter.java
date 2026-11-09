@@ -107,7 +107,9 @@ final class AicrStateReporter {
             int previous = sStatus;
             int normalized = status > 0 ? status : STATUS_IDLE;
             sStatus = normalized;
-            XposedBridge.log(TAG + ": aicr runningStatus=" + status);
+            if (normalized != previous) {
+                XposedBridge.log(TAG + ": aicr runningStatus=" + status);
+            }
             Handler handler = handler();
             if (normalized == STATUS_IDLE) {
                 stopLoop();
@@ -577,7 +579,7 @@ final class AicrStateReporter {
                         < (long) total * UNSUPPORTED_RATIO_NUM) {
             return false;
         }
-        if (sExcludedStagesLogged.add(stage)) {
+        if (sExcludedStagesLogged.add(stage) && AicrHooks.isDiagBuild()) {
             XposedBridge.log(TAG + ": detail stage " + stage + " excluded (failed="
                     + failed + " total=" + total + ")");
         }
@@ -598,7 +600,7 @@ final class AicrStateReporter {
                 XposedBridge.log(TAG + ": detail query slow " + elapsedMs
                         + "ms, fallback to legacy detail");
             }
-        } else if (!sDetailTimingLogged) {
+        } else if (!sDetailTimingLogged && AicrHooks.isDiagBuild()) {
             sDetailTimingLogged = true;
             XposedBridge.log(TAG + ": detail query took " + elapsedMs + "ms");
         }

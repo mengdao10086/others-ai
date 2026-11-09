@@ -134,7 +134,7 @@ final class AicrCpuAffinity {
                 XposedBridge.log(TAG + ": affinity target thread gone");
                 sLastTid = -1;
             } else if (sLastTid == -2) {
-                XposedBridge.log(TAG + ": cpu affinity waiting for " + TARGET_THREAD + " thread");
+                logOnce("cpu affinity waiting for " + TARGET_THREAD + " thread");
                 sLastTid = -1;
             }
             return;

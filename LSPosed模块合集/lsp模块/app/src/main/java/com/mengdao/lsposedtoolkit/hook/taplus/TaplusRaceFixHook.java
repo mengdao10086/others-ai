@@ -3,7 +3,6 @@ package com.mengdao.lsposedtoolkit.hook.taplus;
 import android.graphics.Bitmap;
 
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -14,7 +13,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 public final class TaplusRaceFixHook {
 
-    private static final String TAG = "TaplusFix";
     private static final String SERVICE_CLASS =
             "com.miui.contentextension.services.TextContentExtensionService";
 
@@ -28,7 +26,7 @@ public final class TaplusRaceFixHook {
                     protected void beforeHookedMethod(MethodHookParam param) {
                         if (param.args[0] == null) {
                             param.setResult(null);
-                            XposedBridge.log(TAG + ": [竞态] 阻止 setBitmap(null) — 保护 bitmap");
+                            SaveEventLog.blockedSetBitmapNull();
                         }
                     }
                 });
