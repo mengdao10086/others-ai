@@ -74,7 +74,7 @@ final class AnalyzeControl {
             }
             String detail = AicrStateReceiver.detail();
             if (detail.length() > 0) {
-                String statusLine = statusFromDetail(detail);
+                String statusLine = statusFromDetail(detail, "分析中 ");
                 if (statusLine != null) {
                     return statusLine;
                 }
@@ -91,7 +91,8 @@ final class AnalyzeControl {
             return "分析中（AI 引擎）";
         }
         if (!galleryRunning()) {
-            return "空闲";
+            String lastLine = statusFromDetail(AicrStateReceiver.lastDetail(), "");
+            return lastLine != null ? lastLine : "空闲";
         }
         return isCanceled() ? "正在停止" : "分析中";
     }
@@ -99,15 +100,19 @@ final class AnalyzeControl {
     /**
      * 明细格式（由 AicrStateReporter 产生）：
      * 5 段「已完成|总数|最慢阶段|待处理|失败」；3 段为旧格式「已处理|总数|阶段」。
+     * prefix 为空时是空闲态摘要，运行时传「分析中 」。
      */
-    private static String statusFromDetail(String detail) {
+    private static String statusFromDetail(String detail, String prefix) {
+        if (detail == null || detail.length() == 0) {
+            return null;
+        }
         String[] parts = detail.split("\\|");
         if (parts.length == 5) {
-            return "分析中 已完成 " + parts[0] + " · 待处理 " + parts[3]
+            return prefix + "已完成 " + parts[0] + " · 待处理 " + parts[3]
                     + " · 失败 " + parts[4];
         }
         if (parts.length == 3) {
-            return "分析中 已处理 " + parts[0] + " / " + parts[1]
+            return prefix + "已处理 " + parts[0] + " / " + parts[1]
                     + " 张 · 阶段：" + parts[2];
         }
         return null;

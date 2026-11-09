@@ -14,7 +14,8 @@ import de.robv.android.xposed.XposedBridge;
  *
  * 相册自己的 isRunning 在 aicr 接管时永远是 false，设置页会一直显示「空闲」。
  * 这里在相册进程动态注册接收器，把 aicr 的 status / progress 存成静态值，
- * 由状态轮询读取。超过有效期没收到新值就当作已结束，避免卡死在「分析中」。
+ * 由状态轮询读取。超过有效期没收到新值就当作已结束，避免卡死在「分析中」；
+ * 明细与进度额外保留最后一轮有效值，空闲态与进程重启后仍可显示。
  */
 final class AicrStateReceiver extends BroadcastReceiver {
 
@@ -71,10 +72,18 @@ final class AicrStateReceiver extends BroadcastReceiver {
             return;
         }
         sStatus = intent.getIntExtra(AicrProtocol.EXTRA_STATUS, 0);
-        sProgress = intent.getIntExtra(AicrProtocol.EXTRA_PROGRESS, -1);
-        sDetail = intent.getStringExtra(AicrProtocol.EXTRA_DETAIL);
-        if (sDetail == null) {
-            sDetail = "";
+        // 缺少 extra 或值为空/-1 时保留上一次的有效值：空闲心跳不应冲掉最后一轮结果。
+        if (intent.hasExtra(AicrProtocol.EXTRA_PROGRESS)) {
+            int progress = intent.getIntExtra(AicrProtocol.EXTRA_PROGRESS, -1);
+            if (progress > 0) {
+                sProgress = progress;
+            }
+        }
+        if (intent.hasExtra(AicrProtocol.EXTRA_DETAIL)) {
+            String detail = intent.getStringExtra(AicrProtocol.EXTRA_DETAIL);
+            if (detail != null && detail.length() > 0) {
+                sDetail = detail;
+            }
         }
         sStartedAt = intent.getLongExtra(AicrProtocol.EXTRA_STARTED_AT, 0L);
         sUpdatedAt = System.currentTimeMillis();
@@ -97,14 +106,19 @@ final class AicrStateReceiver extends BroadcastReceiver {
                     && now - sLastPersistAt < PERSIST_INTERVAL_MS) {
                 return;
             }
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                    .edit()
+            SharedPreferences.Editor editor = context.getSharedPreferences(
+                    PREFS, Context.MODE_PRIVATE).edit()
                     .putInt(KEY_STATUS, sStatus)
-                    .putInt(KEY_PROGRESS, sProgress)
-                    .putString(KEY_DETAIL, detail)
                     .putLong(KEY_STARTED_AT, sStartedAt)
-                    .putLong(KEY_SAVED_AT, sUpdatedAt)
-                    .apply();
+                    .putLong(KEY_SAVED_AT, sUpdatedAt);
+            // 明细与进度保留最后一轮有效值；空串/-1 不覆盖磁盘上已有的值。
+            if (detail.length() > 0) {
+                editor.putString(KEY_DETAIL, detail);
+            }
+            if (sProgress > 0) {
+                editor.putInt(KEY_PROGRESS, sProgress);
+            }
+            editor.apply();
             sLastPersistAt = now;
             sPersistedStatus = sStatus;
             sPersistedProgress = sProgress;
@@ -114,7 +128,10 @@ final class AicrStateReceiver extends BroadcastReceiver {
         }
     }
 
-    /** 恢复 20 秒内的落盘状态；已有实时值时不覆盖。 */
+    /**
+     * 恢复落盘状态：明细与进度不受 20 秒新鲜度限制，进程重启后仍可显示最后一轮结果；
+     * status / started_at 只在 20 秒内有效，避免误显示「分析中」。已有实时值时不覆盖。
+     */
     private static void restore(Context context) {
         if (sRestored || sUpdatedAt > 0 || context == null) {
             return;
@@ -123,16 +140,23 @@ final class AicrStateReceiver extends BroadcastReceiver {
         try {
             SharedPreferences preferences =
                     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            if (sProgress <= 0) {
+                int progress = preferences.getInt(KEY_PROGRESS, -1);
+                if (progress > 0) {
+                    sProgress = progress;
+                }
+            }
+            if (sDetail == null || sDetail.length() == 0) {
+                String detail = preferences.getString(KEY_DETAIL, "");
+                if (detail != null && detail.length() > 0) {
+                    sDetail = detail;
+                }
+            }
             long savedAt = preferences.getLong(KEY_SAVED_AT, 0L);
             if (savedAt <= 0L || System.currentTimeMillis() - savedAt >= FRESH_MS) {
                 return;
             }
             sStatus = preferences.getInt(KEY_STATUS, 0);
-            sProgress = preferences.getInt(KEY_PROGRESS, -1);
-            sDetail = preferences.getString(KEY_DETAIL, "");
-            if (sDetail == null) {
-                sDetail = "";
-            }
             sStartedAt = preferences.getLong(KEY_STARTED_AT, 0L);
             sUpdatedAt = savedAt;
         } catch (Throwable ignored) {
@@ -151,6 +175,16 @@ final class AicrStateReceiver extends BroadcastReceiver {
     /** 进度明细「已完成|总数|最慢阶段|待处理|失败」；拿不到或过期返回空串。 */
     static String detail() {
         return isFresh() && sDetail != null ? sDetail : "";
+    }
+
+    /** 最后一次读到的明细，忽略 20 秒新鲜度；没有返回空串。 */
+    static String lastDetail() {
+        return sDetail != null ? sDetail : "";
+    }
+
+    /** 最后一次读到的进度，忽略 20 秒新鲜度；没有返回 -1。 */
+    static int lastProgress() {
+        return sProgress > 0 ? sProgress : -1;
     }
 
     /** 本轮开始时间（epoch ms）；未知返回 0。 */

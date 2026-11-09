@@ -116,8 +116,13 @@ final class AicrStateReporter {
                 // 分析停止：退出大核模式并绑回 0-3
                 AicrCpuAffinity.stopManual();
                 RecentsLock.onRunStopped(context());
-                clearCache();
-                report(STATUS_IDLE, -1, "");
+                if (handler != null) {
+                    handler.post(IDLE_REPORT);
+                } else {
+                    // 后台线程不可用：只广播最后缓存值，绝不回主线程读 Room
+                    report(STATUS_IDLE, sCachedProgress, sCachedDetail);
+                    clearCache();
+                }
                 return;
             }
             if (previous == STATUS_IDLE) {
@@ -206,6 +211,28 @@ final class AicrStateReporter {
             }
             refreshProgress(true);
             shortCircuitBroadcast(status);
+        }
+    };
+
+    /**
+     * 分析结束：在后台线程强制刷新一次进度与明细，广播最后一轮结果后再清缓存，
+     * 让设置页在空闲态仍能显示「已完成 / 待处理 / 失败」。
+     */
+    private static final Runnable IDLE_REPORT = new Runnable() {
+        @Override
+        public void run() {
+            if (sStatus != STATUS_IDLE) {
+                // 空闲期间又开始了新一轮：交给新一轮广播，避免旧值覆盖
+                return;
+            }
+            try {
+                refreshProgress(true);
+                report(STATUS_IDLE, sCachedProgress, sCachedDetail);
+            } catch (Throwable t) {
+                XposedBridge.log(TAG + ": idle report failed: " + t);
+            } finally {
+                clearCache();
+            }
         }
     };
 

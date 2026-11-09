@@ -56,6 +56,7 @@ final class AicrStateReporter {
     private static boolean sHandlerInitialized;
     private static volatile int sStatus = STATUS_IDLE;
     private static volatile boolean sLooping;
+    private static volatile int sCachedProgress = -1;
     private static volatile String sCachedDetail = "";
     private static volatile long sLastDetailReadAt;
     private static volatile long sLastProgressBroadcastAt;
@@ -105,9 +106,13 @@ final class AicrStateReporter {
             Handler handler = handler();
             if (status == STATUS_IDLE) {
                 stopLoop();
-                sCachedDetail = "";
-                sLastDetailReadAt = 0L;
-                report(status, -1, "");
+                if (handler != null) {
+                    handler.post(IDLE_REPORT);
+                } else {
+                    // 后台线程不可用：只广播最后缓存值，绝不回主线程读 Room
+                    report(status, sCachedProgress, sCachedDetail);
+                    clearCache();
+                }
                 return;
             }
             sLastProgressBroadcastAt = 0L;
@@ -131,8 +136,33 @@ final class AicrStateReporter {
             if (status == STATUS_IDLE) {
                 return;
             }
-            report(status, currentProgress(), cachedDetail(false));
+            int progress = currentProgress();
+            sCachedProgress = progress;
+            report(status, progress, cachedDetail(false));
             sLastProgressBroadcastAt = SystemClock.elapsedRealtime();
+        }
+    };
+
+    /**
+     * 分析结束：在后台线程再读一次明细，广播最后一轮结果后再清缓存，
+     * 让设置页在空闲态仍能显示「已完成 / 待处理 / 失败」。
+     */
+    private static final Runnable IDLE_REPORT = new Runnable() {
+        @Override
+        public void run() {
+            if (sStatus != STATUS_IDLE) {
+                // 空闲期间又开始了新一轮：交给新一轮广播，避免旧值覆盖
+                return;
+            }
+            try {
+                sCachedProgress = currentProgress();
+                String detail = cachedDetail(true);
+                report(STATUS_IDLE, sCachedProgress, detail);
+            } catch (Throwable t) {
+                XposedBridge.log(TAG + ": idle report failed: " + t);
+            } finally {
+                clearCache();
+            }
         }
     };
 
@@ -166,7 +196,9 @@ final class AicrStateReporter {
                 }
                 long now = SystemClock.elapsedRealtime();
                 if (now - sLastProgressBroadcastAt >= BROADCAST_INTERVAL_MS) {
-                    report(status, currentProgress(), cachedDetail(false));
+                    int progress = currentProgress();
+                    sCachedProgress = progress;
+                    report(status, progress, cachedDetail(false));
                     sLastProgressBroadcastAt = now;
                 }
             } catch (Throwable t) {
@@ -189,6 +221,12 @@ final class AicrStateReporter {
         sCachedDetail = currentDetail();
         sLastDetailReadAt = now;
         return sCachedDetail;
+    }
+
+    private static void clearCache() {
+        sCachedProgress = -1;
+        sCachedDetail = "";
+        sLastDetailReadAt = 0L;
     }
 
     private static synchronized Handler handler() {
