@@ -2,8 +2,10 @@ package com.mengdao.galleryanalyze.hook.aicr;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Looper;
 import android.os.SystemClock;
 
 import com.mengdao.galleryanalyze.hook.AicrProtocol;
@@ -40,6 +42,10 @@ final class AicrStateReporter {
     /** 明细查询每阶段要查两次 Room，缓存 60 秒，避免 10 秒一次的重查询。 */
     private static final long DETAIL_READ_INTERVAL_MS = 60000L;
     private static final int STATUS_IDLE = 0;
+    /** aicr 侧落盘的最后有效进度与明细，相册主进程缺席时由查询回放补回。 */
+    private static final String SNAPSHOT_PREFS = "mengdao_aicr_progress_cache";
+    private static final String SNAPSHOT_KEY_PROGRESS = "progress";
+    private static final String SNAPSHOT_KEY_DETAIL = "detail";
 
     private static final String MANAGER_DATABASE_CLASS =
             "com.xiaomi.aicr.aisearch.database.managerdb.ManagerDataBase";
@@ -58,6 +64,10 @@ final class AicrStateReporter {
     private static volatile boolean sLooping;
     private static volatile int sCachedProgress = -1;
     private static volatile String sCachedDetail = "";
+    private static volatile boolean sSnapshotLoaded;
+    private static volatile int sSnapshotProgress = -1;
+    private static volatile String sSnapshotDetail = "";
+    private static volatile boolean sSnapshotReplayLogged;
     private static volatile long sLastDetailReadAt;
     private static volatile long sLastProgressBroadcastAt;
     private static volatile boolean sProgressFailureLogged;
@@ -111,6 +121,7 @@ final class AicrStateReporter {
                 } else {
                     // 后台线程不可用：只广播最后缓存值，绝不回主线程读 Room
                     report(status, sCachedProgress, sCachedDetail);
+                    persistSnapshot(sCachedProgress, sCachedDetail);
                     clearCache();
                 }
                 return;
@@ -129,6 +140,52 @@ final class AicrStateReporter {
         }
     }
 
+    /** 相册主动查询：立即回报一次当前状态与进度（进度仍在后台线程读）。 */
+    static void reportNow() {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            Handler handler = handler();
+            if (handler != null) {
+                handler.post(QUERY_REPORT);
+            } else {
+                // 没有后台线程时绝不读进度：主线程读 Room 会抛异常并被 aicr 吞成 0
+                report(sStatus, -1, "");
+            }
+            return;
+        }
+        QUERY_REPORT.run();
+    }
+
+    private static final Runnable QUERY_REPORT = new Runnable() {
+        @Override
+        public void run() {
+            int status = sStatus;
+            if (status == STATUS_IDLE) {
+                stopLoop();
+                // 回放落盘值：相册主进程当时不在场时，最后一轮明细只能靠这里补回。
+                ensureSnapshotLoaded();
+                int progress = sSnapshotProgress;
+                String detail = sSnapshotDetail;
+                clearCache();
+                if (detail.length() > 0 && !sSnapshotReplayLogged) {
+                    sSnapshotReplayLogged = true;
+                    XposedBridge.log(TAG + ": aicr idle replay detail");
+                }
+                report(status, progress, detail);
+                return;
+            }
+            Handler handler = sHandler;
+            if (handler != null) {
+                startLoop(handler);
+            }
+            int progress = currentProgress();
+            sCachedProgress = progress;
+            String detail = cachedDetail(false);
+            persistSnapshot(progress, detail);
+            report(status, progress, detail);
+            sLastProgressBroadcastAt = SystemClock.elapsedRealtime();
+        }
+    };
+
     private static final Runnable IMMEDIATE_BROADCAST = new Runnable() {
         @Override
         public void run() {
@@ -138,7 +195,9 @@ final class AicrStateReporter {
             }
             int progress = currentProgress();
             sCachedProgress = progress;
-            report(status, progress, cachedDetail(false));
+            String detail = cachedDetail(false);
+            persistSnapshot(progress, detail);
+            report(status, progress, detail);
             sLastProgressBroadcastAt = SystemClock.elapsedRealtime();
         }
     };
@@ -161,6 +220,7 @@ final class AicrStateReporter {
             } catch (Throwable t) {
                 XposedBridge.log(TAG + ": idle report failed: " + t);
             } finally {
+                persistSnapshot(sCachedProgress, sCachedDetail);
                 clearCache();
             }
         }
@@ -198,7 +258,9 @@ final class AicrStateReporter {
                 if (now - sLastProgressBroadcastAt >= BROADCAST_INTERVAL_MS) {
                     int progress = currentProgress();
                     sCachedProgress = progress;
-                    report(status, progress, cachedDetail(false));
+                    String detail = cachedDetail(false);
+                    persistSnapshot(progress, detail);
+                    report(status, progress, detail);
                     sLastProgressBroadcastAt = now;
                 }
             } catch (Throwable t) {
@@ -227,6 +289,66 @@ final class AicrStateReporter {
         sCachedProgress = -1;
         sCachedDetail = "";
         sLastDetailReadAt = 0L;
+    }
+
+    /** 落盘最后有效的进度与明细；context 取不到或异常时静默跳过。 */
+    private static synchronized void persistSnapshot(int progress, String detail) {
+        try {
+            Context context = context();
+            if (context == null) {
+                return;
+            }
+            boolean validDetail = detail != null && detail.length() > 0;
+            if (progress <= 0 && !validDetail) {
+                return;
+            }
+            SharedPreferences prefs = context.getSharedPreferences(
+                    SNAPSHOT_PREFS, Context.MODE_PRIVATE);
+            int storedProgress = prefs.getInt(SNAPSHOT_KEY_PROGRESS, -1);
+            String storedDetail = prefs.getString(SNAPSHOT_KEY_DETAIL, "");
+            if (storedDetail == null) {
+                storedDetail = "";
+            }
+            sSnapshotProgress = progress > 0 ? progress : storedProgress;
+            sSnapshotDetail = validDetail ? detail : storedDetail;
+            sSnapshotLoaded = true;
+            SharedPreferences.Editor editor = null;
+            if (progress > 0 && progress != storedProgress) {
+                editor = prefs.edit().putInt(SNAPSHOT_KEY_PROGRESS, progress);
+            }
+            if (validDetail && !detail.equals(storedDetail)) {
+                if (editor == null) {
+                    editor = prefs.edit();
+                }
+                editor.putString(SNAPSHOT_KEY_DETAIL, detail);
+            }
+            if (editor != null) {
+                editor.apply();
+            }
+        } catch (Throwable ignored) {
+            // 落盘失败不影响状态上报
+        }
+    }
+
+    /** 惰性读回落盘值；同一进程只读一次，之后查询走内存。 */
+    private static synchronized void ensureSnapshotLoaded() {
+        if (sSnapshotLoaded) {
+            return;
+        }
+        try {
+            Context context = context();
+            if (context == null) {
+                return;
+            }
+            SharedPreferences prefs = context.getSharedPreferences(
+                    SNAPSHOT_PREFS, Context.MODE_PRIVATE);
+            sSnapshotProgress = prefs.getInt(SNAPSHOT_KEY_PROGRESS, -1);
+            String detail = prefs.getString(SNAPSHOT_KEY_DETAIL, "");
+            sSnapshotDetail = detail == null ? "" : detail;
+            sSnapshotLoaded = true;
+        } catch (Throwable ignored) {
+            // 读盘失败按无缓存处理
+        }
     }
 
     private static synchronized Handler handler() {
