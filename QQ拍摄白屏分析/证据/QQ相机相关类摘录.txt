@@ -1,0 +1,181 @@
+QQ 相机相关类 / 原生库摘录
+============================
+APK：base (4).apk
+包名：com.tencent.mobileqq，versionName 9.1.67，versionCode 9728
+targetSdk 31；申请 android.permission.CAMERA、android.hardware.camera(.autofocus)
+dex：38 个；分析 classes9.dex / classes22.dex（AELight 相机主实现），jadx 1.5.6 反编译。
+
+一、结论性类关系
+  com.tencent.aelight.camera.ae.camera.core.AECameraGLSurfaceView
+      extends android.opengl.GLSurfaceView implements GLSurfaceView.Renderer
+  com.tencent.aelight.camera.ae.camera.core.AECameraManager
+      extends com.tencent.qqcamerakit.capture.b
+  com.tencent.aelight.camera.ae.camera.filter.AEFilterProcessTex
+      extends FilterProcessBase，负责相机帧 → AEKit 滤镜 → 屏幕
+  com.tencent.aekit.target.gl.SurfaceTextureWrapper / OESTextureRender
+  com.tencent.aekit.openrender.SurfaceTextureFilter
+  com.tencent.qqcamerakit.capture.camera2.b  ← Camera2 实现
+  com.tencent.qqcamerakit.capture.camera.CameraControl ← Camera1 实现
+
+二、AECameraGLSurfaceView：EGL 配置与渲染模式（classes9.dex）
+  public class AECameraGLSurfaceView extends android.opengl.GLSurfaceView
+      implements ... GLSurfaceView.Renderer ...
+
+  initEGL()：
+    setEGLContextClientVersion(2);
+    setEGLConfigChooser(8, 8, 8, 8, 0, 0);          // RGBA8888，无 depth/stencil
+    setEGLContextFactory(new GLSurfaceView.EGLContextFactory() {
+        createContext(...) {
+            EGLContext c = createEGLContextSafely(..., 3);   // 先请求 ES 3
+            if (c == null || c == EGL10.EGL_NO_CONTEXT)
+                c = createEGLContextSafely(..., 2);           // 失败再退回 ES 2
+            eglQueryContext(..., EGL_CONTEXT_CLIENT_VERSION, ...);
+            this.eglContextVersion = ...;
+        }
+    });
+    setPreserveEGLContextOnPause(false);
+    setRenderMode(0);                                  // RENDERMODE_WHEN_DIRTY
+
+  渲染模式是 WHEN_DIRTY：
+    只有 onFrameAvailable() 里调用 requestRender() 才会画帧；
+    相机帧不来 → 一帧都不画 → SurfaceView 不上屏 → 透出 Activity 白底。
+
+  onFrameAvailable(SurfaceTexture)：
+    this.mHaveFrame = true;
+    queueEvent(() -> { if (mFilterProcess != null) mFilterProcess.t(); });
+    requestRender();
+
+  onDrawFrame(...)：
+    if (isPaused) return;
+    if (mFilterProcess == null) return;
+    mFilterProcess.g();
+    int[] tex = mFilterProcess.s(mSurfaceWidth, mSurfaceHeight, isGIFMode);
+    ...
+    drawToMediaCodec(tex[1], ...);
+
+三、AEFilterProcessTex.s(...)（classes9.dex）
+  public int[] s(int i, int i2, boolean z) {
+      if (!k()) { int[] r = this.r; r[0]=0; r[1]=0; return r; }   // 相机未就绪直接返回
+      ...
+      Frame f = this.G.RenderProcess(this.p, this.g, this.h);    // p = 相机 OES 纹理
+      ...
+      n0(i, i2, iN, z);                                          // 画到屏幕
+  }
+
+  private void n0(int i, int i2, int i3, boolean z) {
+      if (z) {
+          GLES20.glClearColor(0.92f, 0.93f, 0.96f, 1.0f);        // #EAEDF5
+          GLES20.glClear(...);
+          ...
+      } else {
+          textureId = i3;
+      }
+      this.J.setRotationAndFlip(0, 0, 1);
+      this.J.RenderProcess(textureId, i, i2, 0, 0.0d, this.E);
+  }
+
+  注意：截图取样是纯 #FFFFFF（255,255,255），不是 #EAEDF5。
+  说明屏幕上是“GL 一帧都没上屏”的窗口白底，而不是上面这条 clear 分支。
+
+四、相机纹理的创建（AECameraGLSurfaceView / FilterProcessBase）
+  private SurfaceTexture initSurfaceTexture() {
+      int[] iArr = new int[1];
+      GLES20.glGenTextures(1, iArr, 0);              // 在 GL 线程创建纹理名
+      this.mCameraTexture = iArr[0];
+      return new SurfaceTexture(this.mCameraTexture); // Camera 输出目标
+  }
+
+  FilterProcessBase.h() 同样：
+      GLES20.glGenTextures(1, iArr, 0);
+      this.p = iArr[0];
+      this.q = new SurfaceTexture(this.p);
+
+五、OES 外部纹理着色器（com.tencent.aekit）
+  SurfaceTextureFilter:
+    fragment:
+      #extension GL_OES_EGL_image_external : require
+      precision mediump float;
+      varying vec4 textureCoordinate;
+      uniform samplerExternalOES inputImageTexture;
+      void main() {
+        gl_FragColor = texture2D(inputImageTexture,
+            vec2(textureCoordinate.x, textureCoordinate.y));
+      }
+    vertex:
+      precision mediump float;
+      attribute vec4 position;
+      uniform mat4 tMat;
+      attribute vec4 inputTextureCoordinate;
+      varying vec4 textureCoordinate;
+      void main() { gl_Position = position; textureCoordinate = tMat * inputTextureCoordinate; }
+
+  SurfaceTextureFilter.RenderProcess(...)：
+    OnDrawFrameGLSL();
+    Frame frame = FrameBufferCache.getInstance().get(i2, i3);
+    frame.bindFrame(-1, i2, i3, 0.0d);
+    GLES20.glActiveTexture(GL_TEXTURE0);
+    GLES20.glBindTexture(GL_TEXTURE_EXTERNAL_OES, i);
+    GLES20.glUniform1i(mSTextureHandle, 0);
+    GLES20.glUniformMatrix4fv(mTMatHandle, 1, false, mTMat);
+    GLES20.glDrawArrays(6 /* GL_TRIANGLE_FAN */, 0, 4);
+
+  OESTextureRender（另一条等价路径）：
+    shader 同上 samplerExternalOES；
+    drawFrame 里 GLES20.glBindFramebuffer + glFramebufferTexture2D +
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES, textureId) + glDrawArrays(5);
+    prepare() 对 shader 编译/链接失败直接 throw RuntimeException；
+    glGetAttribLocation 返回 -1 也 throw RuntimeException。
+
+六、相机 API：Camera2 优先，Camera1 兜底
+  com.tencent.qqcamerakit.capture.camerastrategy.a：
+    b = (Camera2 supportLevel == 1 || 0 || 3)
+    com.tencent.qqcamerakit.capture.a 中所有操作按 camerastrategy.a.b 分流：
+      b == true  → camera2.*
+      b == false → camera.CameraControl（Camera1）
+    另外有按机型黑名单（camerastrategy.c.a.f）排除某些设备。
+
+  camera2/b.B0(SurfaceTexture, ...)：
+    this.s = surfaceTexture;
+    this.s.setDefaultBufferSize(...);
+    this.h = new android.view.Surface(this.s);
+    CaptureRequest.Builder b = CameraMonitor.createCaptureRequest(device, 1);
+    b.addTarget(this.h);                 // 预览目标 = SurfaceTexture
+    b.addTarget(this.f.getSurface());    // 另一路 ImageReader
+    device.createCaptureSession(Arrays.asList(this.h, this.f.getSurface(), this.e.getSurface()), ...)
+
+  Camera1 路径同样 setPreviewTexture(surfaceTexture)。
+  两条路径最终都进同一个 SurfaceTexture → GL 外部纹理。
+
+七、AECameraManager.realStartPreview(...)（classes9.dex）
+  cameraProxy.l(previewSize, previewSize, previewSize, 30, "continuous-video", 3, 0);
+  cameraProxy.r(surfaceTexture, this);     // 把 SurfaceTexture 交给 qqcamerakit
+  ...
+  listener.onCameraPreviewStarted();
+
+八、GPU 白/黑名单机制（com.tencent.aelight.camera.ae.util.j）
+  存在按 GL_RENDERER 字符串（Adreno/Mali/PowerVR）解析型号的规则：
+    private void w(JSONObject o) {
+        for (String verdor : o.getString("verdor").split(";"))
+            if (this.a.contains(verdor)) v(o.getJSONObject(verdor));
+    }
+  但 this.a（GPU 信息）只在 SDK < 24 的分支里用
+  com.tencent.mobileqq.opencl.OpenclInfoManager().a() 填充；
+  SDK >= 24 时 p(...) 直接走机型/配置判断，this.a 保持 ""，w() 实际不生效。
+  结论：本机（Android 16 级）不会因 GPU 型号切换渲染路径；
+        按机型黑名单（blackList）仍可能生效，但 K60 未被点名。
+  GL_RENDERER 还会被 com.tencent.aelight.camera.ae.flashshow.util.d 读取，
+  但只用于上报/缓存 device_gpu_name，不参与渲染分支。
+
+九、截图取样（PIL）
+  文件：Screenshot_2026-11-11-19-20-08-168_com.tencent.mobileqq-edit.jpg
+  尺寸：1440 x 3155
+  取样点 (100,100) (720,400) (200,1000) (1200,800) (720,1200) (300,2500)
+  全部为 (255,255,255)，即纯白。
+  形态：预览区纯白；关闭/快门/翻转/闪光灯/比例/美化等 UI 正常；无报错文字。
+  文件名含 _edit，但界面是取景/拍摄页（有快门与闪光灯），不是编辑页。
+
+十、相关原生库（APK lib/arm64-v8a）
+  libqav_video_effect.so   音视频特效（GL shader，含 ShaderManager/glShaderSource）
+  libtriton.so             腾讯 Triton 引擎（含 EglHelper/CreateEglContext/WebGL）
+  libtgpalite.so / libwarbler.so / libtv8rt.so
+  未发现自带 GLES/EGL 实现；QQ 使用系统 /vendor 的 Adreno 驱动。

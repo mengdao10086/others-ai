@@ -1,0 +1,75 @@
+公开资料交叉印证 + ROM 对照尝试
+================================
+
+一、驱动来源（高相关）
+  1) K11MCH1/AdrenoToolsDrivers Releases（GitHub，2025-10-28 页面）
+     https://github.com/K11MCH1/AdrenoToolsDrivers/releases/
+     原文：
+       “Qualcomm Driver v837 — Qualcomm drivers v837 extracted from Quest 3.
+        Vulkan Version: 1.3.295
+        NOTES: For a7xx. Maybe a6xx. Use at your own discretion.”
+     含义：837 是从 Quest 3（骁龙 XR2 Gen 2 / Adreno 740）提取的高通闭源驱动，
+     面向 a7xx 系列，非 K60（Adreno 730）原生驱动。
+
+二、改装 Adreno 驱动破坏 App 内相机/录屏的公开报告（同向证据）
+  2) XDA “Adreno Driver 767 Magisk Module”（2024-09-17）
+     https://xdaforums.com/t/adreno-driver-767-magisk-module.4693486/
+     摘录：
+       - “Adreno gpu drivers other than the stock one usually break camera
+          functionality on Sony devices though, so I wouldn't recommend this.”
+       - “it does have some glitches while using whatsapp video chat.”
+       - “screen recording issues and recording in apps like whatsapp and telegram.”
+       - 用户反馈 “everything except internal cameras in apps”（应用内相机不行，
+         系统相机可用）。
+       - 有人用 Magisk DenyList 把出问题的 App 排除出模块挂载后恢复。
+  3) XDA “Adreno 650 version 819.1/2 Magisk Driver Update Module”（2025-05-24）
+     同类反馈：应用内录像/录屏绿屏、相机异常；建议对该 App 使用 DenyList
+     改用系统原厂库。
+  4) 酷安 “GPU驱动797二改”（2024-11-16）
+     https://www.coolapk.com/feed/60721499
+     修改说明明确写“修复相机打不开闪退”，说明改装 GPU 驱动与相机故障
+     在该社区是已知组合问题。
+
+三、是否存在 “Adreno 837.0.6 + QQ 白屏” 的完全同款公开记录
+  未检索到。
+  公开资料只能证明：
+   a) 837 是 Quest 3 / Adreno 740 的跨设备驱动；
+   b) 改装 Adreno 驱动普遍会破坏“应用内相机/录屏”这类 SurfaceTexture→GL 路径，
+      而系统相机通常正常；
+   c) 常见处置是回滚驱动或按 App 排除模块挂载。
+  结论记为：“无完全同款公开记录，但有同机制的多条公开报告”。
+
+三·补、本次真机日志的新发现（2026-11-11）
+  白屏的直接原因不是驱动 so，而是模块安装/卸载脚本的
+    find /data/data/* -iname "*shader*" -exec rm -rf {} +
+  删除了 QQ 的 AEKit 资源包
+    /data/user/0/com.tencent.mobileqq/app_lib/qq_bundle_new/BASIC_64/<hash>/assets/shaders/
+  导致 vs_simple.bin / vs_epm.bin / vs_boxblur.bin / fs_adjustments.bin 全部缺失，
+  loadProgram 报 vertex shader is invalid、ReadSample error。
+  公开资料中没有同款细分归因（多数只笼统说“改装驱动破坏应用内相机”）。
+  用户实测（2026-11-11）：删除整个 BASIC_64 → QQ 重下/重解压 → 拍摄恢复；
+  证明“shader 缺失”是白屏直接原因。驱动 837 是否有独立影响，待“重装模块但删掉
+  find 行”的对照实验判定。详见同目录 logcat关键片段.txt。
+
+四、ROM 对照尝试（K60 移植包）
+  路径：D:\下载\Mi\备份\k60\K60_移植17 3.0.318[68F32]
+  结构：images/ 下有 super.img（8.5 GB，LP 动态分区）等。
+  已做：
+   - 用 7-Zip 26.02 成功打开 super.img（Type = LP），列出分区：
+       vendor_a.img  1,663,328,256 字节
+       system_a.img / product_a.img / odm_a.img / vendor_dlkm_a.img ...
+   - 已提取 vendor_a.img（1.6 GB）。
+   - vendor_a.img 的 1024 字节处 magic = E2 E1 F5 E0（0xE0F5E1E2，EROFS）。
+     该 ROM 的 vendor 是 EROFS，不是 ext4。
+  受阻：
+   - 本机 7-Zip 26.02 不支持 EROFS（强制 -terofs 报 Unsupported archive type）。
+   - D:\tools 下无 lpunpack / erofs-utils / fsck.erofs。
+   - 因此本次未能从 ROM 中取出原厂
+     /vendor/lib64/egl/*、/vendor/lib64/hw/vulkan.*、/vendor/lib64/libgsl*、
+     /vendor/etc/vulkan、camera HAL/gralloc so 做逐字节版本对照。
+  结论：ROM 侧“原厂驱动版本号”未取得，列为未验证项。
+        可在手机上用一条只读命令补：
+          getprop ro.board.platform; getprop ro.soc.model;
+          strings /vendor/lib64/egl/libGLESv2_adreno.so | grep -E "V@0|E0[0-9]{2}"
+          strings /vendor/lib64/hw/vulkan.adreno.so | grep -E "^0[0-9]{3}\\.[0-9]"
+          ls -l /vendor/lib64/egl /vendor/lib64/hw/vulkan.adreno.so /vendor/lib64/libgsl.so

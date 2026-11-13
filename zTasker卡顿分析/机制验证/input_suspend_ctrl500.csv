@@ -1,0 +1,4 @@
+label,iter,foreground,delivered,latency_ms
+suspend_ctrl_500,0,1,1,47.00
+suspend_ctrl_500,1,1,1,46.44
+suspend_ctrl_500,2,1,1,31.41

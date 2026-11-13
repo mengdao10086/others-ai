@@ -1,0 +1,5 @@
+duration_s=14 ticks=6574 msg_samples=1571
+wait_late_us p50=35 p95=495 p99=520 max=1371
+msg_lat_us  p50=40 p95=180 p99=677 max=1087
+broadcasts=2
+  WM_SETTINGCHANGE x2

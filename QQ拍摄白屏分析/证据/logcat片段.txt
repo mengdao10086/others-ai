@@ -1,0 +1,45 @@
+logcat 设备侧证据
+=================
+
+状态：已有真机日志，且已定位到直接失败点。
+
+原始日志：D:\下载\LocalSend\QQ拍摄logcat原始.log
+  - 大小 15,026,034 字节，74,364 行
+  - main/system 缓冲区从 2026-11-11 20:04:41 开始（脚本启动时 logcat -c）
+  - 相关相机会话：20:04:44–20:04:57，进程 com.tencent.mobileqq:peak（PID 1797）
+
+结论（详见同目录 logcat关键片段.txt）：
+  1. Camera2 打开/配置成功（openCamera2、startPreview onConfigured）。
+  2. AEKit 着色器文件不存在：
+       /data/user/0/com.tencent.mobileqq/app_lib/qq_bundle_new/BASIC_64/<hash>/assets/shaders/essl/
+       vs_simple.bin、vs_epm.bin、vs_boxblur.bin、fs_adjustments.bin
+     日志原文：FileReader: Failed to open file / loadProgram but vertex shader is invalid
+               / LightEngine ... ReadSample error!
+  3. 同 bundle 的 material/video_empty/template.json 能正常加载 → 只删了 shaders 目录。
+  4. QQ 资源自检发现缺失，但 isAEKitNeedDownload=false、bundle all done，本轮不补；
+     用户实测：删除整个 BASIC_64 后 QQ 会重下/重解压，拍摄恢复。
+  5. 全程 0 条 EGL_BAD_* / GL_INVALID_* / shader 链接失败 / linker 失败 / dequeueBuffer 失败；
+     GPUInfo = Adreno (TM) 730 + OpenGL ES 3.2 V@0837.0.6，驱动已生效。
+
+与模块脚本的对应：
+  customize.sh 中的
+    find /data/data/* -iname "*shader*" -exec rm -rf {} +
+  会匹配 QQ 的 .../assets/shaders 目录并递归删除。
+
+采集脚本（备查）：
+  - ..\脚本\QQ拍摄logcat测试.sh
+  - D:\下载\Edge\QQ拍摄logcat测试.sh
+  手机端落点：/storage/emulated/0/一键另存/测试/QQ拍摄logcat测试.sh
+  结果落点：同目录 QQ拍摄logcat结果.log / QQ拍摄logcat原始.log
+
+用户实测（2026-11-11，MT 终端需先 su 再另起一行执行，su -c 会错误处理引号）：
+  - 删除整个 /data/user/0/com.tencent.mobileqq/app_lib/qq_bundle_new/BASIC_64
+  - 打开 QQ 拍摄，保持联网等待重下/重解压 → 拍摄恢复正常。
+  说明：QQ 对“整包缺失”会重下；只少 shaders 子目录时本轮不补。shader 缺失是白屏直接原因。
+
+补充说明：
+  - 19:20:08 的截图当次日志不在本文件中（main/system 缓冲区 20:04:41 才开始）；
+    20:04 是另一次复现，但 shader 缺失是持久状态，可解释两次白屏。
+  - 若要再抓一次，重点过滤：
+      AELightLog|loadMem|shader name|ReadSample|LightResourceChecker|app_lib|bundle|
+      EGL|GLES|Adreno|Camera2|SurfaceTexture|BufferQueue|dequeueBuffer

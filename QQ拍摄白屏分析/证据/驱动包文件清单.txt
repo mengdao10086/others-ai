@@ -1,0 +1,121 @@
+驱动包文件清单与分类
+====================
+包名：GPU_v@837.0.6M-KSU.zip
+module.prop：id=GPU_UPDATE，name=Adreno™ GPU Driver，version=v2，versionCode=v837.0.6，description=v@0837.0.6 Kernel 5.4+ Only
+安装类型：KernelSU / Magisk 模块（system/vendor 覆盖挂载）
+
+一、安装做的事（customize.sh 解码后）
+1. 读取 getprop ro.soc.model / ro.vendor.qti.soc_model，只允许 SM8550/SM8475/SM8425/SM8450/SM8350/SM8250/SM8150/SM7550/SM7475/SM7435/SM7450/SM7325/SM7350/SM6450/SM6115/SM6225/SM6150/SM4450/SM4375（SM6375 且 board=blair 除外）。
+2. 内核 < 5.4 仅警告；Android SDK < 34 直接 abort，< 36 警告“可能无法在 Android <16 启动”。
+3. vendor 只有 arm64-v8a 时删除 32 位 system/vendor/lib。
+4. 拷贝 qgl_config.txt 到 /data/vendor/gpu/qgl_config.txt。
+5. set_perm_recursive：.so 设为 0755 0644 u:object_r:same_process_hal_file:s0；permissions xml 设为 vendor_configs_file。
+6. 清空所有应用的 shader / graphitecache / gpucache、/data/system/graphicsstats、dalvik-cache、package_cache、resource-cache。
+7. 删除其它 GPU 模块目录（gpu_driver_free、gpu_driver、adreno_driver、adreno_vk_gpu_driver、adreno_gl_gpu_driver）。
+8. 恢复模式分支 META-INF/rec.sh 额外改写 /vendor/etc/public.libraries.txt（libOpenCL、libgpumemtracer、libgpuservice、gpu++）。
+
+⚠ 危险动作（本次白屏的直接原因）
+  第 6 条中的：
+    find /data/data/* -iname "*shader*" -exec rm -rf {} +
+  是递归匹配 /data/data 下任意路径名含 "shader" 的文件或目录，不只 cache。
+  QQ 光影相机的动态资源包路径：
+    /data/user/0/com.tencent.mobileqq/app_lib/qq_bundle_new/BASIC_64/<hash>/assets/shaders/essl/
+  目录名 shaders 命中 *shader*，被整体删除。
+  真机日志显示 vs_simple.bin / vs_epm.bin / vs_boxblur.bin / fs_adjustments.bin
+  全部 FileReader: Failed to open file，随后 vertex shader is invalid / ReadSample error。
+  详见同目录 logcat关键片段.txt。
+
+  uninstall.sh 也含同一行（逐行原文，无条件判断）：
+    1  find /data/user_de/*/*/*cache/* -iname "*shader*" -exec rm -rf {} +
+    2  find /data/data/* -iname "*shader*" -exec rm -rf {} +
+    3  find /data/data/* -iname "*graphitecache*" -exec rm -rf {} +
+    4  find /data/data/* -iname "*gpucache*" -exec rm -rf {} +
+    5  find /data_mirror/data*/*/*/*/* -iname "*shader*" -exec rm -rf {} +
+    6  find /data_mirror/data*/*/*/*/* -iname "*graphitecache*" -exec rm -rf {} +
+    7  find /data_mirror/data*/*/*/*/* -iname "*gpucache*" -exec rm -rf {} +
+  KernelSU 文档说明 uninstall.sh 在模块删除前执行；卸载时 QQ 的 shaders 目录
+  已被安装脚本删掉，find 对 QQ 已无可删，所以“卸载恢复”不等于“卸载脚本不删”。
+
+  本机模拟复现（2026-11-11）：
+    mkdir -p sim/app_lib/qq_bundle_new/BASIC_64/hash/assets/shaders/essl
+    touch    .../assets/shaders/essl/vs_simple.bin  .../assets/material.json
+    find sim -iname "*shader*" -exec rm -rf {} +
+  结果：shaders 目录被整体删除，material.json 保留 —— 与 QQ 日志中
+  “shader 文件缺失、material/template.json 正常” 的现象完全一致。
+
+二、替换/新增的文件（按层分类）
+A. EGL/GLES 用户态驱动（/vendor/lib64/egl 与 /vendor/lib64）
+  libEGL_adreno.so                   43,928
+  libGLESv1_CM_adreno.so            233,824
+  libGLESv2_adreno.so             5,487,968
+  eglSubDriverAndroid.so            109,432   ← EGL 的 Android 平台子驱动（窗口/NativeBuffer/EGLImage 导入）
+  libq3dtools_adreno.so             348,072
+  libq3dtools_esx.so              2,315,288
+  libVkLayer_ADRENO_qprofiler.so  2,036,952
+
+B. Vulkan
+  /vendor/lib64/hw/vulkan.adreno.so 5,778,736
+
+C. GPU 系统层 / 编译器 / OpenCL
+  libgsl.so                       2,222,496   ← Graphics System Layer，UMD 与内核 KGSL 之间的接口
+  libllvm-glnext.so               2,112,112
+  libllvm-qgl.so                 24,532,040
+  libllvm-qcom.so                   216,960
+  libadreno_utils.so                114,296
+  libadreno_compiler_cl.so       29,402,544
+  libadreno_app_profiles.so         996,792
+  libCB.so                       13,602,024
+  libOpenCL.so / libOpenCL_adreno.so
+  libkcl.so / libkernelmanager.so
+  libgpumemtracer.so / libgpuservice.so / gpu++.so / libgame_enhance.so / libgamepoweroptfeature.so / libgpudataproducer.so
+
+D. 显示/缓冲映射 HAL 客户端
+  vendor.qti.hardware.display.mapper@2.0.so
+  vendor.qti.hardware.display.mapper@3.0.so
+  vendor.qti.hardware.display.mapper@4.0.so
+  vendor.qti.hardware.display.mapperextensions@1.0/1.1/1.2/1.3.so
+  libdmabufheap.so
+  libhdr_tm.so
+  libbase64.so
+
+E. GPU 固件（/vendor/firmware）
+  a630_sqe.fw / a650_sqe.fw / a660_sqe.fw / a730_sqe.fw / gen71100_sqe.fw
+  （K60 = SM8475 / Adreno 730，对应 a730_sqe.fw）
+
+F. 特性声明（/vendor/etc/permissions）
+  android.hardware.opengles.aep.xml
+  android.hardware.vulkan.compute-0.xml
+  android.hardware.vulkan.level-1.xml
+  android.hardware.vulkan.version-1_1/1_3/1_4.xml
+  android.software.opengles.deqp.level.xml
+  android.software.vulkan.deqp.level.xml
+  android.software.tuning-1.xml
+
+G. 运行期配置
+  qgl_config.txt → /data/vendor/gpu/qgl_config.txt
+  关键项：enableShaderPreamble=True、forceCommitLazyAlloc=True、earlyWaveAllocation=True、
+  enableMergedBins=True、forceWaveSize=Double、pipelineCacheCompression=True、
+  textureFilteringQuality=Balanced、VK_QCOM_tile_shading=True 等。
+
+三、没有改动的层
+  没有 camera HAL / camera provider
+  没有 gralloc HAL 本体
+  没有 kernel / boot.img / KGSL
+  没有 HWC / composer
+  没有 SurfaceFlinger
+  没有 libEGL.so 通用装载器（只换 vendor 实现）
+
+四、版本字符串（llvm-strings 提取）
+  vulkan.adreno.so：0837.0.6；Build Date 11/10/25；Compiler Version E031.50.14.00
+  libGLESv2_adreno.so：Build Date 11/10/25；OpenGL ES Shader Compiler Version E031.50.14.00
+  libadreno_utils.so 内含 KGSL/元数据校验字符串：
+    Failed to validate chip ID : gpu_model(0x%08x) vs. kgsl(0x%08x)
+    Successfully validate chip ID : gpu_model(0x%08x) vs. kgsl(0x%08x)
+    Metadata device version mismatch {store uuid %s, struct uuid %s}
+    Metadata driver version mismatch {store uuid %s, struct uuid %s}
+    Metadata memory layout version mismatch {store uuid %s, struct uuid %s}
+    Size of metadata is mismatched ...
+  vulkan.adreno.so 内含：
+    ERROR: Driver is incompatible with ucode version 0x%08x!
+
+五、完整 zip 清单见同目录 驱动包文件清单_raw.txt

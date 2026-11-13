@@ -1,0 +1,55 @@
+驱动库依赖关系（llvm-readelf -d）
+==================================
+目的：确认新驱动在哪一层与 ROM/内核耦合，以及相机预览 buffer 导入路径经过哪些库。
+
+libEGL_adreno.so NEEDED：
+  libadreno_utils.so, libgsl.so, libcutils.so, libdl.so, libz.so, liblog.so, libc++.so, libc.so, libm.so
+
+libGLESv2_adreno.so NEEDED：
+  libadreno_utils.so, libgsl.so, libllvm-glnext.so, libcutils.so, libdl.so, libz.so, liblog.so, libc++.so, libc.so, libm.so
+
+libgsl.so NEEDED：
+  libcutils.so, liblog.so, libz.so, libsync.so, libdmabufheap.so, libc++.so, libc.so, libm.so, libdl.so
+
+eglSubDriverAndroid.so NEEDED（EGL Android 平台子驱动）：
+  vendor.qti.hardware.display.mapper@2.0.so
+  vendor.qti.hardware.display.mapper@3.0.so
+  vendor.qti.hardware.display.mapper@4.0.so
+  vendor.qti.hardware.display.mapperextensions@1.1.so
+
+vulkan.adreno.so NEEDED：
+  vendor.qti.hardware.display.mapper@2.0/3.0/4.0.so
+  vendor.qti.hardware.display.mapperextensions@1.1.so
+
+libCB.so NEEDED：
+  vendor.qti.hardware.display.mapper@3.0/4.0.so
+  vendor.qti.hardware.display.mapperextensions@1.1.so
+
+解读：
+1. 相机预览链路 = Camera HAL → gralloc buffer → BufferQueue → SurfaceTexture →
+   EGLImage → OES 纹理。其中 SurfaceTexture 把 gralloc handle 交给 EGL 的
+   Android 平台子驱动 eglSubDriverAndroid.so 做 native buffer 导入。
+2. 本次模块把 eglSubDriverAndroid.so 连同它依赖的 display.mapper HAL 客户端库
+   一起换成了 837 版本；而 mapper 的 service 端、gralloc HAL、内核 KGSL 仍是 ROM 原版。
+3. libgsl.so 是 UMD 与 KGSL 之间的系统层，同样被整体替换；它依赖被替换的
+   libdmabufheap.so。内核 KGSL 未替换。
+4. 因此这是“用户态整套图形栈换新 + 内核/gralloc/HAL 保持旧版”的组合，
+   存在明确的版本耦合面。
+
+模块自带的版本自检字符串（来自 libadreno_utils.so / vulkan.adreno.so）：
+  Failed to validate chip ID : gpu_model(0x%08x) vs. kgsl(0x%08x)
+  Metadata device version mismatch {store uuid %s, struct uuid %s}
+  Metadata driver version mismatch {store uuid %s, struct uuid %s}
+  Metadata memory layout version mismatch {store uuid %s, struct uuid %s}
+  Size of metadata is mismatched {stored size %u, struct size %u}
+  ERROR: Driver is incompatible with ucode version 0x%08x!
+说明：驱动自身就会对“芯片 ID / 元数据版本 / ucode 版本”做一致性校验，
+跨设备、跨内核移植时这些校验正是最先出问题的地方。
+
+驱动来源（公开资料）：
+  K11MCH1/AdrenoToolsDrivers 发布页写明：
+  “Qualcomm Driver v837 — Qualcomm drivers v837 extracted from Quest 3.
+   Vulkan Version: 1.3.295. NOTES: For a7xx. Maybe a6xx.”
+  Quest 3 = 骁龙 XR2 Gen 2 / Adreno 740；K60 = SM8475 / Adreno 730。
+  即：这是把 Adreno 740 的 837 驱动，通过附带 a730_sqe.fw + SoC 白名单，
+  强装到 Adreno 730 上的跨代移植包。

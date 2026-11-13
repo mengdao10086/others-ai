@@ -1,0 +1,3 @@
+case,latency_ms
+idle,15.52
+blocked_thread_300ms,200.10

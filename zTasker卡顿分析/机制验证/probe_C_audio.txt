@@ -1,0 +1,4 @@
+duration_s=12 ticks=5637 msg_samples=1428
+wait_late_us p50=39 p95=489 p99=533 max=989
+msg_lat_us  p50=40 p95=102 p99=539 max=1088
+broadcasts=0

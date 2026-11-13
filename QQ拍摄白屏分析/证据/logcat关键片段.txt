@@ -1,0 +1,53 @@
+QQ 拍摄白屏 logcat 关键片段（带时间戳）
+==========================================
+来源：D:\下载\LocalSend\QQ拍摄logcat原始.log
+会话：2026-11-11 20:04:44 - 20:04:57
+进程：com.tencent.mobileqq:peak（PID 1797）
+设备：XIAOMI_23013RK75C（Redmi K60）
+日志行原文摘录（为控制篇幅只保留关键行）：
+
+11-11 20:04:44.231  1797  2607 E Camera2Control: [Camera2]openCamera2
+11-11 20:04:44.572  1797  2586 E AELightLog_native: ... loadMem open file failed! file path = /data/user/0/com.tencent.mobileqq/app_lib/qq_bundle_new/BASIC_64/b083ef36be5b9bb82f510f9de5f3d30a/assets/shaders/essl/vs_simple.bin, error code = 16799570, message = FileReader: Failed to open file.
+11-11 20:04:44.572  1797  2586 E AELightLog_native: ... loadProgram but vertex shader is invalid! shader name = vs_simple time = 1794398684572
+11-11 20:04:44.582  1797  2586 E AELightLog_native: ... loadMem open file failed! file path = .../assets/shaders/essl/vs_epm.bin ... FileReader: Failed to open file.
+11-11 20:04:44.582  1797  2586 E AELightLog_native: ... loadProgram but vertex shader is invalid! shader name = vs_epm
+11-11 20:04:44.584  1797  2586 E AELightLog_native: ... loadMem open file failed! file path = .../assets/shaders/essl/vs_simple.bin ...
+11-11 20:04:44.591  1797  2586 E AELightLog_native: ... [KEY POINT] LightEngine:0xb400006d9e1be088 ReadSample error!
+11-11 20:04:44.843  1797 15102 D Camera2Control: [Camera2]startPreview onConfigured!
+11-11 20:04:45.239  1797 15155 E AELightLog_native: ... loadMem open file failed! file path = .../assets/shaders/essl/vs_simple.bin ...
+11-11 20:04:45.242  1797  2586 E AELightLog_native: ... loadMem open file failed! file path = .../assets/shaders/essl/vs_boxblur.bin ...
+11-11 20:04:45.243  1797  2586 E AELightLog_native: ... loadMem open file failed! file path = .../assets/shaders/essl/vs_boxblur.bin ...
+11-11 20:04:45.256  1797  2586 E AELightLog_native: ... loadMem open file failed! file path = .../assets/shaders/essl/vs_boxblur.bin ...
+11-11 20:04:45.284  1797  2586 E AELightLog_native: ... [KEY POINT] LightEngine:0xb400006d9e1be088 ReadSample error!
+11-11 20:04:45.319  1797  2586 I t.mobileqq:peak: EglImage dataspace changed, need recreate
+11-11 20:04:45.340  1797  1797 I MODULE_GY_AECAMERA :[Performance2]AEPituCameraUnit: 【Click】onBackPressed
+11-11 20:04:47.055 18496 15193 E LightResourceChecker: checkBundleResources fails, file not exists: .../assets/shaders/essl/fs_adjustments.bin
+11-11 20:04:47.231 18496 15250 I MODULE_GY_AECAMERA :AEResManager: [requestDownload] - BEGIN -, aeResInfo={index:1, description:LightBasePackage, ...}
+11-11 20:04:47.232 18496 15250 I MODULE_GY_AECAMERA :AEResManager: [requestDownloadSingle] - BEGIN -, aeResInfo=BASIC_64
+11-11 20:04:47.240 18496 15113 E MODULE_GY_AECAMERA :AEResUtil: bundle all done
+11-11 20:04:47.418 18496 15113 I MODULE_GY_AECAMERA :WnsConfig: isAEKitNeedDownload ： false
+11-11 20:04:47.807  1797 15383 E AELightLog_native: ... loadMem open file failed! file path = .../assets/shaders/essl/vs_simple.bin ...
+11-11 20:04:47.830  1797 15383 E AELightLog_native: ... loadMem open file failed! file path = .../assets/shaders/essl/vs_epm.bin ...
+11-11 20:04:47.855  1797 15383 E AELightLog_native: ... loadMem open file failed! file path = .../assets/shaders/essl/vs_simple.bin ...
+11-11 20:04:47.877  1797 15383 E AELightLog_native: ... [KEY POINT] LightEngine:0xb400006d9e19a7a8 ReadSample error!
+11-11 20:04:47.947  1797 15383 I MODULE_GY_AECAMERA :[Performance2]AEPituCameraUnit: actionAfterFirstFrame
+11-11 20:04:48.366  1797 15383 I MODULE_GY_AECAMERA :AEBaseDataReporter: reportRealFirstFrameTime|cost_time:1315,...
+11-11 20:04:57.249  1797 15383 D AEFilterProcessTex: in capture frame.
+11-11 20:04:57.476  1797 15383 E AELightLog_DeviceSupportUtil: GPUInfo = Adreno (TM) 730; Qualcomm; OpenGL ES 3.2 V@0837.0.6 (GIT@5eb6d58341, Icac217ebc7, 1762779062) (Date:11/10/25)
+11-11 20:04:57.543  1797 14991 E AELightLog_LightResourceChecker: checkBundleResources fails, file not exists: .../assets/shaders/essl/fs_adjustments.bin
+
+判读：
+1. 相机本身正常：Camera2 openCamera2 / startPreview onConfigured 成功，第二会话拿到首帧并进入拍照。
+2. AEKit 的 own shader 资源缺失：vs_simple / vs_epm / vs_boxblur / fs_adjustments 全部
+   FileReader: Failed to open file；随后 loadProgram 报“vertex shader is invalid”，
+   LightEngine 报“ReadSample error”。
+3. 缺失只发生在 .../BASIC_64/<hash>/assets/shaders/ 下；同一 bundle 的
+   assets/material/video_empty/template.json 能正常加载，说明是“shaders 目录被整体删除”，
+   不是整个资源包下载失败。
+4. QQ 自检发现缺文件，但 isAEKitNeedDownload=false、bundle all done，
+   本轮没有补下载，所以缺失会持续存在。
+   注意：用户实测“删除整个 BASIC_64 → QQ 重下/重解压 → 拍摄恢复”，
+   说明整包缺失会触发重下，只有“只少 shaders 子目录”时当场不补。
+5. 全程没有 EGL_BAD_* / GL_INVALID_* / shader 链接失败 / linker / dequeueBuffer 错误；
+   GPUInfo 显示 Adreno 730 + V@0837.0.6，驱动已生效且 GLES 3.2 可用。
+   → 白屏的直接原因是 AEKit 着色器资源缺失，而不是 GPU 驱动二进制加载失败。

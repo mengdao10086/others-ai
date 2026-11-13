@@ -1,0 +1,412 @@
+hwnd,pid,visible,ret,class,ms,title
+591300,6820,0,1,GDI+ Hook Window Class,0.2,GDI+ Window (amdow.exe)
+67462,6820,0,1,AMDDVROVERLAYWINDOWCLASS,0.0,amd dvr overlay
+67468,6820,0,1,AMDDVROVERLAYWINDOWCLASS,0.0,amd dvr overlay
+67466,6820,0,1,AMDDVROVERLAYWINDOWCLASS,0.0,amd dvr overlay
+67464,6820,0,1,AMDDVROVERLAYWINDOWCLASS,0.0,amd dvr overlay
+67470,6820,0,1,AMDDVROVERLAYWINDOWCLASS,0.0,amd dvr overlay
+67460,6820,0,1,AMDDVROVERLAYWINDOWCLASS,0.0,amd dvr overlay
+67454,6820,0,1,AMDDVROVERLAYWINDOWCLASS,0.0,amd dvr overlay
+67452,6820,0,1,AMDDVROVERLAYWINDOWCLASS,0.0,amd dvr overlay
+67456,6820,0,1,AMDDVROVERLAYWINDOWCLASS,0.0,amd dvr overlay
+67458,6820,0,1,AMDDVROVERLAYWINDOWCLASS,0.0,amd dvr overlay
+328264,16284,0,1,GDI+ Hook Window Class,0.0,GDI+ Window (AMDRSServ.exe)
+591792,436,1,1,ThumbnailDeviceHelperWnd,0.1,
+65954,436,0,1,ForegroundStaging,0.0,
+65904,436,0,1,ForegroundStaging,0.0,
+66060,436,0,1,SystemTray_Main,0.0,电池指示器
+66164,436,0,1,ATL:00007FF98535B050,0.0,
+65830,436,0,1,tooltips_class32,0.0,
+65806,436,1,1,Shell_TrayWnd,0.0,
+1378504,436,0,1,TopLevelWindowForOverflowXamlIsland,0.0,系统托盘溢出窗口。
+65866,436,0,1,tooltips_class32,0.0,
+67296,23684,0,1,popupshadow,0.0,
+525972,23684,0,1,TrayNotifyWnd,0.0,微信
+132178,11736,0,1,Qt5QWindowToolSaveBits,0.1,
+1051072,13028,0,1,tooltips_class32,0.0,
+264562,436,1,1,XamlExplorerHostIslandWindow_WASDK,0.1,
+329158,27952,0,1,Q360NetmonClass,0.1,
+132724,27952,0,1,Q360NetmTrayIconWnd,0.0,
+198302,27952,0,1,360NetmonWindowClass{364B97E2-D014-4e2f-88C7-482B040F0D31},0.0,Q360NetmonWnd
+131664,18440,0,1,Wnd_StartFeed,0.0,
+393718,31588,1,1,Chrome_WidgetWin_1,0.0,WPS Office.lnk 固定到开始菜单失效 - Claude Code - Visual Studio Code [管理员]
+132570,23684,1,1,popupshadow,0.0,
+67334,23684,0,1,CWebviewControlHostWnd,0.0,CWebviewHostWnd
+67332,23684,0,1,popupshadow,0.0,
+132860,23684,0,1,EmotionTipWnd,0.0,EmotionTipWnd
+132850,23684,0,1,popupshadow,0.0,
+394906,23684,0,1,ChatContactMenu,0.0,ChatContactMenu
+67328,23684,0,1,HttpImgHoverWnd,0.0,
+67326,23684,0,1,HttpImgHoverWnd,0.0,
+67320,23684,0,1,popupshadow,0.0,
+67318,23684,0,1,EmotionTipWnd,0.0,EmotionTipWnd
+132852,23684,0,1,popupshadow,0.0,
+67312,23684,0,1,ChatContactMenu,0.0,ChatContactMenu
+67298,23684,1,1,WeChatMainWndForPC,0.0,微信
+132934,3936,1,1,Qt51517QWindowIcon,0.1,米哈游启动器
+10160788,27344,0,1,ATL:00EDB890,0.0,
+13828632,30652,0,1,ConsoleWindowClass,0.0,C:\WINDOWS\system32\cmd.exe
+328508,9456,0,1,Chrome_StatusTrayWindow,0.0,
+394606,14436,0,1,crashpad_SessionEndWatcher,0.0,
+132538,9456,0,1,Chrome_WidgetWin_0,0.0,
+197388,9456,0,1,Base_PowerMessageWindow,0.0,
+12979486,15148,0,1,SunAwtToolkit,0.4,theAwtToolkitWindow
+1050716,24512,0,1,FLUTTER_RUNNER_WIN32_WINDOW,0.0,LocalSend
+3475824,24512,0,1,GDI+ Hook Window Class,0.0,GDI+ Window (localsend_app.exe)
+7604780,32832,0,1,USB_Notification_Class,0.0,ADB USB Monitor
+3869658,23684,0,1,DuiTimerManagerWnd,0.0,
+3344466,18812,0,1,SunAwtToolkit,1.9,theAwtToolkitWindow
+526018,13028,0,1,tooltips_class32,0.1,
+395804,13028,0,1,ShadowWnd,0.0,
+526946,13028,0,1,UIMainFrame,0.0,zTasker
+329722,32808,0,0,PersonalizationThemeChangeListener,0.0,
+591310,32808,0,0,WorkerW,0.0,
+985588,32808,1,0,Windows.UI.Core.CoreWindow,0.0,设置
+1639498,31632,1,1,ApplicationFrameWindow,0.0,设置
+1903050,436,0,1,WorkerW,0.0,
+657644,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+2230830,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+592338,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+918696,24376,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+394238,29016,0,1,Chrome_WidgetWin_0,0.1,
+459726,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+328728,11736,0,0,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+328670,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+460146,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+590400,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+394138,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+197672,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+197682,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+197542,11736,0,1,WorkerW,0.0,
+132152,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+197786,11736,0,0,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+132004,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+132042,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+197528,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+263288,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+132226,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+132234,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+131998,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+132276,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+132012,11736,0,1,FileMonHideWnd,0.0,
+132030,11736,0,0,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+132038,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+328578,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+131684,28360,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+328278,28360,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+131678,28360,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+132184,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+131630,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+132204,11736,0,1,Qt5QWindowIcon,0.0,
+131838,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+197272,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+131614,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+131610,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+262624,11736,0,1,Qt5QWindowIcon,0.0,
+263060,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+329088,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+327712,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+196676,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+327716,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+131904,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+131778,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+131790,11736,0,1,FileMonHideWnd,0.0,
+131788,11736,0,1,FileMonHideWnd,0.0,
+131792,11736,0,1,FileMonHideWnd,0.0,
+197048,11736,0,1,FileMonHideWnd,0.0,
+197686,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+328426,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+197394,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+197384,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+197420,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+197428,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+197396,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+197380,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+131862,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+132044,32376,0,1,Chrome_SystemMessageWindow,0.1,
+132066,32376,0,1,Chrome_WidgetWin_0,0.0,
+197658,32376,0,1,Base_PowerMessageWindow,0.0,
+393810,11736,0,1,Qt5QWindowToolSaveBits,0.1,
+1837588,32376,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+197526,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+328568,11736,0,0,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+262574,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+197684,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+197622,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+197624,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+197722,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+131898,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+131894,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+131842,11736,0,1,KAccountWnd_Kso_classname_qingSdk,0.0,KAccountWnd_Kso_classname_qingSdk
+197424,11736,0,1,__#_ACCOUNTSDK WINIPC CHANNEL NAME_#__,0.0,qing
+131814,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+131896,11736,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+29755564,436,0,1,OperationStatusWindow,0.0,进度
+65892,436,0,1,ApplicationManager_DesktopShellWindow,0.0,
+789056,13028,0,1,_zTaskerSystemStatusListenWnd_,0.0,zTasker System Watcher
+590706,13028,0,1,zTasker.Tray,0.0,zTasker.Tray
+788948,13028,0,1,_zTaskerHotkeyWindow_,0.0,zTaskerHotkeyMsgWindow
+854200,13028,0,1,_zTaskerEventProxyWnd_,0.0,zTaskerEventProxyWnd
+1312766,13028,0,1,_AsyncTaskEventWnd_,0.0,_AsyncTaskEventWnd_
+2230474,13028,0,1,GDI+ Hook Window Class,0.0,GDI+ Window (zTasker.exe)
+262306,4364,0,1,Windows.UI.Core.CoreWindow,0.1,DesktopWindowXamlSource
+133740,436,0,1,WorkerW,0.0,
+592078,24376,0,0,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+329950,18412,0,1,PseudoConsoleWindow,0.0,
+524720,1072,0,1,Chrome_WidgetWin_0,0.0,
+329492,9624,0,1,crashpad_SessionEndWatcher,0.0,
+526180,31588,0,1,Electron_SystemPreferencesHostWindow,0.0,
+722858,31588,0,1,Chrome_WidgetWin_0,0.0,
+198874,31588,0,1,Base_PowerMessageWindow,0.0,
+198778,17556,0,1,Qt683QWindowIcon,0.0,AMD Software: Adrenalin Edition
+526342,17556,0,1,Qt683QWindowIcon,0.0,Radeonsoftware
+67588,17556,0,1,Qt683QWindowIcon,0.0,Radeonsoftware
+67560,17648,0,1,Chrome_WidgetWin_0,0.0,
+198366,3936,0,1,Chrome_SystemMessageWindow,0.0,
+263608,3936,0,1,Chrome_WidgetWin_0,0.0,
+196844,3936,0,1,Base_PowerMessageWindow,0.0,
+327868,3936,0,1,Qt51517TrayIconMessageWindowClass,0.0,QTrayIconMessageWindow
+67418,19648,0,1,Qt683ScreenChangeObserverWindow,0.0,
+460354,16284,0,1,DVREventWindowClass,0.0,AMD:DVR-CapturingWindow
+67384,15952,0,1,Chrome_WidgetWin_0,0.0,
+67338,23684,0,1,SessionDragWnd,0.0,SessionDragWnd
+67292,27952,0,1,Q360AdPopBlocker,0.0,360_ADPOP_BLOCKER
+198314,26636,0,1,CNCPUMetricsWindowClass,0.0,AMD:CN-MetricsCapturingWindow
+67280,17556,0,1,Qt683ScreenChangeObserverWindow,0.0,
+67274,27952,0,1,LiveUpd360C,0.0,
+198332,436,0,1,shellhack_server_{B9927402-3800-41BE-A788-F457879AC4E0},0.0,0x000001b4
+132730,27952,0,1,Qh360LoginMgrWnd,0.0,
+132742,27952,0,1,ATL:77BC25D8,0.0,
+132740,27952,0,1,WebSoket_MiniAppHelperClass,0.0,
+132738,27952,0,1,Qh360TraySafeId,0.0,
+132706,27952,0,1,Q360NetmonMainWndClass,0.0,
+263654,27952,0,1,ATL:50FD3F50,0.0,
+198208,27952,0,1,#360IDSMultiUserWnd,0.0,360IDSMultiUserWnd
+198176,27952,0,1,#360NetDefenderMultiUserWnd,0.2,360NetDefenderMultiUserWnd
+132604,27952,0,1,ADShutdownListenerHiddenWindow,0.1,
+132732,29016,0,1,Chrome_WidgetWin_0,0.1,
+132682,29016,0,1,Base_PowerMessageWindow,0.0,
+198184,11376,0,1,crashpad_SessionEndWatcher,0.1,
+198200,23684,0,1,Base_PowerMessageWindow,0.0,
+329310,23684,0,1,TimerDispatchWnd,0.0,
+263704,23684,0,1,EventDispatchWnd,0.0,
+132692,32464,0,1,crashpad_SessionEndWatcher,0.0,
+132718,23684,0,1,GDI+ Hook Window Class,0.1,GDI+ Window (WeChat.exe)
+67092,24376,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+67086,24376,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.1,
+67088,24376,0,0,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+67078,24376,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+132598,24376,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+67072,24376,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+67018,24376,0,1,KAccountWnd_Kso_classname_qingSdk,0.0,KAccountWnd_Kso_classname_qingSdk
+67016,24376,0,1,__#_ACCOUNTSDK WINIPC CHANNEL NAME_#__,0.0,aspcenter
+67004,24376,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+66990,24376,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+66972,13276,0,1,tooltips_class32,0.0,
+132454,13276,0,1,Neat Download Manager 1.4,0.0,Neat Download Manager 1.4
+132516,13276,0,1,tooltips_class32,0.0,
+197816,8924,1,1,Windows.UI.Core.CoreWindow,0.1,Windows 输入体验
+66206,436,0,1,MS_WebcheckMonitor,0.0,MS_WebcheckMonitor
+66190,32508,0,1,WorkerW,0.0,
+66186,436,0,1,BluetoothNotificationAreaIconWindowClass,0.0,
+66178,436,0,1,WorkerW,0.0,
+66154,436,0,1,MiracastConnectionWindow,0.0,MiracastConnectionWindow
+131590,436,0,1,WorkerW,0.0,
+66044,15600,0,1,.NET-BroadcastEventWindow.21af1a5.0,0.0,.NET-BroadcastEventWindow.21af1a5.0
+131530,436,0,1,KDriveProxyBaseHideWnd,0.0,
+196754,436,0,1,KShellCacheManagerDlg,0.0,
+262230,436,0,1,GDI+ Hook Window Class,0.0,GDI+ Window (Explorer.EXE)
+196794,436,0,1,{FFB9FCFB-BB90-44e5-B06B-CCD65C8D057E},0.0,
+262228,436,0,1,{C5C92FF8-548D-45b8-9297-BED15E69EF93},0.0,
+131522,436,0,1,WorkerW,0.0,
+197076,436,0,1,WorkerW,0.0,
+65944,436,1,1,DummyDWMListenerWindow,0.0,
+65940,436,1,1,EdgeUiInputTopWndClass,0.0,
+65912,436,1,1,DummyDWMListenerWindow,0.0,
+65910,436,1,1,DummyDWMListenerWindow,0.0,
+65908,436,1,1,DummyDWMListenerWindow,0.0,
+65906,436,1,1,DummyDWMListenerWindow,0.0,
+65902,436,0,1,GamingFallbackWindow,0.0,
+65890,436,0,1,Postures Broadcast Listener Class,0.0,
+65886,436,0,1,WorkerW,0.0,
+65874,436,0,1,WorkerW,0.0,
+65870,436,0,1,WorkerW,0.0,
+65852,436,0,1,WorkerW,0.0,
+65850,436,0,1,WorkerW,0.0,
+65834,21536,0,1,CrossDeviceResumeWindowClass,0.0,CrossDeviceResumeWindow
+131262,11352,0,1,COMTASKSWINDOWCLASS,0.0,Task Host Window
+262274,436,0,1,DDEMLEvent,0.0,
+131206,436,0,1,DDEMLMom,0.0,
+131232,9700,0,1,PushNotificationsPowerManagement,0.0,Windows Push Notifications Platform
+131242,21476,0,1,COMTASKSWINDOWCLASS,0.0,Task Host Window
+131174,23904,0,1,SmartDC,0.0,SmartDC
+65642,23904,0,1,AMD EEU Client,0.0,AMD EEU Client
+65606,25128,0,1,Dwm,0.0,DWM Notification Window
+66382,18856,0,1,CicLoaderWndClass,0.0,
+525266,27952,0,1,ATL:51B2E780,0.0,
+198240,27952,0,1,ATL:5239EEC8,0.0,
+198156,27952,0,1,GDI+ Hook Window Class,0.0,GDI+ Window (360tray.exe)
+198222,27952,0,1,Q360SafeMonClass,0.0,
+132600,24376,0,1,QEventDispatcherWin32_Internal_Widget1762357856,0.0,
+262722,27952,0,1,360AsyncNetwork,0.0,360AsyncNetwork
+395010,17556,0,1,CNEventWindowClass,0.0,AMD:CCC-AEMCapturingWindow
+132180,15952,0,1,Chrome_WidgetWin_0,0.0,
+263728,29016,0,1,Chrome_WidgetWin_0,0.0,微信
+264202,17556,0,1,Qt683QWindowIcon,0.0,Radeonsoftware
+14615092,31588,0,1,Chrome_WidgetWin_0,0.0,
+65858,436,1,1,Progman,0.0,Program Manager
+132958,6820,0,1,IME,0.0,Default IME
+67490,6820,0,1,IME,0.0,Default IME
+67488,6820,0,1,IME,0.0,Default IME
+67486,6820,0,1,IME,0.0,Default IME
+67484,6820,0,1,IME,0.0,Default IME
+67482,6820,0,1,IME,0.0,Default IME
+67480,6820,0,1,IME,0.0,Default IME
+67478,6820,0,1,IME,0.0,Default IME
+67476,6820,0,1,IME,0.0,Default IME
+67472,6820,0,1,IME,0.0,Default IME
+67474,6820,0,1,IME,0.0,Default IME
+262718,16284,0,1,IME,0.0,Default IME
+65956,436,0,1,IME,0.0,Default IME
+66166,436,0,1,IME,0.0,Default IME
+65848,436,0,1,MSCTFIME UI,0.0,MSCTFIME UI
+65808,436,0,1,IME,0.0,Default IME
+131686,18440,0,1,IME,0.0,Default IME
+262632,31588,0,1,MSCTFIME UI,0.0,MSCTFIME UI
+1902526,31588,0,1,IME,0.0,Default IME
+67222,23684,0,1,MSCTFIME UI,0.0,MSCTFIME UI
+329274,23684,0,1,IME,0.0,Default IME
+67548,3936,0,1,MSCTFIME UI,0.0,MSCTFIME UI
+328488,3936,0,1,IME,0.0,Default IME
+67546,3936,0,1,MSCTFIME UI,0.0,MSCTFIME UI
+131360,3936,0,1,IME,0.0,Default IME
+8259100,1056,0,1,IME,0.0,Default IME
+459334,14436,0,1,IME,0.0,Default IME
+393796,9456,0,1,IME,0.0,Default IME
+3935072,15148,0,1,IME,0.1,Default IME
+1967948,24512,0,1,MSCTFIME UI,0.0,MSCTFIME UI
+591992,24512,0,1,IME,0.0,Default IME
+18352630,24512,0,1,IME,0.0,Default IME
+10750842,32832,0,1,IME,0.0,Default IME
+2361296,18812,0,1,IME,0.0,Default IME
+590018,13028,0,1,MSCTFIME UI,0.1,MSCTFIME UI
+7538828,13028,0,1,IME,0.0,Default IME
+591312,32808,0,0,IME,0.0,Default IME
+264310,32808,0,0,IME,0.0,Default IME
+329842,32808,0,0,IME,0.0,Default IME
+329832,31632,0,1,IME,0.0,Default IME
+1116768,436,0,1,IME,0.0,Default IME
+1902362,436,0,1,MSCTFIME UI,0.0,MSCTFIME UI
+329996,11736,0,1,IME,0.1,Default IME
+1182286,11736,0,1,IME,0.0,Default IME
+592468,11736,0,1,IME,0.0,Default IME
+853006,24376,0,1,IME,0.0,Default IME
+1968706,11736,0,1,IME,0.0,Default IME
+328668,11736,0,1,IME,0.0,Default IME
+328748,11736,0,1,IME,0.0,Default IME
+394176,11736,0,1,IME,0.0,Default IME
+851992,11736,0,1,IME,0.0,Default IME
+197660,11736,0,1,IME,0.0,Default IME
+197742,11736,0,1,IME,0.0,Default IME
+132144,11736,0,1,IME,0.0,Default IME
+132010,11736,0,1,IME,0.0,Default IME
+132008,11736,0,1,IME,0.0,Default IME
+132002,11736,0,1,IME,0.0,Default IME
+132228,11736,0,1,IME,0.0,Default IME
+263290,11736,0,1,IME,0.0,Default IME
+132238,11736,0,1,IME,0.0,Default IME
+132236,11736,0,1,IME,0.0,Default IME
+132242,11736,0,1,IME,0.0,Default IME
+197294,11736,0,1,IME,0.0,Default IME
+132040,11736,0,1,IME,0.0,Default IME
+132098,11736,0,1,IME,0.0,Default IME
+197724,28360,0,1,IME,0.0,Default IME
+132210,28360,0,1,IME,0.0,Default IME
+132208,28360,0,1,IME,0.0,Default IME
+197178,11736,0,1,IME,0.0,Default IME
+131676,11736,0,1,IME,0.0,Default IME
+262172,11736,0,1,IME,0.0,Default IME
+131836,11736,0,1,IME,0.0,Default IME
+131724,11736,0,1,IME,0.0,Default IME
+197154,11736,0,1,IME,0.0,Default IME
+131830,11736,0,1,IME,0.0,Default IME
+329090,11736,0,1,IME,0.0,Default IME
+1050782,11736,0,1,IME,0.0,Default IME
+196662,11736,0,1,IME,0.0,Default IME
+196674,11736,0,1,IME,0.0,Default IME
+196660,11736,0,1,IME,0.0,Default IME
+131902,11736,0,1,IME,0.0,Default IME
+131766,11736,0,1,IME,0.0,Default IME
+197300,11736,0,1,IME,0.0,Default IME
+131794,11736,0,1,IME,0.0,Default IME
+131834,11736,0,1,IME,0.0,Default IME
+197690,11736,0,1,IME,0.0,Default IME
+263248,11736,0,1,IME,0.0,Default IME
+197422,11736,0,1,IME,0.0,Default IME
+197412,11736,0,1,IME,0.0,Default IME
+197406,11736,0,1,IME,0.0,Default IME
+197414,11736,0,1,IME,0.0,Default IME
+262962,11736,0,1,IME,0.0,Default IME
+197382,11736,0,1,IME,0.0,Default IME
+131864,11736,0,1,IME,0.0,Default IME
+3410340,32376,0,1,IME,0.0,Default IME
+2623998,32376,0,1,IME,0.0,Default IME
+197674,11736,0,1,IME,0.0,Default IME
+328358,11736,0,1,IME,0.0,Default IME
+197670,11736,0,1,IME,0.1,Default IME
+197668,11736,0,1,IME,0.0,Default IME
+197620,11736,0,1,IME,0.0,Default IME
+132220,11736,0,1,IME,0.0,Default IME
+132192,11736,0,1,IME,0.0,Default IME
+132190,11736,0,1,IME,0.0,Default IME
+131816,11736,0,1,IME,0.0,Default IME
+327726,11736,0,1,IME,0.1,Default IME
+1116646,436,0,1,IME,0.1,Default IME
+1509630,436,0,1,MSCTFIME UI,0.1,MSCTFIME UI
+133386,436,0,1,MSCTFIME UI,0.1,MSCTFIME UI
+65888,436,0,1,IME,0.0,Default IME
+592414,13028,0,1,IME,0.1,Default IME
+25364656,13028,0,1,IME,0.0,Default IME
+2099722,436,0,1,IME,0.0,Default IME
+263230,1072,0,1,IME,0.0,Default IME
+460444,9624,0,1,IME,0.0,Default IME
+67616,17556,0,1,MSCTFIME UI,0.0,MSCTFIME UI
+67282,17556,0,1,IME,0.0,Default IME
+67562,17648,0,1,IME,0.0,Default IME
+67420,19648,0,1,IME,0.0,Default IME
+394820,16284,0,1,IME,0.0,Default IME
+67386,15952,0,1,IME,0.0,Default IME
+67286,26636,0,1,IME,0.0,Default IME
+67272,436,0,1,IME,0.1,Default IME
+132684,29016,0,1,IME,0.0,Default IME
+263656,11376,0,1,IME,0.0,Default IME
+132696,32464,0,1,IME,0.0,Default IME
+132694,23684,0,1,IME,0.0,Default IME
+67094,24376,0,1,IME,0.0,Default IME
+67090,24376,0,1,IME,0.0,Default IME
+67080,24376,0,1,IME,0.0,Default IME
+67076,24376,0,1,IME,0.0,Default IME
+67074,24376,0,1,IME,0.0,Default IME
+67006,24376,0,1,IME,0.0,Default IME
+66992,24376,0,1,IME,0.0,Default IME
+198004,13276,0,1,MSCTFIME UI,0.0,MSCTFIME UI
+132286,13276,0,1,IME,0.0,Default IME
+197830,8924,0,1,IME,0.0,Default IME
+66192,32508,0,1,IME,0.0,Default IME
+66180,436,0,1,IME,0.0,Default IME
+196916,436,0,1,IME,0.0,Default IME
+66046,15600,0,1,IME,0.0,Default IME
+131528,436,0,1,IME,0.0,Default IME
+196748,436,0,1,IME,0.0,Default IME
+65988,436,0,1,IME,0.0,Default IME
+65974,436,0,1,IME,0.0,Default IME
+65972,436,0,1,IME,0.0,Default IME
+65854,436,0,1,IME,0.0,Default IME
+65836,21536,0,1,IME,0.0,Default IME
+131226,9700,0,1,IME,0.0,Default IME
+65646,23904,0,1,IME,0.0,Default IME
+65644,23904,0,1,IME,0.0,Default IME
+13633466,24376,0,1,IME,0.0,Default IME
+395022,17556,0,1,IME,0.0,Default IME
+65882,436,0,1,MSCTFIME UI,0.0,MSCTFIME UI
+196686,436,0,1,IME,0.0,Default IME

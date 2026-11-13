@@ -1,2 +1,8 @@
 .gitnexus/
 .claude/
+
+# 分析原料：解包产物与用户目录备份（体积大，不入库）
+zTasker卡顿分析/原始/
+zTasker卡顿分析/机制验证/User备份_*/
+zTasker卡顿分析/机制验证/*.exe
+zTasker卡顿分析/机制验证/*.dat
