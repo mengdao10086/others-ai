@@ -1,0 +1,4992 @@
+// ================================================================
+// tempctrl.c — 飞智 WaspWing 散热器智能温控守护程序
+// ================================================================
+//
+// 运行环境 / 架构 / 进程检测 / 控制指令见 逻辑说明.md「整体架构」。
+// 温度单位：整型 0.1°C（电池原生单位；CPU m°C ÷ 100），如 350 = 35.0°C。
+// 已删除机制（Gear / PID 方差门控等）见 逻辑说明.md「已删除机制索引」。
+// 编译：参数与工具链约束见同目录 build_tempctrl.sh（唯一来源，勿在此复制命令行）。
+//
+// ================================================================
+
+// _GNU_SOURCE 必须在任何头文件之前：CPU 亲和用的 cpu_set_t / sched_setaffinity 在 bionic 里
+// 由 __USE_GNU 门控（不定义会只报未声明，不报缺失的头文件，难以定位）。
+#define _GNU_SOURCE
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <signal.h>
+#include <time.h>
+#include <stdarg.h>
+#include <errno.h>
+#include <sched.h>
+#include <sys/stat.h>
+#include <sys/file.h>
+#include <sys/wait.h>
+#include <sys/time.h>
+#include <sys/select.h>
+#include <fcntl.h>
+#include <dirent.h>
+#include <limits.h>
+
+#include "tempctrl_shared.h"
+
+#include <math.h>
+
+// C 端键表与 clamp 边界的唯一手写处是 参数定义/params.def.json，本头由 gen_params.py 生成。
+// 本文件只取宏：CFG_PERF_INT_KEYS / CFG_SYSFS_KEYS 的展开点必须在下方 struct 与所有被取地址的
+// static 变量声明之后（见 params_generated.h 头部说明）。
+#include "params_generated.h"
+
+// 「KI 分段倍率表」求值算法（无外部依赖的纯头，与参数定义/check_params.py 的跨端对拍程序共用）
+#include "ki_cut.h"
+
+// --- 通用宏 ---
+#define EMA(new_val, old_val, alpha_pct) \
+    (((new_val) * (alpha_pct) + (old_val) * (100 - (alpha_pct))) / 100)
+
+/** 带方向取整的 EMA（平滑值向原始值方向取整，解决渐进无法到达的问题）；原理见 逻辑说明.md「EMA 方向取整」 */
+#define EMA_DIR(new_val, old_val, alpha_pct) \
+    ({ \
+        int _nv = (new_val); \
+        int _ov = (old_val); \
+        int _num = (_nv) * (alpha_pct) + (_ov) * (100 - (alpha_pct)); \
+        int _r = _num / 100; \
+        if (_nv > _ov && _num % 100 > 0) _r++; \
+        _r; \
+    })
+
+// ======================== 运行模式与参数映射 ========================
+//
+// 本实现固定下发 mode=1（固定功率）：不用 mode=0 的理由见 逻辑说明.md「实测说明」；
+// setRunMode 参数序、mode 取值与参数映射见 README「广播协议」（唯一规范处）。
+
+// ======================== 常量与边界 ========================
+#define COLD_MIN             1
+#define COLD_MAX           194     // 制冷强度最大有效值（B6X 硬件上限），PID_COLD_RANGE/RATE_LIMIT_COLD/COLD_RPM_MAP 的 clamp 上界
+// B7X 独立上限（运行时根据 active_device 选择）
+#define B7X_COLD_MAX       255
+#define B7X_FAN_RPM_MAX    8000
+
+// B7X 上限（FAN_RPM_RANGE / PID_COLD_RANGE 第三值，可配置，暂时与 B6X 一致）
+// B7X_COLD_MAX / B7X_FAN_RPM_MAX 宏保留为 clamp 安全上界
+static int b7_pid_cold_max = 190;   // PID_COLD_RANGE 第三值（B7X），默认同 B6X
+static int b7_fan_rpm_max  = 6000;  // FAN_RPM_RANGE 第三值（B7X），默认同 B6X
+
+// ======================== 私有目录（配置/日志/曲线数据落点） ========================
+// 此路径必须与 lsp模块/app/build.gradle.kts 的 applicationId 一致（数据目录名 = 包名，改任一处须同步另一处）。
+// status 双文件仍留 /data/local/tmp/（与 MainHook.java 共享，原样不动）；落点分工见 README「文件落点」，app 侧私有目录落点与清理清单见 app/逻辑说明.md §2.5。
+
+
+/** 确保私有目录存在。只 mkdir 这一层（父目录须由 installd 创建并打标签、不可 root 抢建），
+ *  新建时 chown 为父目录属主。返回 1=可用，0=不可用；理由见 逻辑说明.md「配置文件系统」。 */
+static int ensure_private_dir(void) {
+    if (mkdir(PRIVATE_DIR, 0771) == 0) {
+        char parent[256];
+        snprintf(parent, sizeof(parent), "%s", PRIVATE_DIR);
+        char *slash = strrchr(parent, '/');
+        if (slash) {
+            *slash = '\0';
+            struct stat pst;
+            if (stat(parent, &pst) == 0)
+                chown(PRIVATE_DIR, pst.st_uid, pst.st_gid);   // best-effort，失败不影响 root 自身读写
+        }
+        return 1;
+    }
+    struct stat st;
+    return stat(PRIVATE_DIR, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+// ======================== 系统命令路径 ========================
+// 一律用绝对路径：daemon 的 PATH 未必含 /system/bin，裸命令名会静默失败。
+
+// ======================== 系统路径与缩放 ========================
+// --- sysfs 路径配置（可由 profile.conf 覆盖）---
+static char BATT_TEMP_PATH[128] = "/sys/class/power_supply/battery/temp";
+static char CPU_TEMP_PATH_FMT[128] = "/sys/class/thermal/thermal_zone%d/temp";
+static char BATT_CURRENT_PATH[128] = "/sys/class/power_supply/battery/current_now";
+
+// --- sysfs 缩放系数（原始值 ÷ 缩放系数 = 内部单位 0.1°C）---
+static int BATT_TEMP_DIVISOR = 1;     // 电池温度原始值 0.1°C，无需缩放
+static int CPU_TEMP_DIVISOR = 100;    // CPU 温度原始值 m°C，÷100 转 0.1°C
+static int BATT_CURRENT_DIVISOR = 10000;  // 电池电流原始值 µA ÷ 此值 → 0.01A
+
+// --- CPU 温度扫描范围（可配置）---
+// 按此范围建立有效 zone 候选名单，后续只扫名单内的 zone；区间变化时重建名单
+static int CPU_ZONE_MIN = 0;
+static int CPU_ZONE_MAX = 99;
+static int cpu_zone_rescan_cycles = 12;   // CPU_ZONE_RESCAN 第一值：全量重扫间隔（控制周期，1 周期=5 秒，默认 12=60 秒）
+static int cpu_zone_keep = 10;            // 保留温度值个数（CPU_ZONE_RESCAN 第二值，默认 10）
+static int cpu_zone_list_dirty = 0;       // 1=CPU_ZONE 区间刚变化，需重建候选名单
+
+// --- CPU 亲和核集合（可配置；单一输入位：簇 c0/c123 或核号 0 / 0-1 / 0,2-3）---
+// 静态初值必须写字面量（默认值审计按字面量比对，写成宏会被跳过）；理由见 逻辑说明.md「CPU_AFFINITY 的生效时机」。
+char affinity_spec[64] = "c0";   // CPU_AFFINITY 原样字符串（解析在 apply_cpu_affinity）
+static int affinity_cfg_seen = 0; // 本次加载是否读到该键（缺键时回落默认，见 load_config）
+
+// ======================== 通用参数 ========================
+// --- 基准温度 ---
+static int BATT_BASELINE = 350;     // 基准温度 35.0°C
+
+// --- 冷端→风扇映射 ---
+static int cold_map_start = 40;     // COLD_RPM_MAP 第一值=映射起始强度，低于此值时线性外推下限
+static int cold_map_exp = 150;      // COLD_RPM_MAP 第二值=n^exp（÷100，150=1.50），>1 低冷慢转
+// MAP_INPUT_SMOOTH_ALPHA：冷/热端映射输入（制冷强度/热端温度）共用的 EMA 平滑系数（%，1~99）
+static int rpm_smooth_alpha = 33;
+
+// --- 热端映射范围 ---
+static int hot_map_min = 350;       // HOT_RPM_MAP 第一值（0.1°C）
+static int hot_map_max = 450;       // HOT_RPM_MAP 第二值（0.1°C）
+
+// --- 风扇转速范围 ---
+static int fan_rpm_min = 2000;      // FAN_RPM_RANGE 第一值
+static int fan_rpm_max = 6000;      // FAN_RPM_RANGE 第二值
+static int fan_rpm_round_unit = 10; // RATE_LIMIT_FAN 第三值：下发转速前按该单位就近取整（RPM，1~500）
+#define FAN_WEIGHT_MAX 4000         // 自加权合并的权重上限（RPM）：映射值超过它时按同一权重参与
+
+// ======================== 速率限制 ========================
+// --- 固定值 ---
+static int RATE_LIMIT_FAN = 200;   // RATE_LIMIT_FAN 第一值：风扇每周期最大变化量（RPM，升/降共用，三值键）
+static int RATE_LIMIT_COLD = 15;   // 制冷强度升降速基础值：升速=base+dev×mult/10，降速=base-dev×mult/10，负值→0=禁止该方向
+
+// --- 动态值（根据电池温差自动调整）---
+static int RATE_LIMIT_COLD_MULT = 10;  // 制冷强度倍率：升速/降速 = base ± dev(0.1°C) × mult / 10
+static int COLD_DEADZONE = 3;          // 制冷最小变化幅度（RATE_LIMIT_COLD 第三值）：与散热器实际 |差值| < 该值时不升不降；豁免有方向（升只看距上限、降只看距下限，余量 < ceil(死区×1.5) 才豁免）
+static int RATE_LIMIT_FAN_DEBOUNCE = 50;   // RATE_LIMIT_FAN 第二值：防抖阈值（RPM/周期，0=关闭防抖）；变化量 ≤ 阈值且距方向端点（升=最高/降=最低）≥ 阈值×1.5（向上取整）时保持不动
+static int cold_rate_bound = 0;        // 本周期制冷方向对应的限速上限（升=up 降=down，供拆分步长使用）
+static int cycle_batt_temp = -1;       // 本周期电池温度（-1=未就绪）
+// --- 1s 采集缓存：5s 控制块直接读缓存，不再重复读 sysfs/状态文件 ---
+static int cached_batt_raw = -1;   // 电池温度（0.1°C），保留上次成功值抗抖
+static int cached_cpu_now  = -1;   // CPU 最高温度（0.1°C），保留上次成功值抗抖
+
+// ======================== 实际值 ========================
+// 始终向目标值（PID 目标制冷 / 风扇目标）靠拢，每周期最多变动速率限制的量
+static int actual_rpm = -1;            // 当前实际风扇转速（RPM）
+static int actual_cold = -1;           // 当前实际制冷片强度
+
+// ======================== 平滑下发（RAMP_DISPATCH） ========================
+// 判定层（防抖/限速/去重/回传比对）仍是每 5s 一次；通过后只登记本轮目标，
+// 由 1s 主循环每拍送出一份。关闭时等价于每个控制周期一次下发。
+#define RAMP_SLOTS 5                   // 每控制周期固定拆 5 份，与 1s 主循环节拍对齐
+static int ramp_dispatch = 1;          // RAMP_DISPATCH：1=拆 5 次下发，0=每周期一次
+static int ramp_slots_left = 0;        // 本轮剩余份数（0=无待发）
+static int ramp_remain_rpm  = 0;       // 剩余风扇变化量（带符号）
+static int ramp_remain_cold = 0;       // 剩余制冷变化量（带符号）
+static int ramp_step_rpm    = 0;       // 每份风扇步长（正数）
+static int ramp_step_cold   = 0;       // 每份制冷步长（正数）
+static int ramp_target_rpm  = 0;       // 本轮风扇目标（已取整的出值）
+static int ramp_mode = 1, ramp_target_temp = 5, ramp_wl = 0;   // 本轮下发参数
+static int sent_rpm  = -1;             // 最近一次实际广播的风扇值（拆分起点；-1=未知）
+static int sent_cold = -1;             // 最近一次实际广播的制冷值（拆分起点；-1=未知）
+
+// ======================== 下发日志去重 ========================
+// 决策目标（限速前）变化时打一条普通日志；限速逐步靠拢产生的下发只写 debug。
+static int dispatch_target_cold = -1;  // 本周期期望制冷（PID 决策，限速前）
+static int dispatch_target_rpm  = -1;  // 本周期期望风扇（限速前）
+static int logged_target_cold   = -1;  // 上次普通日志对应的期望制冷
+static int logged_target_rpm    = -1;  // 上次普通日志对应的期望风扇
+
+// ======================== 控制周期计数器 ========================
+static int pid_ctrl_cycles = 0;               // PID 控制周期单调计数器（pid_cycle 每次 +1）
+static int reconnect_keep_cycles = 3;         // RECONNECT_KEEP_CYCLES：断联< N 控制周期(×5s) 不重置 PID 状态
+
+// ======================== CPU 温度滤波 ========================
+static int CPU_FILTER_ALPHA = 25;   // CPU 滤波系数（%）
+static int cpu_filtered_temp = 250; // 加权 CPU 温度，初始 25.0°C
+static int first_run = 1;           // 首次运行，滤波直接赋初值
+
+// ======================== 日志与调试 ========================
+// --- 日志路径（默认根据二进制名自动生成，可由 profile.conf 覆盖）---
+static char log_file_path[256] = "";
+static int LOG_MAX = 16256;          // 日志文件大小上限（字节），0=关闭日志（普通模式）
+#define LOG_MAX_DEBUG 204800         // 调试日志的体积上限（字节）；普通模式不受影响
+static FILE *log_fp = NULL;          // 持久的日志文件指针
+static char log_path_opened[256] = ""; // 已打开的文件路径（检测路径变化）
+int debug_mode = 0;           // 调试日志总开关，=1 时启用各分区调试输出
+static int debug_sensor = 0;    // [传感器] 电池/CPU 读数
+int debug_exec   = 0;    // [执行下发] 速率限制/am broadcast + 风扇转速
+static int debug_conn   = 0;    // [连接状态] App 存活/BLE/重连对齐
+static int debug_config = 0;    // [配置加载] 配置文件解析过程
+static int debug_main   = 0;    // [主循环] main_loop 流程跟踪
+static int debug_pid    = 0;    // [PID] PID 控制调试
+static int debug_launch = 0;    // [自动拉起] 目标选择/回退/跳过（结果成功/失败为普通日志，不归此分区）
+
+// ======================== 配置文件系统 ========================
+// 配置文件路径（自动检测或 --config 指定）
+static char config_path[256] = "";
+// 配置文件的最后修改时间（用于热重载检测）
+static time_t config_mtime = 0;
+// 0 = 尚未加载成功：main_loop 按 CONFIG_RETRY_INTERVAL 周期重试（唯一自愈途径，见 逻辑说明.md「配置路径自动检测」）。
+static int config_loaded = 0;
+// --config 显式指定过路径（1）还是自动探测（0）。重试时沿用同一条来源，不中途改换落点。
+static int config_explicit = 0;
+// 上次重试探测的时刻（节流用；0 = 尚未重试过，首次重试不额外等待）
+static time_t config_retry_at = 0;
+// 未加载状态下重新探测/加载配置的间隔（秒）；取值理由见 逻辑说明.md「配置路径自动检测」。
+#define CONFIG_RETRY_INTERVAL 60
+
+// ======================== PID 控制（单累积器） ========================
+// --- 配置变量（按 profile.conf 键顺序排列）---
+
+// PID_KDP：KDP 融合 P+D 项系数（÷1000，kdp = kdp_coef×ch_kdp）
+static int pid_kdp_coef = 300;
+// PID_KI_RATE 第一值：积分升速率（÷1000，被积项 ch−target_f > 0 时用；acc 不乘 dt）
+static int pid_ki_up_coef = 20;
+// PID_KI_RATE 第二值：积分降速率（÷1000，被积项 < 0 时用；默认 30，可独立调）
+static int pid_ki_down_coef = 30;
+// PID_SPEED 第一值：速度项倍率系数（÷10，100=速度×10，0=关闭；ch = error + v×speed_coef/10 + cpu_comp）
+static int pid_speed_coef = 100;
+// PID_SPEED 第二值：速度非线性阈值 L（÷100，单位 °C/周期；|v| ≥ L 严格恒等，|v| < L 按幂曲线降权）
+static int pid_spd_nl_thr_p100 = 20;
+// PID_SPEED 第三值：速度非线性强度 q（÷100；0 = 完全线性）
+static int pid_spd_nl_exp_p100 = 100;
+// PID_TARGET 第一值：动态目标系数（÷1000，raw_target = clamp(error×target_coef, ±上限)）
+static int pid_target_coef = 20;
+// PID_TARGET 第二值：目标 EMA 平滑系数（%，滤波系数）
+static int pid_target_alpha = 10;
+// PID_TARGET 第三值：动态目标上限（0.1°C，默认 15=1.5°C）
+static int pid_target_max = 15;
+// PID_TARGET_DIR：动态目标方向性 EMA（远离基线加快->away alpha，回归基线减慢->toward alpha）
+static int pid_target_dir_on = 1;                 // 第一值：方向性滤波开关（0=退回 PID_TARGET 第2值单 alpha）
+static int pid_target_away_alpha = 20;            // 第二值：远离基线 alpha（%，20=0.2）
+static int pid_target_toward_alpha = 10;          // 第三值：回归基线 alpha（%，10=0.1）
+// PID_CH_THRESHOLD：跳过重算的 ch 阈值（0.1°C，|last_ch|≤此值 → 整轮冻结）
+static int pid_ch_threshold = 2;
+
+// PID_CPU_COMP：CPU 补偿（始终生效，无开关）
+static int pid_cpu_comp_filter_alpha = 25;      // PID_CPU_COMP 第一值：补偿 EMA 平滑系数（%）
+static int pid_cpu_comp_divisor = 30;           // PID_CPU_COMP 第二值：除数
+static int pid_cpu_comp_offset = 100;           // PID_CPU_COMP 第三值：偏移量（0.1°C，100=10.0°C）
+
+// PID_COLD_RANGE：输出范围
+static int pid_cold_min = 1;              // PID_COLD_RANGE 第一值：制冷强度下限
+static int pid_cold_max = 190;            // PID_COLD_RANGE 第二值：制冷强度上限（B6X）
+
+// --- 「PID 分段倍率表」参数（配置值为整数；倍率 ×100 换算进内部）---
+// PID_CUT_<簇号> = 重复四元组「冷值,KDP倍率,升倍率,降倍率,...」（冷值 0~255；三倍率 ×100，100=不削）
+// 三个倍率字段可留空（两次逗号之间什么都不写）= 该点在该轴上不作为控制点；冷值必填
+// 簇内按冷值升序折线插值、多簇逐轴取最小；旧键名 KI_CUT_<簇号>（三元组）仍被识别并迁移，见 parse_legacy_pidcut_cfg
+#define KI_CUT_MAX_CLUSTERS 8             // 支持的簇数上限（簇号 1~KI_CUT_MAX_CLUSTERS）
+#define CFG_ROW_PREFIX_KI_CUT_LEGACY "KI_CUT_"   // 旧表键前缀（三元组）；永久兼容（读取 + 一次性迁移），不做移除
+static KiCutPoint ki_cut_rows[KI_CUT_MAX_CLUSTERS][KI_CUT_MAX_POINTS];  // 各簇原始点（求值内部排序去重）
+static int ki_cut_cnt[KI_CUT_MAX_CLUSTERS];   // 各簇点数（0 = 未配置）
+static KiCutPoint legacy_rows[KI_CUT_MAX_CLUSTERS][KI_CUT_MAX_POINTS];  // 旧键(KI_CUT_)暂存（每点补 KDP=100），仅填充未被新键占用的簇
+static int legacy_cnt[KI_CUT_MAX_CLUSTERS];   // 旧键各簇点数（0 = 无）
+static int pidcut_new_seen[KI_CUT_MAX_CLUSTERS];  // 本轮新键(PID_CUT_)配置过的簇号（新键优先）
+static int legacy_pidcut_seen = 0;            // 本轮加载是否遇到旧 KI_CUT_* 键（触发一次性迁移写回）
+static int migrate_give_up = 0;               // 迁移写回失败过一次后不再重试（避免每轮刷日志；重启后重试）
+
+// --- PID 运行时状态（单累积器）---
+static float pid_ki = 0.0f;               // 积分累积值（acc；float：限幅赋小数需保留）
+static float pid_kdp = 0.0f;              // 融合 P+D 项（kdp = kdp_coef×ch_kdp；无记忆，跳过①用 last 值）
+static float pid_target_f = 0.0f;         // EMA 动态目标
+static float pid_last_error = 0.0f;       // 上周期纯电池误差（°C，v 计算用）
+static float pid_last_ch = 0.0f;          // 上周期 ch（|ch|≤阈值 → 整轮冻结判据）
+static time_t pid_last_change_time = 0;   // 上次重算时间戳（dt 锚点）
+// --- 无变化回溯（PID_SPEED_RECALL）：锚点温度 + 累计周期数 → 重算速度 ---
+static int recall_anchor = 0;             // 最近一次温度变化前的温度（0.1°C）
+static int recall_prev_batt = 0;          // 上个控制周期的电池温度（0.1°C）
+static int recall_cycles = 0;             // 距该次变化的控制周期数（>0 才有效）
+static int pid_spd_recall_on = 1;         // PID_SPEED_RECALL 第一值：开关
+static int pid_spd_recall_weight = 1000;  // PID_SPEED_RECALL 第二值：回溯速度权重（÷1000，1000=全量）
+
+// --- CPU 补偿运行状态 ---
+static int pid_cpu_comp_ready = 0;          // 补偿平滑是否已初始化（首次上次值用 0，从 0 爬升）
+static float pid_cpu_comp_smooth = 0.0f;    // CPU 补偿 EMA 平滑值（°C）
+static int pid_last_comp_10 = 0;            // 上次 PID 重算时的补偿值（0.1°C）
+static int pid_cpu_comp_active = 0;         // 补偿门控：1=激活（进入后即使条件消失也保持到滤波归零才退出）
+
+// --- 电池温度输入滤波（改动2：加回；仅温度更新时滤波，动态 α，停机后恢复原始值）---
+static int pid_batt_filtered = -1;        // 滤波后电池温度（0.01°C 单位，3680=36.80°C；传感器分辨率 0.1，小数由滤波插值给出），-1=未初始化
+static int pid_batt_last_update_cycle = -1; // 上次温度更新的控制周期（动态α间隔计算用）
+// 曲线数据用：本周期实际送入 PID 的滤波值（0.01°C，-1=尚未算过），以及本周期是否真跑了 PID 重算。
+// 写完一行曲线即清零后者的标记位（见 append_webui_row）。
+static int pid_input_cdeg = -1;
+static int pid_recompute_pending = 0;
+
+// --- 输出映射与对齐 ---
+static int pid_align_rpm = 2000;          // PID 目标 RPM（仅初始化对齐与日志使用；风扇下发已由 compute_fan_target 独立计算）
+static int pid_align_cold = 1;            // PID 目标制冷强度
+
+// --- 「PID 分段倍率表」运行状态（复位值 = 不削减：倍率 = KI_CUT_NONE）---
+static float ki_cut_mult_kdp = (float)KI_CUT_NONE;  // KDP 融合项倍率（×100；100 = 不削）
+static float ki_cut_mult_up = (float)KI_CUT_NONE;   // KI 升速率倍率（×100；100 = 不削）
+static float ki_cut_mult_dn = (float)KI_CUT_NONE;   // KI 降速率倍率（×100；100 = 不削）
+
+// ======================== 散热器回传参数 ========================
+static int cooler_hot_temp = -1;          // 热端温度（0.1°C）
+static int cooler_cold_temp = -1;         // 冷端温度（0.1°C）
+static int cooler_rpm_real = -1;          // 设定风扇转速（设备回显，经超频逻辑折算）
+static int cooler_rpm_run = -1;           // 实际风扇转速（0x13 value[0x0b]<<8|value[0x0a]；未就绪 -1）
+static int rpm_run_missing_streak = 0;    // 连续 N 帧 status 有真实回传但缺 RPM_RUN（诊断用）
+static int rpm_run_missing_logged = 0;    // 缺 RPM_RUN 的提示只打一条
+static int cooler_cold_real = -1;         // 目标制冷（设备回显的设定档；控制路径用它对齐/限速）
+static int cooler_cold_run = -1;          // 实际制冷（运行档，0x13 byte[0x0f]；仅入数据行，不参与控制）
+
+// --- 回传可信就绪 + 启动/重连对齐（不拿 -1/占位 1 兜底，等真实回传再定基线；理由见 逻辑说明.md「启动流程」）---
+#define REPORT_OK_N 2                      // 连续 N 帧读到真实回传才判可信（1 帧=1s）
+#define ALIGN_WAIT_TIMEOUT 15              // 等待真实回传上限（秒），超时用保守值起步防永久停摆
+static int report_ok = 0;                  // 1=已连续 REPORT_OK_N 帧读到真实回传（RUN_MODE 存在 + 冷/rpm 值合法）
+static int report_ok_streak = 0;           // 连续"真实回传"读数
+static int pending_align = 0;              // 1=等待真实回传后对齐 actual_cold/actual_rpm
+static time_t pending_align_since = 0;     // pending_align 起点（超时兜底用）
+
+// ======================== 全局运行状态 ========================
+// --- 信号 ---
+static volatile int running = 1;
+
+// --- 电池温度数值追踪（Scene 式：定时轮询 + 值比较，mtime 变化作为补充刷新信号）---
+static int batt_cached_temp = -1;        // 最后一次读取的温度缓存
+static int batt_temp_updated = 0;        // 最近一次 1s 采集：值或 mtime 任一变化即置位（供采样 push 判定）
+static time_t batt_temp_mtime = 0;       // 温度文件上次 mtime（mtime 更新视为温度数据刷新；不可靠内核恒不变则退化为纯值比较）
+static int batt_mtime_stale = 0;         // 值变化那一拍跳过了 stat：下一次 stat 只重建基线、不再重复计刷新（R39）
+static int batt_changed_since_ctrl = 0;  // 自上次 5s 控制以来，1s 层是否检测到过温度变化（累积）
+static int batt_window_changed = 0;      // 当前控制周期快照（main_loop 入口设置，供跳过判定）
+
+// --- 连接状态 ---
+static int STATUS_TIMEOUT = 3;   // LSP 每 1 秒写一次 status，mtime 超 3s 判死
+static int app_was_alive = 0;
+// 双 status 文件路径（B6X 文件 BLE=0/1/2=owner，B7X 文件 BLE=0/6/7=型号）
+static char status_file_path_b6[512] = PROTO_PATH_STATUS_B6;
+static char status_file_path_b7[512] = PROTO_PATH_STATUS_B7;
+
+// status 文件协议（行格式「字段名=值」/字段名/编码）的唯一规范处是 lsp模块/README.md；
+// 字段名 STF_* 由上方 protocol-const 区块引用的 protocol_generated.h 生成。
+
+/** 行首若为该字段名，返回值的起点指针；否则返回 NULL。长度直接取自字段名本身。 */
+
+// WebUI 曲线数据文件（每 1 秒一行，滚动保留 720 行）；行格式与语义见 app/逻辑说明.md §7.1。
+// 路径 / 保留行数 / 列数 / 格式串均由上方 protocol-const 区块生成。
+// 两列制冷语义不同：第 7 列是 getRealColdLevel() 回显的设定档，第 11 列才是 getColdRunLevel()
+// 的实际运行档（见 制冷值语义取证.md）；控制路径仍只用第 7 列。
+// 两列转速语义不同：第 6 列是 getRealWindLevel() 的设定回显（控制用），第 12 列才是
+// getSpeed() 的设备实际转速原始值（0x13 value[0x0b]<<8|value[0x0a]）。
+
+// 生效制冷上限提示文件（写给 app 定 KI 分段倍率曲线横轴）；行格式与降级见 app/逻辑说明.md §6.6
+#define COLDMAX_HINT_PATH     PROTO_PATH_COLDMAX
+
+// 临时停止（UI_TEMP_STOP）的 boot_id 标记：与 profile.conf 同落私有目录，卸载/清除数据随目录一并清除
+#define TEMP_STOP_BOOT_PATH   PROTO_PATH_TEMP_STOP_BOOT
+#define KERNEL_BOOT_ID_PATH   "/proc/sys/kernel/random/boot_id"
+
+// 三方 app 包名（farsef 在最近连 B6X 散热器时也参与仲裁）
+
+#define ARBITRATE_INTERVAL 15   // app 存活仲裁间隔（秒）：合并扫描后仍较低频，兼顾拉起/清理响应
+
+// 自动拉起散热器 app（优先上次使用的 app）
+static int APP_LAUNCH_ENABLED = 0;      // 总开关：1=允许自动拉起，0=关闭（默认关，刷入时可选开）
+// 锁死自动重启（watchdog）：每次实际下发制冷变化时判定——实际停滞（=上周期实际）且≠上周期下发持续 N 次 → kill app 并重新拉起
+static int app_watchdog_cycles = 6;     // APP_LAUNCH_TIMING 第 2 值：连续停滞次数（0=关闭，默认 6）
+static int watchdog_stall_count = 0;    // 当前连续停滞次数（按实际下发周期计数）
+// 死链自动重启：BLE 已连但冷/热/转速回传同时是全 0（宿主 connect 时的默认对象）连续 N 个周期
+// → kill app 重新拉起。与通用停滞判定互补：只看回传是否有效，不看下发目标。
+#define DEADLINK_CYCLES 3               // 每周期 5s，3 次 ≈ 15s
+static int deadlink_cycles = 0;         // 当前连续死链周期数
+static int watchdog_last_cold = -1;     // 上周期实际制冷值（停滞判定基准）
+static int watchdog_last_cmd  = -1;     // 上周期下发制冷值（未达目标判定基准）
+static long watchdog_last_kill_at = 0;  // 上次 kill 时间戳（冷却防风暴）
+static time_t last_launch_attempt = 0;  // 上次「真正 am start」时刻（拉起冷却用；仅发出 am start 时推进）
+static time_t last_launch_probe_at = 0; // 上次「探测链」（屏检+进程扫描）执行时刻：独立节流，见 APP_LAUNCH_PROBE_INTERVAL
+static time_t last_disconnect_time = 0; // 最近一次断联时间戳（0=未处于断联）。定义上移至此：launch_last_app
+                                        // 的断联初期探测节流要读它，故须先于其声明；清零仍在 reconnect_align
+static time_t last_arbitrate = 0;       // 上次 app 存活仲裁时间（ARBITRATE_INTERVAL 节流）
+static int app_launch_cooldown = 60;    // APP_LAUNCH_TIMING 第 1 值：两次拉起最小间隔（秒，默认 60）
+// 旧键兼容（永久读）：APP_LAUNCH_COOLDOWN / APP_WATCHDOG → APP_LAUNCH_TIMING 两槽。
+// 新键出现时新键优先；旧键仅在新键缺失时按槽覆盖。首次读到旧键一次性迁移写回，失败保留原文件。
+static int launch_timing_seen_cooldown = 0;  // 本轮新键 APP_LAUNCH_TIMING 给出了第 1 槽（拉起冷却）
+static int launch_timing_seen_watchdog = 0;  // 本轮新键给出了第 2 槽（停滞重启）；按槽记录，单值行不得吞掉旧键的另槽
+static int legacy_launch_seen = 0;       // 本轮读到任一旧键
+static int legacy_launch_cooldown = -1;  // 旧键暂存（-1=未出现）
+static int legacy_launch_watchdog = -1;
+static int launch_migrate_give_up = 0;   // 迁移写回失败后不再重试（读兼容已生效，行为不丢）
+static int app_launch_screen_gate_enabled = 1;  // APP_LAUNCH_SCREEN_GATE 第一值：屏幕门禁开关
+static int app_launch_screen_dozing_on  = 0;    // 第二值：Dozing 是否算亮屏（默认 0）
+static int legacy_screen_gate_logged    = 0;    // 旧三值行只提示一次（避免每轮配置热重载刷屏）
+static int legacy_rescan_logged         = 0;    // CPU_ZONE_RESCAN 旧秒值迁移只提示一次
+static time_t last_probe_off_at = 0;     // 上次确认息屏（并完成屏检）的时刻：息屏退避锚点，见 APP_LAUNCH_PROBE_OFF_INTERVAL
+static int last_screen_off = 0;          // 上次观察到的屏幕状态：1=息屏（含按配置算灭的 Dozing），0=亮屏/未知。初值=亮屏
+
+// 息屏时整条探测链的最小间隔（秒，硬编码常量，不是配置键）；为何连屏检一起节流见 逻辑说明.md「自动拉起→开销收敛」。
+#define APP_LAUNCH_PROBE_OFF_INTERVAL 10
+
+// 存活态下整条探测链（屏检 + 进程扫描）的最小间隔（秒，硬编码常量）。
+// 用途：app 存活时 launch_last_app 会被反复调用（断连路径 5s/次、仲裁），若不节流则每次都要
+// fork 一次 dumpsys + 全量扫 /proc。本间隔把整链限到 ≤1 次/此值。**代价（必须知道）**：
+// 它同时是「app 死亡后重新拉起的检测延迟上限」——app 死亡后最晚本间隔才被拉起（改前 ≤5s）。
+// 与 am start 冷却（APP_LAUNCH_TIMING 第 1 值=60s）无关、也不参与其判定；取 12s 使其显著短于 60s、
+// 且与 APP_LAUNCH_PROBE_OFF_INTERVAL=10 同量级。
+#define APP_LAUNCH_PROBE_INTERVAL 12
+
+// 断联初期的探测加速（见 launch_last_app 入口）：断联后 APP_LAUNCH_PROBE_FAST_WINDOW 秒内，探测间隔
+// 收窄到 APP_LAUNCH_PROBE_FAST_INTERVAL；计时起点是 last_disconnect_time（断联起点，重连由 reconnect_align
+// 清零）。**只加快既有探测节奏**：该链只在 App 进程已死时才真正 am start，本改动不新增任何拉起/重启动作。
+// 息屏受入口节流与息屏闸门共同约束：取 12s 与 10s 中较大者，故息屏→亮屏最长滞后约 12s（见 launch_last_app 内注释）。
+#define APP_LAUNCH_PROBE_FAST_INTERVAL 5    // 断联初期探测间隔（秒）
+#define APP_LAUNCH_PROBE_FAST_WINDOW   60   // 断联初期窗口（秒）
+
+// 说明：屏检不再单独缓存。is_screen_awake() 唯一调用点在 launch_last_app 的屏幕门禁内，其频率已由
+// 上面的 APP_LAUNCH_PROBE_INTERVAL（+ 息屏时的 APP_LAUNCH_PROBE_OFF_INTERVAL）统一限流；
+// 曾加过的 4s 屏检缓存在 ≥5s 的调用间隔下恒 miss（且小于 12s 间隔，更无意义），故移除，保持限流点唯一。
+
+// --- 界面开关转写（UI_BACK_HIDE）---
+// 界面 → 钩子的唯一通道（两进程不共享内存，方向与 status 文件相反）；见 README「界面开关文件协议」。
+#define UIPREFS_PATH PROTO_PATH_UIPREFS
+static int back_hide_enabled     = 1;    // UI_BACK_HIDE：1=返回键收后台（默认），0=恢复系统默认退出
+
+// --- 临时停止（UI_TEMP_STOP）---
+// 1=停止对散热器的写控制（保持现场）；默认持续到手机下次重启，靠 boot_id 标记判定失效。
+static int temp_stop_enabled         = 0;    // 配置值（每轮控制前由热重载刷新）
+static int temp_stop_active_last     = 0;    // 上次是否处于停止态（只用于状态切换日志）
+static int temp_stop_writeback_pending = 0;  // 重启后写回 0 失败：本地已恢复控制，逐轮重试写回
+static int uiprefs_last_back_hide = -1;  // 上次已写出的值（-1 = 尚未写过，首轮必写一次）
+static int uiprefs_last_gate_le   = -1;  // 同上的 GATE_LE 记录（哨兵=尚未写过）
+static int uiprefs_last_bt_sec    = -2147483647;  // 同上的 BT_ON_SEC 记录（哨兵=尚未写过）
+static int uiprefs_fail_logged    = 0;   // 写失败只记一条日志，避免每轮重复刷屏
+static int temp_stop_active(void);       // 前置声明：自动拉起守卫早于定义处使用
+
+// --- 断连自动开蓝牙（BT_AUTO_ENABLE_SEC）---
+// 钩子在「确认蓝牙未开启」时把请求写进 BT_REQ_PATH（REQ=<epoch秒>）；本进程 1s 拍读取，
+// token 变大才执行一次开蓝牙命令链。限频（两次之间至少间隔 N 秒、0=关闭）在钩子侧完成，
+// 这里只负责「新请求即执行」。文件由本进程预建 0666（方向是 app 写 / daemon 读，同 status 文件）。
+#define BT_REQ_PATH PROTO_PATH_BT_REQ
+// 临时停止状态发布：daemon 写 / 模块读（内容 "1\n"/"0\n"，每 5s 重写刷新 mtime）
+#define TEMP_STOP_FLAG_PATH PROTO_PATH_TEMP_STOP
+static int bt_auto_enable_sec = 300;     // BT_AUTO_ENABLE_SEC：两次自动开蓝牙最小间隔（秒，默认 300，0=关闭）
+static long long bt_req_handled = -1;    // 已处理的最大请求 token；-1=尚未处理
+static int bt_req_primed = 0;            // 首拍只记下当前 token（不执行），避免重启后对旧请求补执行
+
+// --- 看门狗反向保活开关（WD_KEEPALIVE）---
+// 声明点必须在 load_config 之前（那里第一遍读它）；实现与其余状态在文件末尾的「看门狗反向保活」小节。
+// 默认开：默认值来源、审计口径与"旧值优先"见 逻辑说明.md「看门狗反向保活」；判活口径与拉起方式同见该节。
+static int wd_keepalive_enabled = 1;     // WD_KEEPALIVE：1=守护进程反过来看护 service.d 看门狗（默认 1=开）
+
+// 双设备 BLE 连接状态
+static int b6_connected = 0;        // B6X: BLE 是否已连接
+static int b7_connected = 0;        // B7X: BLE 是否已连接
+static time_t b6_connected_at = 0;  // B6X 连接时间戳（用于仲裁"先连"）
+static time_t b7_connected_at = 0;  // B7X 连接时间戳
+static int app_ble_connected = 0;   // 兼容旧代码，指向当前 active_device
+static int b6_owner = 0;            // B6X: BLE 连接 owner（0=无, 1=老 app, 2=新 app）
+
+// 实际连接的设备型号（B7X 文件 BLE=6/7 编码；B6X 文件 BLE=1/2 型号未知，由路径兜底为 6）
+static int b6_model = 0;            // B6X app 连接的设备型号：0=未知, 6=B6X, 7=B7X
+static int b7_model = 0;            // B7X app 连接的设备型号
+
+// BLE_OWNER_LAST 上次连接者（B6X 文件 1/2；B7X 文件 6/7；跨文件合并取时间最新者）
+static int b6_last_owner = 0;
+static time_t b6_last_at = 0;
+static int b7_last_owner = 0;
+static time_t b7_last_at = 0;
+static int last_owner = 0;       // 全局最近连接者（合并后：1/2/6/7，0=无）
+static time_t last_owner_at = 0; // 对应连接时间
+
+// ======================== 双设备仲裁 ========================
+DeviceType active_device = DEVICE_NONE;      // 当前控制的设备
+
+// 运行时动态限制（根据 active_device 设置）
+static int active_fan_max  = 6000;          // 当前设备风扇上限
+static int active_pid_cold_max = 190;       // 当前设备 PID 制冷上限
+
+// ======================== 热端过温制冷削减 ========================
+// 热端 > 阈值 → 削低制冷上限（首削/累减）；≤ 阈值 → 逐级上爬封顶；冷却独立。规则见 逻辑说明.md「热端过温制冷削减」
+static int HOT_DERATE_THRESHOLD = 450;   // 热端阈值（0.1°C，450=45.0°C）
+static int HOT_DERATE_MULT = 5;          // 削减倍率 = 单次恢复值（削减量=(热端-阈值)×mult/10）
+static int HOT_DERATE_COOLDOWN = 5;      // 削减/恢复后冷却周期数（5 个 5s 周期）
+static int hot_derate = 0;               // 当前削减量（相对配置上限；累减，恢复归零=封顶）
+static int hot_derate_cooldown = 0;      // 削减冷却剩余周期（独立）
+static int hot_recover_cooldown = 0;     // 恢复冷却剩余周期（独立）
+
+// --- 发送去重缓存 ---
+static int last_bcast_valid = 0;
+static int last_mode = -1;
+static int last_target_temp = -1;
+static int last_rpm = -1;
+static int last_cold = -1;
+static int last_wind_level = -1;
+
+// 前向声明（配置函数位于 write_log/clamp 之前）
+static int compute_fan_target(void);
+static void set_default_log_path(void);   // 层开关复位用（定义在 write_log 之后）
+static void ki_cut_parse_row(const char *idx_str, const char *val_str);  // parse_pid_cfg 调用，定义在 KI 削减区
+static int  parse_legacy_pidcut_cfg(const char *key, const char *val_str);  // load_config 调用（旧 KI_CUT_* 键兼容），定义在 KI 削减区
+static void apply_legacy_pidcut(void);     // load_config 调用（旧键按新键优先生效），定义在 KI 削减区
+static int  migrate_pid_cut_config(const char *path);   // load_config 调用（旧键一次性迁移写回），定义在 KI 削减区
+static int  migrate_rescan_unit_config(const char *path, int cycles);  // load_config 调用（旧秒值一次性迁移写回），定义在 KI 削减区
+static int  migrate_launch_timing_config(const char *path, int cooldown, int watchdog);  // 旧两键合并写回
+static void reset_ki_cut_defaults(void);   // reset_perf_layer_defaults 与 main 调用，定义在 KI 削减区
+static void install_cache_mark(const char *pkg);   // /proc 命中正向标记（定义在安装缓存区，供 app_process_scan 调用）
+
+/* 调试日志宏：总开关 debug_mode=1 且对应分区开关=1 时才输出。
+ * 必须单行（NDK clang + CRLF 多行续行失效） */
+#define pid_log(fmt, ...) \
+    do { if (debug_mode && debug_pid) \
+        write_log("[PID] " fmt, ##__VA_ARGS__); \
+    } while(0)
+
+/** 去除首尾空白，返回修剪后的起始指针 */
+
+/** 去除字符串尾部空白，原地修改 */
+
+/** 原地去除首尾空白及换行符，返回修剪后的起始指针 */
+
+/** 从配置值字符串读取路径（trim + strncpy，空值跳过） */
+
+/**
+ * 解析配置文件中的一行 KEY=VALUE。
+ * 跳过注释（#开头）和空行，在 '=' 处分割，修剪 key 尾部空白。
+ * 原地修改 line：key 尾部被 '\0' 截断。
+ * 成功时 *out_key 指向修剪后的 key，返回 value 起始指针（跳过 '='）。
+ * 失败（注释/空行/无'='）返回 NULL。
+ */
+
+// ======================== 配置解析（表驱动 + 分段函数） ========================
+
+// --- sysfs 层键表：键名与解析方式的唯一权威名单 ---
+// is_sysfs_key 与 parse_sysfs_cfg 同源查表，新增键只在此加一行；
+// 不存在"名单里有、分发里没有"而被静默忽略的可能。
+enum { SK_INT = 0, SK_PATH, SK_ZONE, SK_RESCAN, SK_AFFINITY };
+
+struct SysfsCfgKey {
+    const char *key;
+    int kind;               // SK_INT / SK_PATH / SK_ZONE / SK_RESCAN / SK_AFFINITY
+    int *ivar;              // SK_INT：目标变量
+    int imin, imax;         // SK_INT：clamp 范围
+    char *svar;             // SK_PATH：目标路径缓冲
+    size_t ssize;           // SK_PATH：缓冲大小
+};
+
+static const struct SysfsCfgKey SYSFS_CFG_KEYS[] = {
+    // 表行由 params_generated.h 的 CFG_SYSFS_KEYS 展开，键序与 clamp 边界随定义，勿在此手抄
+#define CFG_ROW(k, kind, ivar, imin, imax, svar, ssize) \
+    { k, kind, ivar, imin, imax, svar, ssize },
+    CFG_SYSFS_KEYS(CFG_ROW)
+#undef CFG_ROW
+};
+
+/** sysfs 层键查找：命中返回表项，未命中返回 NULL */
+static const struct SysfsCfgKey *sysfs_key_lookup(const char *key) {
+    int n = (int)(sizeof(SYSFS_CFG_KEYS) / sizeof(SYSFS_CFG_KEYS[0]));
+    for (int i = 0; i < n; i++)
+        if (strcmp(key, SYSFS_CFG_KEYS[i].key) == 0) return &SYSFS_CFG_KEYS[i];
+    return NULL;
+}
+
+/** sysfs 路径与缩放层键集合（SYSFS_ENABLED=1 时解析，独立于性能/调试总开关） */
+static int is_sysfs_key(const char *key) {
+    return sysfs_key_lookup(key) != NULL;
+}
+
+// --- 配置表驱动：纯 int clamp 单值键（性能层，PERF_ENABLED=1）---
+struct IntCfgKey { const char *key; int *var; int min; int max; };
+
+static const struct IntCfgKey INT_CFG_KEYS[] = {
+    // 表行由 params_generated.h 的 CFG_PERF_INT_KEYS 展开，键序与 clamp 边界随定义，勿在此手抄。
+    // 多值键（PID_SPEED / PID_KI_RATE / PID_TARGET / PID_TARGET_DIR / PID_COLD_RANGE / PID_CPU_COMP / PID_SPEED_RECALL）
+    // PID 分段倍率表（PID_CUT_<簇号>）在 parse_pid_cfg 按行前缀分段解析，不进本表
+#define CFG_ROW(k, var, lo, hi) { k, &var, lo, hi },
+    CFG_PERF_INT_KEYS(CFG_ROW)
+#undef CFG_ROW
+};
+
+/** 配置表查找：命中（键名一致）则 clamp 赋值，返回 1 */
+static int parse_int_cfg(const char *key, int val) {
+    int n = (int)(sizeof(INT_CFG_KEYS) / sizeof(INT_CFG_KEYS[0]));
+    for (int i = 0; i < n; i++) {
+        if (strcmp(key, INT_CFG_KEYS[i].key) == 0) {
+            *INT_CFG_KEYS[i].var = clamp(val, INT_CFG_KEYS[i].min, INT_CFG_KEYS[i].max);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/** DEBUG 子开关（DEBUG_ENABLED=1 时） */
+static void parse_debug_cfg(const char *key, int val) {
+    if      (strcmp(key, "DEBUG_SENSOR") == 0)  debug_sensor = (val != 0);
+    else if (strcmp(key, "DEBUG_EXEC") == 0)    debug_exec   = (val != 0);
+    else if (strcmp(key, "DEBUG_CONN") == 0)    debug_conn   = (val != 0);
+    else if (strcmp(key, "DEBUG_CONFIG") == 0)  debug_config = (val != 0);
+    else if (strcmp(key, "DEBUG_MAIN") == 0)    debug_main   = (val != 0);
+    else if (strcmp(key, "DEBUG_PID") == 0)     debug_pid    = (val != 0);
+    else if (strcmp(key, "DEBUG_LAUNCH") == 0)  debug_launch = (val != 0);
+}
+
+/** CPU_ZONE_RESCAN 解析状态：单位标记 + 旧秒值迁移结果（load_config 与 parse_sysfs_cfg 共用） */
+struct RescanCfgState {
+    int unit_is_cycles;    // 1=文件头带 cfg-unit 标记，第一值按控制周期解释
+    int legacy_seen;       // 1=读到无标记的旧秒值
+    int legacy_sec;        // 旧值（日志用）
+    int converted_cycles;  // 迁移后的周期数
+};
+
+/** sysfs 路径与缩放层（SYSFS_ENABLED=1 时）；解析方式由 SYSFS_CFG_KEYS 表驱动 */
+static void parse_sysfs_cfg(const char *key, int val, const char *val_str,
+                            struct RescanCfgState *rescan) {
+    const struct SysfsCfgKey *e = sysfs_key_lookup(key);
+    if (!e) return;
+    switch (e->kind) {
+    case SK_INT:
+        *e->ivar = clamp(val, e->imin, e->imax);
+        break;
+    case SK_PATH:
+        config_read_path(e->svar, e->ssize, (char *)val_str);
+        break;
+    case SK_ZONE: {
+        int a = CPU_ZONE_MIN, b = CPU_ZONE_MAX;
+        if (sscanf(val_str, "%d %d", &a, &b) >= 2) {
+            int old_min = CPU_ZONE_MIN, old_max = CPU_ZONE_MAX;
+            CPU_ZONE_MIN = clamp(a, 0, 99);
+            CPU_ZONE_MAX = clamp(b, 0, 99);
+            if (CPU_ZONE_MIN != old_min || CPU_ZONE_MAX != old_max) cpu_zone_list_dirty = 1;
+        }
+        break;
+    }
+    case SK_RESCAN: {
+        // 双值：重扫间隔（控制周期，1 周期=5 秒） 保留温度值个数
+        int a = cpu_zone_rescan_cycles, b = cpu_zone_keep;
+        int n = sscanf(val_str, "%d %d", &a, &b);
+        if (n >= 1) {
+            int cycles = a;
+            if (!rescan->unit_is_cycles) {
+                // 旧配置单位是「秒」：向上取整换算为控制周期，保持原有重扫节奏
+                cycles = (a > 0) ? (a + 4) / 5 : 0;
+                if (cycles < 1) cycles = 1;
+                if (cycles > 720) cycles = 720;
+                rescan->legacy_seen = 1;
+                rescan->legacy_sec = a;
+                rescan->converted_cycles = cycles;
+            }
+            cpu_zone_rescan_cycles = clamp(cycles, 1, 720);
+        }
+        if (n >= 2) cpu_zone_keep = clamp(b, 1, 64);
+        break;
+    }
+    case SK_AFFINITY:
+        // 单一文本位：簇语法（c0/c123）或核号（0 / 0-1 / 0,2-3，旧写法 "0 5" 仍按区间）。
+        // 这里只存原样字符串（空值 = 保持原值，与其它键的空值约定一致）；值是否合法要看本机
+        // 核集合与簇划分，故判定与回落都放在 apply_cpu_affinity。
+        affinity_cfg_seen = 1;
+        config_read_path(affinity_spec, sizeof(affinity_spec), (char *)val_str);
+        break;
+    }
+}
+
+/** PID 专属多值配置（PERF 层；单值键已并入 INT_CFG_KEYS 表驱动） */
+static int parse_pid_cfg(const char *key, int val, const char *val_str) {
+    // PID_KI_RATE = KI升速率(÷1000) KI降速率(÷1000)
+    // 被积项 ch−target_f > 0 用升速率、< 0 用降速率；默认 20 30
+    if (strcmp(key, "PID_KI_RATE") == 0) {
+        int a = pid_ki_up_coef, b = pid_ki_down_coef;
+        int n = sscanf(val_str, "%d %d", &a, &b);
+        if (n >= 1) pid_ki_up_coef   = clamp(a, 1, 1000);
+        if (n >= 2) pid_ki_down_coef = clamp(b, 1, 1000);
+        return 1;
+    }
+    // PID_SPEED = 速度倍率(÷10) 非线性阈值 L(÷100) 非线性强度 q(÷100)
+    // 三值同属速度项一条链；旧单值行（只给第一值）仍按 n>=1 生效
+    if (strcmp(key, "PID_SPEED") == 0) {
+        int sp = pid_speed_coef, thr = pid_spd_nl_thr_p100, ex = pid_spd_nl_exp_p100;
+        int n = sscanf(val_str, "%d %d %d", &sp, &thr, &ex);
+        if (n >= 1) pid_speed_coef      = clamp(sp,  0, 1000);
+        if (n >= 2) pid_spd_nl_thr_p100 = clamp(thr, 10, 100);
+        if (n >= 3) pid_spd_nl_exp_p100 = clamp(ex,   0, 400);
+        return 1;
+    }
+    // PID_TARGET = 目标系数(÷1000) 目标EMA平滑(%) 动态目标上限(0.1°C)
+    if (strcmp(key, "PID_TARGET") == 0) {
+        int a = pid_target_coef, b = pid_target_alpha, c = pid_target_max;
+        int n = sscanf(val_str, "%d %d %d", &a, &b, &c);
+        if (n >= 1) pid_target_coef  = clamp(a, 1, 1000);
+        if (n >= 2) pid_target_alpha = clamp(b, 1, 100);
+        if (n >= 3) pid_target_max   = clamp(c, 1, 100);
+        return 1;
+    }
+    // PID_TARGET_DIR = 方向性滤波开关 远离基线alpha(%) 回归基线alpha(%)
+    // 默认 "1 20 10" = 远离基线 0.2、回归基线 0.1；开关=0 时退回 PID_TARGET 第2值单一 alpha
+    if (strcmp(key, "PID_TARGET_DIR") == 0) {
+        int on = pid_target_dir_on, a = pid_target_away_alpha, t = pid_target_toward_alpha;
+        int n = sscanf(val_str, "%d %d %d", &on, &a, &t);
+        if (n >= 1) pid_target_dir_on   = (on != 0);
+        if (n >= 2) pid_target_away_alpha   = clamp(a, 1, 100);
+        if (n >= 3) pid_target_toward_alpha = clamp(t, 1, 100);
+        return 1;
+    }
+    if (strcmp(key, "PID_COLD_RANGE") == 0) {
+        int a = pid_cold_min, b = pid_cold_max, c = b7_pid_cold_max;
+        int n = sscanf(val_str, "%d %d %d", &a, &b, &c);
+        if (n >= 2) { pid_cold_min=clamp(a,0,COLD_MAX); pid_cold_max=clamp(b,0,COLD_MAX); }
+        if (n >= 3) { b7_pid_cold_max = clamp(c, 1, B7X_COLD_MAX); }
+        return 1;
+    }
+    if (strcmp(key, "PID_CPU_COMP") == 0) {
+        int a = pid_cpu_comp_filter_alpha, b = pid_cpu_comp_divisor, c = pid_cpu_comp_offset;
+        int n = sscanf(val_str, "%d %d %d", &a, &b, &c);
+        if (n >= 1) pid_cpu_comp_filter_alpha = clamp(a, 1, 100);
+        if (n >= 2) pid_cpu_comp_divisor = clamp(b, 5, 200);
+        if (n >= 3) pid_cpu_comp_offset = clamp(c, 0, 500);
+        return 1;
+    }
+    // PID_SPEED_RECALL = 开关 回溯速度权重(÷1000)
+    // 默认 "1 1000" = 开启、注入全量速度；无上限（锚点+累计周期数）
+    if (strcmp(key, "PID_SPEED_RECALL") == 0) {
+        int on = pid_spd_recall_on, w = pid_spd_recall_weight;
+        int n = sscanf(val_str, "%d %d", &on, &w);
+        if (n >= 1) pid_spd_recall_on = (on != 0);
+        if (n >= 2) pid_spd_recall_weight = clamp(w, 100, 1000);
+        return 1;
+    }
+    // PID 分段倍率表：PID_CUT_<簇号> = 重复四元组「冷值,KDP倍率,升倍率,降倍率,...」（三个倍率可留空）。
+    // 行前缀与逐字段 clamp 边界取自生成头（CFG_ROW_PREFIX_PID_CUT / CFG_MIN|MAX_PID_CUT_F*），
+    // 解析本体见 ki_cut_parse_row（支持任意簇号，故不是精确 strcmp）。
+    // 旧键名 KI_CUT_<簇号> 的兼容与迁移见 parse_legacy_pidcut_cfg（另立函数，避免被 CI 判为多键）。
+    if (strncmp(key, CFG_ROW_PREFIX_PID_CUT, sizeof(CFG_ROW_PREFIX_PID_CUT) - 1) == 0) {
+        ki_cut_parse_row(key + sizeof(CFG_ROW_PREFIX_PID_CUT) - 1, val_str);
+        return 1;
+    }
+    return 0;
+}
+
+/** 通用多值配置（PERF 层） */
+static int parse_common_cfg(const char *key, int val, const char *val_str) {
+    if (strcmp(key, "HOT_RPM_MAP") == 0) {
+        int a = hot_map_min, b = hot_map_max;
+        if (sscanf(val_str, "%d %d", &a, &b) >= 2) { hot_map_min = clamp(a,200,500); hot_map_max = clamp(b,200,500); }
+        return 1;
+    }
+    if (strcmp(key, "FAN_RPM_RANGE") == 0) {
+        int a = fan_rpm_min, b = fan_rpm_max, c = b7_fan_rpm_max;
+        int n = sscanf(val_str, "%d %d %d", &a, &b, &c);
+        if (n >= 2) { fan_rpm_min = clamp(a,1000,6000); fan_rpm_max = clamp(b,1000,6000); }
+        if (n >= 3) { b7_fan_rpm_max = clamp(c, 2000, B7X_FAN_RPM_MAX); }
+        return 1;
+    }
+    if (strcmp(key, "HOT_DERATE") == 0) {
+        int t = HOT_DERATE_THRESHOLD, m = HOT_DERATE_MULT, c = HOT_DERATE_COOLDOWN;
+        int n = sscanf(val_str, "%d %d %d", &t, &m, &c);
+        if (n >= 1) HOT_DERATE_THRESHOLD = clamp(t, 350, 700);   // 35.0~70.0°C
+        if (n >= 2) HOT_DERATE_MULT = clamp(m, 1, 20);
+        if (n >= 3) HOT_DERATE_COOLDOWN = clamp(c, 0, 20);
+        return 1;
+    }
+    // RATE_LIMIT_FAN = 每周期最大变化量 防抖阈值 转速取整单位（三值，升降共用步长；阈值 0=关闭防抖）
+    if (strcmp(key, "RATE_LIMIT_FAN") == 0) {
+        int step = RATE_LIMIT_FAN, thr = RATE_LIMIT_FAN_DEBOUNCE, ru = fan_rpm_round_unit;
+        int n = sscanf(val_str, "%d %d %d", &step, &thr, &ru);
+        if (n >= 1) RATE_LIMIT_FAN          = clamp(step, 50, 2000);
+        if (n >= 2) RATE_LIMIT_FAN_DEBOUNCE = clamp(thr, 0, 2000);
+        if (n >= 3) fan_rpm_round_unit      = clamp(ru, 1, 500);
+        return 1;
+    }
+    if (strcmp(key, "RATE_LIMIT_COLD") == 0) {
+        // RATE_LIMIT_COLD = 基础值 倍率 最小变化幅度（三值）
+        int base = RATE_LIMIT_COLD, mult = RATE_LIMIT_COLD_MULT, dz = COLD_DEADZONE;
+        int n = sscanf(val_str, "%d %d %d", &base, &mult, &dz);
+        if (n >= 1) RATE_LIMIT_COLD      = clamp(base, 1, COLD_MAX);
+        if (n >= 2) RATE_LIMIT_COLD_MULT = clamp(mult, 1, 100);
+        if (n >= 3) COLD_DEADZONE        = clamp(dz, 1, 50);
+        return 1;
+    }
+    // COLD_RPM_MAP = 映射起始强度 指数（双值）
+    if (strcmp(key, "COLD_RPM_MAP") == 0) {
+        int s = cold_map_start, e = cold_map_exp;
+        int n = sscanf(val_str, "%d %d", &s, &e);
+        if (n >= 1) cold_map_start = clamp(s, 0, COLD_MAX);
+        if (n >= 2) cold_map_exp   = clamp(e, 50, 500);
+        return 1;
+    }
+    return 0;
+}
+
+/**
+ * 把界面侧开关转写成 /data/local/tmp 标志文件（BACK_HIDE=0/1、GATE_LE=0/1、BT_ON_SEC=<秒>），供宿主进程里的钩子读取。
+ *
+ * <p>GATE_LE / BT_ON_SEC 受 APP_LAUNCH_ENABLED 控制（用户 2026-10-24 定）：拉起应用总开关关闭时
+ * 对外只发布关闭值（0 / 0），配置值本身不改，重新开启后按原配置恢复。
+ * <p>只在值变化时写；写失败不更新「已写出」记录，下一轮配置重载会重试，且只记一条日志。
+ * 先写 .tmp 再 rename，避免钩子读到半行。
+ */
+static void publish_uiprefs(void) {
+    // 受 APP_LAUNCH_ENABLED 控制（用户 2026-10-24 定）：总开关关闭时不发布放行/自开蓝牙请求。
+    // GATE_LE 不再有独立开关，恒等于自动拉起总开关。
+    int gate_le_eff = APP_LAUNCH_ENABLED ? 1 : 0;
+    int bt_sec_eff  = APP_LAUNCH_ENABLED ? bt_auto_enable_sec : 0;
+    if (back_hide_enabled == uiprefs_last_back_hide
+            && gate_le_eff == uiprefs_last_gate_le
+            && bt_sec_eff == uiprefs_last_bt_sec) {
+        return;
+    }
+    char tmp[64];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", UIPREFS_PATH);
+    FILE *f = fopen(tmp, "w");
+    if (!f) {
+        if (!uiprefs_fail_logged) {
+            write_log("界面开关 标志文件不可写 %s（界面开关将按默认值生效）", UIPREFS_PATH);
+            uiprefs_fail_logged = 1;
+        }
+        return;
+    }
+    fprintf(f, "BACK_HIDE=%d\n", back_hide_enabled ? 1 : 0);
+    fprintf(f, "GATE_LE=%d\n", gate_le_eff);
+    fprintf(f, "BT_ON_SEC=%d\n", bt_sec_eff);
+    fclose(f);
+    if (rename(tmp, UIPREFS_PATH) != 0) {
+        if (!uiprefs_fail_logged) {
+            write_log("界面开关 标志文件替换失败 %s", UIPREFS_PATH);
+            uiprefs_fail_logged = 1;
+        }
+        remove(tmp);
+        return;
+    }
+    uiprefs_last_back_hide = back_hide_enabled;
+    uiprefs_last_gate_le = gate_le_eff;
+    uiprefs_last_bt_sec = bt_sec_eff;
+    uiprefs_fail_logged = 0;
+}
+
+// ======================== 层开关关闭 → 该层参数回落默认值 ========================
+// 语义：PERF_ENABLED / SYSFS_ENABLED 由 1→0 时把该层运行时参数批量赋回代码默认值（配置文件不动）；总开关自身不复位。
+// -1 表示"尚未加载过"（首轮复位本是恒等操作，故跳过）。为什么这样设计与总开关不复位的理由见
+// 逻辑说明.md「PERF_ENABLED / DEBUG_ENABLED / SYSFS_ENABLED 开关」。
+static int last_perf_enabled  = -1;   // -1=未加载过；否则=上一轮 PERF_ENABLED（0/1）
+static int last_sysfs_enabled = -1;   // -1=未加载过；否则=上一轮 SYSFS_ENABLED（0/1）
+
+/* 默认值表行适配：把生成头的 X(C 变量, 默认值) 展开成赋值语句（用法同上两张键表） */
+#define CFG_RESET_ROW(var, def) var = (def);
+
+/** PERF 层 int 取值位 → 代码默认值（表见 params_generated.h 的 CFG_PERF_DEFAULTS） */
+static void reset_perf_layer_defaults(void) {
+    CFG_PERF_DEFAULTS(CFG_RESET_ROW)
+    ramp_slots_left = 0;   // 默认值表只复位取值位，未走完的本轮一并丢弃
+    // 削减量是"相对生效上限"的累减量：上限复位后基线失效，连同两个冷却计数一并清零。
+    // PID 运行态（积分/动态目标等）不动——那是运行状态，不是配置。
+    hot_derate = 0;
+    hot_derate_cooldown = 0;
+    hot_recover_cooldown = 0;
+    // KI 分段倍率表不是 int 取值位（行数可变），其默认表另行复位（复用默认行字符串）
+    reset_ki_cut_defaults();
+}
+
+/** SYSFS 层取值位 → 代码默认值（int 位见 CFG_SYSFS_DEFAULTS；文本键另行处理） */
+static void reset_sysfs_layer_defaults(void) {
+    CFG_SYSFS_DEFAULTS(CFG_RESET_ROW)
+    // 区间/重扫参数已回落默认：标记重建 zone 候选名单（下一次 5 秒控制周期）
+    cpu_zone_list_dirty = 1;
+    // 路径键：3 个用生成头的默认值宏（char[] 不能整型赋值），strncpy 后必须补 NUL
+    strncpy(BATT_TEMP_PATH, CFG_DEFAULT_BATT_TEMP_PATH, sizeof(BATT_TEMP_PATH) - 1);
+    BATT_TEMP_PATH[sizeof(BATT_TEMP_PATH) - 1] = '\0';
+    strncpy(BATT_CURRENT_PATH, CFG_DEFAULT_BATT_CURRENT_PATH, sizeof(BATT_CURRENT_PATH) - 1);
+    BATT_CURRENT_PATH[sizeof(BATT_CURRENT_PATH) - 1] = '\0';
+    strncpy(CPU_TEMP_PATH_FMT, CFG_DEFAULT_CPU_TEMP_PATH_FMT, sizeof(CPU_TEMP_PATH_FMT) - 1);
+    CPU_TEMP_PATH_FMT[sizeof(CPU_TEMP_PATH_FMT) - 1] = '\0';
+    // CPU_AFFINITY 同为文本键（走 path 型通道），不在 CFG_SYSFS_DEFAULTS 里，同样手写一行
+    strncpy(affinity_spec, CFG_DEFAULT_CPU_AFFINITY, sizeof(affinity_spec) - 1);
+    affinity_spec[sizeof(affinity_spec) - 1] = '\0';
+    // LOG_FILE 必须走派生函数（二进制名 + 私有目录，不可用时兜底 /cache），照抄宏会绕过兜底
+    set_default_log_path();
+}
+
+#undef CFG_RESET_ROW
+
+/** CPU 亲和取值位回落代码默认值（值非法/交集为空时用；层开关 1→0 的复位走 reset_sysfs_layer_defaults） */
+void reset_cpu_affinity_defaults(void) {
+    strncpy(affinity_spec, CFG_DEFAULT_CPU_AFFINITY, sizeof(affinity_spec) - 1);
+    affinity_spec[sizeof(affinity_spec) - 1] = '\0';
+}
+
+/** 第一遍预读的层总开关（其余预读键直接写全局变量） */
+struct PrepassCfg {
+    int perf_enabled;   // PERF_ENABLED（默认 1）
+    int debug_enabled;  // DEBUG_ENABLED
+    int sysfs_enabled;  // SYSFS_ENABLED
+};
+
+/**
+ * 旧键兼容（永久读）：APP_LAUNCH_COOLDOWN / APP_WATCHDOG → APP_LAUNCH_TIMING 的两个槽。
+ * 只暂存、不直接生效——第一遍结束后由 load_config 按「新键优先」合并。
+ * 用 strncmp 而非 strcmp：既避免被 gen_params.py 的「已定义键」扫描误算成新键，
+ * 又让 compat.daemonAccept 的「C 端接受集」核对能识别这两个旧键。
+ * @return 1=属于旧键集合；0=不属于
+ */
+static int config_apply_legacy_launch_key(struct PrepassCfg *out, const char *key, const char *val_str) {
+    if (strncmp(key, "APP_WATCHDOG", 12) == 0 && key[12] == '\0') {
+        if (out) {
+            legacy_launch_watchdog = clamp(atoi(val_str), 0, 120);   // 停滞重启连续周期数（0=关闭）
+            legacy_launch_seen = 1;
+        }
+        return 1;
+    }
+    if (strncmp(key, "APP_LAUNCH_COOLDOWN", 19) == 0 && key[19] == '\0') {
+        if (out) {
+            legacy_launch_cooldown = clamp(atoi(val_str), 0, 3600);  // 两次拉起最小间隔（秒，0=不冷却）
+            legacy_launch_seen = 1;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+/**
+ * 第一遍预读键的**唯一名单与处理入口**：层总开关，以及不受层开关管辖的基础设施键。
+ * <p>out != NULL：第一遍读取并生效；out == NULL：第二遍只判断「是否属于预读集合」用于跳过。
+ * 两遍共用本函数，新增预读键只在此加一行——不得在第二遍另抄一份键名列表，否则漏改会让
+ * 已消费的键落进「未识别键」日志。
+ * @return 1=属于预读集合；0=不属于
+ */
+static int config_apply_prepass_key(struct PrepassCfg *out, const char *key, const char *val_str) {
+    if (config_apply_legacy_launch_key(out, key, val_str)) return 1;   // 旧两键（永久读兼容）
+    if (strcmp(key, "PERF_ENABLED") == 0) {
+        if (out) out->perf_enabled = atoi(val_str) != 0;
+    } else if (strcmp(key, "DEBUG_ENABLED") == 0) {
+        if (out) out->debug_enabled = atoi(val_str) != 0;
+    } else if (strcmp(key, "SYSFS_ENABLED") == 0) {
+        if (out) out->sysfs_enabled = atoi(val_str) != 0;   // sysfs 路径与缩放独立大类
+    } else if (strcmp(key, "APP_LAUNCH_ENABLED") == 0) {
+        if (out) APP_LAUNCH_ENABLED = (atoi(val_str) != 0);   // 任何模式下都生效（含 PERF=0/DEBUG=0）
+    } else if (strcmp(key, "APP_LAUNCH_TIMING") == 0) {
+        // 拉起冷却 + 停滞重启（二值）：第 1 值秒、第 2 值连续周期数；新键优先于两个旧键。
+        if (!out) return 1;
+        int cooldown = app_launch_cooldown;
+        int cycles = app_watchdog_cycles;
+        int n = sscanf(val_str, "%d %d", &cooldown, &cycles);
+        if (n >= 1) {
+            app_launch_cooldown = clamp(cooldown, 0, 3600);
+            launch_timing_seen_cooldown = 1;
+        }
+        if (n >= 2) {
+            app_watchdog_cycles = clamp(cycles, 0, 120);
+            launch_timing_seen_watchdog = 1;
+        }
+    } else if (strcmp(key, "APP_LAUNCH_SCREEN_GATE") == 0) {
+        // 屏幕门禁（二值：开关 Dozing是否算亮屏）；仅 mWakefulness=Awake（或按配置算亮屏的 Dozing）才拉起
+        // 旧三值行「开关 读取失败默认值 Dozing」：按原语义取第一、第三值（第二值已废弃），并记一次日志。
+        if (!out) return 1;
+        int on = app_launch_screen_gate_enabled;
+        int legacy_fail_default = 1;
+        int dz = app_launch_screen_dozing_on;
+        int n = sscanf(val_str, "%d %d %d", &on, &legacy_fail_default, &dz);
+        if (n >= 3) {
+            app_launch_screen_gate_enabled = (on != 0);
+            app_launch_screen_dozing_on    = (dz != 0);
+            if (!legacy_screen_gate_logged) {
+                write_log("配置 APP_LAUNCH_SCREEN_GATE 旧三值行（开关=%d 读取失败默认值=%d Dozing=%d）：按原语义取第一、第三值；第二值已废弃，读取失败固定按可拉起兜底",
+                          on, legacy_fail_default, dz);
+                legacy_screen_gate_logged = 1;
+            }
+        } else {
+            dz = app_launch_screen_dozing_on;
+            n = sscanf(val_str, "%d %d", &on, &dz);
+            if (n >= 1) app_launch_screen_gate_enabled = (on != 0);
+            if (n >= 2) app_launch_screen_dozing_on  = (dz != 0);
+        }
+    } else if (strcmp(key, "UI_TEMP_STOP") == 0) {
+        // 临时停止：守护进程自己的控制闸门，同样必须在第一遍读掉（三层全关时也要生效）。
+        if (out) temp_stop_enabled = clamp(atoi(val_str), 0, 1);
+    } else if (strcmp(key, "UI_BACK_HIDE") == 0) {
+        // 界面键里唯一被守护进程读取的一个：本机不消费，只转写标志文件供钩子读取。
+        // 与 APP_LAUNCH_ENABLED 同理，必须在第一遍读掉——否则 PERF/DEBUG/SYSFS 全关时本函数会提前 return。
+        if (out) back_hide_enabled = (atoi(val_str) != 0);
+    } else if (strcmp(key, "WD_KEEPALIVE") == 0) {
+        // 反向保活开关：与 UI_BACK_HIDE 同理必须在第一遍读掉（它是基础设施，不受 PERF/DEBUG/SYSFS 层开关管辖，
+        // 三层全关时本函数会提前 return，那时也必须已生效）。
+        if (out) wd_keepalive_enabled = (atoi(val_str) != 0);
+    } else if (strcmp(key, "BT_AUTO_ENABLE_SEC") == 0) {
+        // 断连自动开蓝牙间隔（秒，0=关闭）：同 UI_BACK_HIDE，必须第一遍读掉以便转写进 uiprefs。
+        if (out) bt_auto_enable_sec = clamp(atoi(val_str), 0, 3600);
+    } else {
+        return 0;
+    }
+    return 1;
+}
+
+static int load_config(const char *path) {
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        write_log("配置 无法打开 %s", path);
+        return 0;   // 打不开 = 未加载成功，调用方据此保留"待重试"状态（见 config_loaded）
+    }
+    // --- 第一遍：预读 PERF_ENABLED 和 DEBUG_ENABLED（全扫描，不受配置顺序影响）---
+    // 须容纳最长配置行 PID_CUT_<n> 满 32 点（四元组，最长 ≈522 字节含换行），故取 640
+    char line[640];
+    struct PrepassCfg pre = {1, 0, 0};   // 见 config_apply_prepass_key
+    struct RescanCfgState rescan = {0};
+    launch_timing_seen_cooldown = 0;
+    launch_timing_seen_watchdog = 0;
+    legacy_launch_seen = 0;
+    legacy_launch_cooldown = -1;
+    legacy_launch_watchdog = -1;
+    while (fgets(line, sizeof(line), f)) {
+        // 单位标记是注释行，config_parse_line 会跳过，故在解析前单独识别
+        if (strstr(line, "cfg-unit: CPU_ZONE_RESCAN=cycles") != NULL)
+            rescan.unit_is_cycles = 1;
+        char *key;
+        char *val_str = config_parse_line(line, &key);
+        if (!val_str) continue;
+        config_apply_prepass_key(&pre, key, val_str);   // 名单与第二遍跳过共用同一函数
+    }
+
+    // 旧键兼容（永久）：按槽合并——新键写出的槽优先，新键未写的槽才由同槽旧键覆盖。
+    // 例：APP_LAUNCH_TIMING=60（单值）+ 旧 APP_WATCHDOG=10 → 冷却=60、停滞重启=10。
+    if (!launch_timing_seen_cooldown && legacy_launch_cooldown >= 0)
+        app_launch_cooldown = legacy_launch_cooldown;
+    if (!launch_timing_seen_watchdog && legacy_launch_watchdog >= 0)
+        app_watchdog_cycles = legacy_launch_watchdog;
+
+    // 旧两键一次性迁移写回：合并为 APP_LAUNCH_TIMING 一行并删除旧行。
+    // 失败保留原文件（上面的读兼容已把旧值装入内存，行为不丢），且不再重试避免刷日志。
+    if (legacy_launch_seen && !launch_migrate_give_up) {
+        if (migrate_launch_timing_config(path, app_launch_cooldown, app_watchdog_cycles)) {
+            struct stat mst;
+            if (stat(path, &mst) == 0) config_mtime = mst.st_mtime;
+        } else {
+            launch_migrate_give_up = 1;
+        }
+    }
+    legacy_launch_seen = 0;
+
+    // 转写要在下面的前置处理与提前 return 之前完成（总开关全关时也要发布）
+    publish_uiprefs();
+
+    // 前置条件：自动拉起关闭 → 锁死自动重启（watchdog）强制关闭（不改配置，仅运行时生效）。
+    if (!APP_LAUNCH_ENABLED && app_watchdog_cycles > 0) {
+        write_log("配置 自动拉起关闭 → 锁死自动重启 强制关闭（APP_LAUNCH_TIMING 第 2 值=%d 运行时置 0）", app_watchdog_cycles);
+        app_watchdog_cycles = 0;
+    }
+
+    // 层开关 1→0 边沿：该层运行时参数回落代码默认值（首次加载 last_* = -1，不触发）。
+    // 复位点必须在下面「三层全关提前 return」之前：三层全关时第二遍不跑，只有这里能复位。
+    if (last_perf_enabled == 1 && !pre.perf_enabled) {
+        reset_perf_layer_defaults();
+        write_log("配置 性能参数层关闭 → 运行时参数回落代码默认值");
+    }
+    if (last_sysfs_enabled == 1 && !pre.sysfs_enabled) {
+        reset_sysfs_layer_defaults();
+        write_log("配置 sysfs 层关闭 → 运行时参数回落代码默认值");
+    }
+    last_perf_enabled  = pre.perf_enabled;
+    last_sysfs_enabled = pre.sysfs_enabled;
+
+    // debug_mode 需在提前 return 前更新（PERF=0 且 DEBUG=0 时也清零）
+    if (pre.debug_enabled) {
+        debug_mode = 1;
+        write_log("配置 调试日志 开启");
+    } else {
+        debug_mode = 0;
+    }
+
+    if (!pre.perf_enabled && !pre.debug_enabled && !pre.sysfs_enabled) {
+        fclose(f);   // PERF/DEBUG/SYSFS 全关：跳过解析
+        return 1;    // 文件已读到（内容就是"全关"），算加载成功，不要再触发重试
+    }
+
+    if (pre.perf_enabled) {
+        write_log("配置 自定义性能参数 启用");
+    }
+
+    // --- 第二遍：全量单次扫描，仅按层分发（DEBUG/sysfs/PERF），无子守卫 ---
+    affinity_cfg_seen = 0;
+    memset(legacy_cnt, 0, sizeof(legacy_cnt));            // 旧键暂存清零；本遍末尾按「新键优先」合并
+    memset(pidcut_new_seen, 0, sizeof(pidcut_new_seen));
+    rewind(f);
+    while (fgets(line, sizeof(line), f)) {
+        char *key;
+        char *val_str = config_parse_line(line, &key);
+        if (!val_str) continue;
+        // 第一遍已消费的键：按同一名单跳过（apply=NULL 只查集合，不重复生效），不落「未识别键」
+        if (config_apply_prepass_key(NULL, key, val_str)) continue;
+        int val = atoi(val_str);
+
+        // --- DEBUG 子开关：仅 DEBUG_ENABLED=1 时解析 ---
+        if (debug_mode && strncmp(key, "DEBUG_", 6) == 0 && strcmp(key, "DEBUG_ENABLED") != 0) {
+            parse_debug_cfg(key, val);
+            continue;
+        }
+
+        // --- sysfs 路径与缩放层（SYSFS_ENABLED=1 时加载，独立于性能/调试总开关） ---
+        if (pre.sysfs_enabled && is_sysfs_key(key)) {
+            parse_sysfs_cfg(key, val, val_str, &rescan);
+            continue;
+        }
+
+        // --- 性能参数：仅 PERF_ENABLED=1 时解析（不含 DEBUG_*/sysfs 路径键） ---
+        if (!pre.perf_enabled) continue;
+
+        // 旧键兼容（永久）：KI_CUT_<簇号>（三元组）与已废弃的 KI_CUT_SMOOTH，见 parse_legacy_pidcut_cfg
+        if (parse_legacy_pidcut_cfg(key, val_str)) continue;
+
+        // 平滑下发开关（switch 型，不进 int 表）
+        if (strcmp(key, "RAMP_DISPATCH") == 0) { ramp_dispatch = clamp(atoi(val_str), 0, 1); continue; }
+
+        // 表驱动单值 → 分段函数（PID/通用），键互不重叠、唯一命中
+        if (parse_int_cfg(key, val)) continue;
+        if (parse_pid_cfg(key, val, val_str)) continue;
+        if (parse_common_cfg(key, val, val_str)) continue;
+        debug_log(debug_config, "配置 未识别键 %s（已忽略）", key);
+    }
+
+    // CPU_AFFINITY 缺键时回落代码默认（其余键沿用"缺键 = 保持上次值"）：该键的默认值就是
+    // "未配置时应生效的区间"，沿用旧值会让手删该行后仍留着旧区间
+    if (pre.sysfs_enabled && !affinity_cfg_seen) reset_cpu_affinity_defaults();
+
+    apply_legacy_pidcut();   // 旧键生效：仅填充本轮未被新键 PID_CUT_ 占用的簇（新键优先）
+
+    fclose(f);
+
+    // 旧键一次性迁移写回（方案 B）：检出旧 KI_CUT_* 时把配置就地改名/补列，并删除已废弃的 KI_CUT_SMOOTH。
+    // 失败保留原文件（上面的读兼容已把旧值装入内存，行为不丢）。迁移成功后刷新 config_mtime，
+    // 避免下一轮因本函数自身改写文件而重复热重载。仅在本轮真正解析到旧键时触发（幂等）。
+    if (legacy_pidcut_seen && !migrate_give_up) {
+        if (migrate_pid_cut_config(path)) {
+            struct stat mst;
+            if (stat(path, &mst) == 0) config_mtime = mst.st_mtime;   // 避免本函数自身改写触发下一轮热重载
+        } else {
+            migrate_give_up = 1;   // 写回失败不再重试（避免每轮刷日志；读兼容已生效，行为不丢）
+        }
+    }
+    legacy_pidcut_seen = 0;
+
+    // CPU_ZONE_RESCAN 旧单位（秒）一次性迁移：写回周期数并追加单位标记。
+    // 失败保留内存中的迁移值；下次加载按旧秒值重算，结果幂等。
+    if (rescan.legacy_seen) {
+        if (!legacy_rescan_logged) {
+            write_log("配置 CPU_ZONE_RESCAN 旧值 %d 秒 → 迁移为 %d 个控制周期（5 秒/周期）",
+                      rescan.legacy_sec, rescan.converted_cycles);
+            legacy_rescan_logged = 1;
+        }
+        if (migrate_rescan_unit_config(path, rescan.converted_cycles)) {
+            struct stat mst;
+            if (stat(path, &mst) == 0) config_mtime = mst.st_mtime;
+        }
+    }
+
+    return 1;   // 已读完并解析
+}
+
+// ======================== CPU 亲和（把配置落到进程上） ========================
+// 时机（启动 + 配置热重载 + 低频重申）、取值语法（c0/c123 或核号）、顺序（先迁 cpuset 组后设亲和）、
+// 边界（只迁自身、不改组的 cpus）见 逻辑说明.md「CPU_AFFINITY 的生效时机」。
+// 低频重申 / 重试间隔（秒）：见 cpu_affinity_reassert()。只在既有的 5s 节拍上被调用、且内部自限流，
+// 真读 /proc/self/cgroup 至多每 300s 一次——不新增独立轮询、不改变任何控制时序。
+
+// 上次读回并记入日志的 cpuset 组路径（如 "/" 或 "/top-app/main"），仅低频重申用它判"是否被改回"。
+// 「上次应用留下了什么异常 / 没做到什么」的原因摘要（**空串 = 一切按请求做到**）。
+// 这是**全文件唯一**的降级状态位，覆盖 apply_cpu_affinity() 内**所有**异常与回落：
+//   配置值非法→回落默认、与本机核无交集→回落默认、读不到本机核编号、
+//   迁组写 cgroup.procs 失败、设亲和失败、读回未覆盖请求（多条用"；且"连接）。
+//   ① 它决定要不要定期重试（见 cpu_affinity_reassert）；
+//   ② 它决定日志什么时候打——只在**状态变化**时打一条（进入降级打一条、原因变了再打一条、
+//      恢复打一条；持续同一原因不再重复打）。
+// 为什么必须只有一个位：重试周期 300s，任一异常若各自带一个"是否已记过"的位，就会各按各的
+// 节拍刷日志（拒写机型约 288 行/天）。合并成一个 reason 串后，全文件只有这一处降级状态。
+
+// 本段一律用核集合（cpu_set_t）表达目标核，不再用「[lo,hi] 连续区间」——
+// 簇模式的各簇未必相邻（如 c0c2 跳过中间簇），区间表达不了。
+
+/** 核集合空？ */
+
+/** 核集合 super ⊇ sub？ */
+
+/** 核集合 dst ∩= other */
+
+/** 核集合 dst |= other */
+
+/** 核集合里最小的核号；空集合返回 CPU_SETSIZE */
+
+/** 核集合 → "0-3,5"（日志用；连续段折叠成区间） */
+
+/**
+ * 解析核集合文本（cpulist）：**逗号或空白分隔的若干项，每项是核号 "N" 或区间 "N-M"**。
+ *   "0,5"   → {0, 5}
+ *   "0-5"   → {0,1,2,3,4,5}
+ *   "0,2-5" → {0} ∪ {2,3,4,5}      ← 项与区间可混写
+ *   "0 5"   → {0, 5}（空格与逗号同为分隔符，**不是**区间 0~5）
+ * 内核侧文件（present、cpuset 的 cpus、related_cpus/affected_cpus）与配置值**都是这一种形态**，
+ * 故不再兼容十六进制位掩码（那是早期 cgroup cpuset 的形态，本 ROM 的 noprefix 挂载不用它；
+ * 留着一来是死代码，二来含 a~f 的 token 会被误判）。
+ * 返回 1=解析出至少一个核；0=空串或形态不符（调用方按"本形态不可信"降级）。
+ */
+
+/** 读一个核集合文件（cpulist，形如 "0-7" / "0-3,5" / "0 1 2 3"）；读不到或形态不符返回 0 */
+
+/** 读某 cpuset 组的 cpus（组目录绝对路径） */
+
+/** 取 /proc/self/cgroup 里 cpuset 控制器（v1）的组路径（如 /top-app/main）；未挂 cpuset 返回 0 */
+
+/**
+ * 把自身 pid 写进 <dir>/cgroup.procs —— 迁移整个线程组（本段唯一的 cgroup 写操作）。
+ * 只在**根组**（CPUSET_DIR）用：根组的 cpus 恒为全部在线核，且与 ROM 的组命名无关，
+ * 因此不需要探测组名、也不需要遍历组目录。旧实现还有"根组写不进就递归扫子组"的兜底，
+ * 但写失败通常是 SELinux 拒写，换个子组一样失败，故已删。
+ */
+
+// ---- 簇探测（从内核拓扑现算，不写死机型核数表）----
+// 编号规则（含 cpu0 的簇 = c0，其余按首核号升序）见 逻辑说明.md「CPU_AFFINITY 的生效时机」。
+// 只留一个探测源：cpufreq policy（每个频率域 = 一个簇）。旧实现另有 cpu_capacity 与
+// physical_package_id 两级兜底，但两者跨机型都不可靠（容量可能全核同值；物理封装在多数 ARM
+// 内核全核同为 0，只能产出"单簇"= 与降级等价），留着等于用"降级"冒充"探测成功"。
+
+/**
+ * 校验并归一化一组簇：两两不相交、并集恰好等于本机 present（这条同时挡住"格式被误读成小数"
+ * 之类的不完整划分）；再把含 cpu0 的簇排到 0 号、其余按首核号升序。成功返回 1。
+ */
+
+/** 探测源 1：cpufreq policy 目录（每目录读 related_cpus，读不到退 affected_cpus） */
+
+/**
+ * 探测簇划分：只看 cpufreq policy 目录；探不到就**单簇降级**
+ * （c0 = 本机全部核，等于不限制——宁可不管，也不把用户限到错误的核上）。
+ * 返回簇数（≥1）；连本机核集合都读不到时返回 0，由调用方按"全部核"处理。*src 回传出处供日志。
+ */
+
+/**
+ * 配置值 → 目标核集合。返回 1=成功；0=非法（整串丢弃，调用方回落默认）。
+ * 语法：首字符 c（只认小写）= 簇模式，c 后每一位数字一个簇号，含非数字/簇号超本机簇数都算非法；
+ * 否则按核号：**逗号分隔的项，每项是核号 N 或区间 N-M**（`0,5` / `0-5` / `0,2-5`）；
+ * 空格与逗号同为分隔符（`0 5` = `0,5` = 核 0 和核 5 两个核，**不是**区间）——保留空格形态只为不让旧配置炸。
+ * 注意：旧实现把"两个空白分隔的十进制核号"额外解释成区间 0~5，该分支已删。
+ */
+
+/** 读 /proc/self/status 里 "字段:"（含冒号，如 "Cpus_allowed_list:"）后的值；找到返回 1 */
+
+/**
+ * 把一段"没做到 / 回落了"的事实追加进降级原因（多条之间用"；且 "连接）。
+ * **本函数不打任何日志**：何时打、打几条，统一由 apply_cpu_affinity() 末尾那**一个**降级状态机
+ * 决定——否则 300s 的定期重试会把同一原因反复刷进日志（拒写机型约 288 行/天）。
+ */
+
+/**
+ * 把 affinity_spec 应用到自身进程。
+ * 迁组：**固定迁到 cpuset 根组**（CPUSET_DIR）——根组的 cpus 恒为全部在线核，且组名与 ROM 无关，
+ * 所以不探测组名、不遍历组目录；当前组已覆盖目标核集合时无需迁组（组已是上限，直接设亲和即可）。
+ * 降级：值非法、或与本机核集合无交集 → 回落代码默认；簇探测失败 → 单簇（c0 = 全部核）；
+ * 迁组失败（如 SELinux 拒写）、设亲和失败 → 只保留能做的部分。实际生效范围一律以读回的
+ * Cpus_allowed_list 为准，故这里不写"已生效"——请求被 cpuset 夹取或写入失败时，读回的就是事实。
+ * **日志**：本函数内**所有**异常/降级都不单独打日志，一律用 cpu_aff_note() 记进同一个 reason，
+ * 由末尾那**一个**降级状态机按"状态变化"打一条（见 cpu_aff_reason）。
+ */
+
+/**
+ * 低频重申 / 重试：一次性迁组有两种"静默失效"——ROM 事后把进程重新分类回 top-app/main（组路径变了），
+ * 或本来就迁不进去（SELinux 拒写、被 cpuset 夹取）。前者只需在"变了"时动作，后者要定期再试一次。
+ * 后者的判据是 apply 侧留下的那个降级状态串（含配置/环境类异常，见 cpu_aff_reason）。
+ *
+ * 频率与开销（为什么是 300s、为什么不另起轮询）：
+ *   本函数只在**既有的 5s 节拍**上被调用（1s 主循环里的 5s 控制块 + 等待设备循环，各一处），
+ *   且内部自限流：除首次外绝大多数调用只做一次 time() 比较（vDSO，微秒级）；真读
+ *   /proc/self/cgroup 至多每 CPU_AFF_REASSERT_SEC（300s）一次。**不新增线程/定时器，不改变控制时序**。
+ *   取 300s：重试是兜底而非主路径，且失败态下每次重试都要写 cgroup.procs + sched_setaffinity，
+ *   间隔太短没有意义；被 ROM 改回后的纠正延迟上界 = 300s + 一个 5s 节拍。
+ *
+ * 触发条件（任一即重做一次完整应用）：
+ *   ① 组路径与上次读回的不一致 → 被 ROM 改回去了；
+ *   ② 上次应用留下了异常 / 没达目标（cpu_aff_reason 非空）→ 定期重试。
+ * 两者都不刷日志：①只在真的变了时打一条；②的"失败/恢复"由 apply_cpu_affinity() 按状态变化各打一条。
+ * 返回 1=本次重做了；0=未到点 / 无需动作。
+ */
+
+// ======================== 可执行文件名提取 ========================
+
+/** 读取自身可执行文件路径（/proc/self/exe）到 out，返回 1=成功，0=失败 */
+static int read_self_exe(char *out, size_t size) {
+    ssize_t len = readlink("/proc/self/exe", out, size - 1);
+    if (len <= 0) return 0;
+    out[len] = '\0';
+    return 1;
+}
+
+/**
+ * 从 /proc/self/exe 获取可执行文件名（不含路径）
+ * 返回 1=成功，0=失败
+ */
+static int get_exe_basename(char *buf, size_t size) {
+    char exe_path[512];
+    if (!read_self_exe(exe_path, sizeof(exe_path))) return 0;
+    char *slash = strrchr(exe_path, '/');
+    if (!slash) return 0;
+    strncpy(buf, slash + 1, size - 1);
+    buf[size - 1] = '\0';
+    return 1;
+}
+
+/**
+ * 根据二进制名设定默认日志路径
+ * 例：tempctrl → <PRIVATE_DIR>/tempctrl.log
+ * 此值为默认值，profile.conf 中 LOG_FILE 可覆盖
+ * 私有目录不可用时兜底回原 /cache 落点，并写 stderr（不静默失败）
+ */
+static void set_default_log_path(void) {
+    char basename[64];
+    if (!get_exe_basename(basename, sizeof(basename))) {
+        strncpy(basename, "tempctrl", sizeof(basename) - 1);
+        basename[sizeof(basename) - 1] = '\0';
+    }
+    if (ensure_private_dir()) {
+        snprintf(log_file_path, sizeof(log_file_path), PRIVATE_DIR "/%s" PROTO_LOG_EXT, basename);
+        return;
+    }
+    fprintf(stderr, "tempctrl: 私有目录 %s 不可用，日志回退 "
+            PROTO_PATH_CACHE_DIR "\n", PRIVATE_DIR);
+    snprintf(log_file_path, sizeof(log_file_path),
+             PROTO_PATH_CACHE_DIR "/%s" PROTO_LOG_EXT, basename);
+}
+
+/**
+ * 自动检测配置文件路径
+ *
+ * 默认在私有目录下找 profile.conf（--config 指定的绝对路径优先，见 main）
+ *
+ * 返回 1=找到，0=未找到
+ */
+static int detect_config_path(void) {
+    if (!ensure_private_dir()) return 0;
+
+    snprintf(config_path, sizeof(config_path), PROTO_PATH_CONFIG);
+    if (access(config_path, F_OK) == 0) return 1;
+
+    config_path[0] = '\0';
+    return 0;
+}
+
+/**
+ * 配置的"延迟加载"重试：未加载成功时按 CONFIG_RETRY_INTERVAL 周期重新探测并加载，已加载则返回 0。
+ * 为什么必须有它、两个调用点各覆盖哪段、为何刻意不碰 update_active_limits() 见 逻辑说明.md「配置路径自动检测」。
+ * 返回 1 = 本次刚加载成功（调用方据此做后处理）。
+ */
+static int config_retry_if_needed(void) {
+    if (config_loaded) return 0;                 // 已加载：交回调用方原有的 mtime 热重载路径
+    time_t now = mono_now();                     // 重试间隔用单调时钟（墙钟回拨不影响）
+    if (config_retry_at != 0 && now - config_retry_at < CONFIG_RETRY_INTERVAL) return 0;
+    config_retry_at = now;
+    // --config 显式指定过路径就沿用原路径重试，不去改换落点。
+    // 两条路都先确认"可读"再 load_config：否则文件长期不可读时，load_config 那条
+    // 「配置 无法打开」会每 60s 刷一条（重试本身应当是静默的）。
+    int have_path = config_explicit ? (access(config_path, R_OK) == 0)
+                                    : (detect_config_path() != 0);
+    if (!have_path) return 0;
+    if (!load_config(config_path)) return 0;
+    config_loaded = 1;
+    struct stat st;
+    if (stat(config_path, &st) == 0) config_mtime = st.st_mtime;
+    write_log("配置 延迟加载成功 %s", config_path);
+    return 1;
+}
+
+// ======================== 辅助函数 ========================
+
+/**
+ * 写入日志（自动滚动：超上限后保留最新日志，截断对齐到完整行首）。
+ * 日期格式：日+时间，无年月（例 "14 22:30:16"）。
+ * LOG_MAX=0 时关闭日志。持持久 FILE*
+ * 普通模式按 LOG_MAX 滚动；调试模式取 LOG_MAX 与 LOG_MAX_DEBUG 中的较大值，
+ * 两种模式都参与滚动（不再因 debug_mode 跳过截断）。LOG_MAX=0 始终优先表示关闭日志。
+ */
+void write_log(const char *fmt, ...) {
+    if (LOG_MAX == 0) return;     // 日志关闭（含调试模式，不被调试上限顶回）
+
+    // 调试模式取普通上限与调试专用上限的较大值；普通模式仍用 LOG_MAX。
+    int max_bytes = (debug_mode && LOG_MAX < LOG_MAX_DEBUG) ? LOG_MAX_DEBUG : LOG_MAX;
+
+    // 超标 → 截断保留尾部（调试模式按较大上限滚动，保留最新日志）。
+    // ftruncate 只能从尾部截断，删头部必须先把尾部内容前移到文件头再截断。
+    struct stat st;
+    if (stat(log_file_path, &st) == 0 && st.st_size > max_bytes) {
+        int fd = open(log_file_path, O_RDWR);
+        if (fd >= 0) {
+            off_t keep = (off_t)max_bytes;            // 保留的尾部字节数（最新日志）
+            off_t del  = (off_t)st.st_size - keep;    // 头部要删除的字节数
+            char *buf = malloc((size_t)keep);
+            if (buf) {
+                ssize_t got = pread(fd, buf, (size_t)keep, del);
+                // 对齐完整行首：del 落在行中间时，丢弃 buf 开头的半行
+                size_t start = 0;
+                char prev = '\0';
+                if (del > 0 && pread(fd, &prev, 1, del - 1) == 1 && prev != '\n') {
+                    for (size_t i = 0; i < (size_t)got; i++) {
+                        if (buf[i] == '\n') { start = i + 1; break; }
+                    }
+                }
+                if (got - (off_t)start > 0) {
+                    pwrite(fd, buf + start, (size_t)(got - (off_t)start), 0);
+                    ftruncate(fd, (off_t)(got - (off_t)start));
+                }
+                free(buf);
+            }
+            close(fd);
+        }
+    }
+
+    // 打开或重开（首次调用、路径变化、或因滚动刚关闭）
+    if (!log_fp || strcmp(log_file_path, log_path_opened) != 0) {
+        if (log_fp) fclose(log_fp);
+        log_fp = fopen(log_file_path, "a");
+        if (!log_fp) return;
+        strncpy(log_path_opened, log_file_path, sizeof(log_path_opened) - 1);
+    }
+
+    // 时间戳（仅日+时间）
+    time_t now = time(NULL);
+    struct tm *tm = localtime(&now);
+    char ts[24];
+    snprintf(ts, sizeof(ts), "%02d %02d:%02d:%02d", tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+    fprintf(log_fp, "[%s] ", ts);
+
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(log_fp, fmt, args);
+    va_end(args);
+
+    fprintf(log_fp, "\n");
+    fflush(log_fp);    // 立即落盘，防止崩溃丢日志
+}
+
+
+/** 设备代号（日志显示用）：B7X→"b7x"，其余（B6X / 无设备）→"b6x" */
+static const char *device_tag_of(DeviceType dev) {
+    return (dev == DEVICE_B7X) ? "b7x" : "b6x";
+}
+
+/** 限速步进：actual 向 desired 靠拢，每周期最多变 up_limit（升）或 down_limit（降）。
+ * 任何情况都走正常步进（不做首步直通）；调用方须保证 actual 已初始化为合法值，
+ * 重连/启动路径用散热器实际回传值初始化，回传异常时保持原值/最小合法值。 */
+
+/** CPU 温度 EMA 滤波：首次直取，此后按 CPU_FILTER_ALPHA 平滑 */
+static void update_cpu_filtered(int cpu_now) {
+    if (cpu_now < 0) return;
+    if (first_run) {
+        cpu_filtered_temp = cpu_now;
+        first_run = 0;
+    } else {
+        cpu_filtered_temp = EMA_DIR(cpu_now, cpu_filtered_temp, CPU_FILTER_ALPHA);
+    }
+}
+
+// ======================== 状态文件（模块心跳 + BLE 状态） ========================
+
+/**
+ * 发布临时停止状态到 TEMP_STOP_FLAG_PATH（daemon 写 / 模块读）。
+ * 单行 "1\n" 或 "0\n"；每次控制周期重写以刷新 mtime（模块按 mtime≤15s 判新鲜）。
+ * @return 1=写入成功，0=失败
+ */
+static int publish_temp_stop_state(void) {
+    FILE *f = fopen(TEMP_STOP_FLAG_PATH, "w");
+    if (!f) return 0;
+    fputs(temp_stop_enabled ? "1\n" : "0\n", f);
+    fclose(f);
+    chmod(TEMP_STOP_FLAG_PATH, 0666);
+    return 1;
+}
+
+/**
+ * 创建（或触摸）状态文件，设 0666 权限
+ *
+ * 模块（App 进程）通过此文件向 daemon 发送 BLE 连接状态和心跳。
+ * daemon 创建后模块每 1 秒覆写一次 BLE 状态（B6X=0/1/2, B7X=0/6/7）。
+ * open("a") 不会截断已有内容，仅创建/更新时间戳。
+ */
+static void create_status_files(void) {
+    const char *paths[] = {status_file_path_b6, status_file_path_b7};
+    for (int i = 0; i < 2; i++) {
+        FILE *f = fopen(paths[i], "a");
+        if (f) {
+            fclose(f);
+            chmod(paths[i], 0666);
+            write_log("状态文件 就绪 %s", paths[i]);
+        } else {
+            write_log("状态文件 创建失败 %s", paths[i]);
+        }
+    }
+    // 开蓝牙请求文件：方向 app 写 / daemon 读（同 status 文件），预建 0666 供钩子覆盖写
+    FILE *bf = fopen(BT_REQ_PATH, "a");
+    if (bf) {
+        fclose(bf);
+        chmod(BT_REQ_PATH, 0666);
+        write_log("开蓝牙请求文件 就绪 %s", BT_REQ_PATH);
+    } else {
+        write_log("开蓝牙请求文件 创建失败 %s", BT_REQ_PATH);
+    }
+    // 临时停止状态文件：预建 0666 并写入当前值（配置已加载，反映启动时的 UI_TEMP_STOP）
+    if (publish_temp_stop_state()) {
+        write_log("临时停止状态文件 就绪 %s", TEMP_STOP_FLAG_PATH);
+    } else {
+        write_log("临时停止状态文件 创建失败 %s", TEMP_STOP_FLAG_PATH);
+    }
+}
+
+// ======================== 双文件状态读取 ========================
+
+// —— status 元数据缓存（R40）——
+// read_cooler_params 每秒已把当前 status 文件整行读完；read_status_ble_both 每 5s 又打开同一文件
+// 取 BLE/CONNECTED_AT/BLE_OWNER_LAST。这里缓存那份解析结果，**只允许在同一采集序号（同一 1s 拍）内复用**；
+// 跨拍一律重读，故模块每秒改写的内容不会被旧缓存挡住。
+static unsigned long status_seq = 0;        // 每拍采集序号（sample_webui_inputs 开头 +1）
+static int    status_meta_valid = 0;
+static unsigned long status_meta_seq = 0;   // 该缓存取自哪一拍
+static int    status_meta_is_b6 = 0;        // 缓存来自哪个文件
+static int    meta_connected = 0;
+static time_t meta_connected_at = 0;
+static int    meta_model = 0;               // 仅 B7X 文件：BLE=6/7
+static int    meta_owner_ble = 0;           // 仅 B6X 文件：BLE=1/2
+static int    meta_last_owner = 0;
+static time_t meta_last_at = 0;
+
+/**
+ * 读取单个 status 文件的 BLE 状态与连接时间戳（编码语义见 README「status 文件协议」）。
+ * is_b6_file=1：B6X 文件（BLE=1/2 即 b6_owner）；=0：B7X 文件（BLE=6/7 即型号）。
+ * 两文件均解析 BLE_OWNER_LAST=<owner> <at>，存入全局 b6/b7_last_*。
+ */
+static void read_single_status(const char *path, int is_b6_file,
+                               int *out_connected, time_t *out_connected_at,
+                               int *out_model) {
+    *out_connected = 0;
+    *out_connected_at = 0;
+    if (out_model) *out_model = 0;
+    FILE *f = fopen(path, "r");
+    if (!f) return;
+    char line[64];
+    while (fgets(line, sizeof(line), f)) {
+        const char *v;
+        if ((v = status_field_value(line, STF_BLE)) != NULL) {
+            int ble = atoi(v);
+            *out_connected = (ble != 0);
+            if (is_b6_file) {
+                if (ble == 1 || ble == 2) b6_owner = ble;
+                // BLE=1/2 不设 model，由 read_status_ble_both 按文件路径兜底型号 6
+            } else if (out_model && (ble == 6 || ble == 7)) {
+                *out_model = ble;   // B7X 文件型号编码
+            }
+        } else if ((v = status_field_value(line, STF_CONNECTED_AT)) != NULL) {
+            *out_connected_at = (time_t)atol(v);
+        } else if ((v = status_field_value(line, STF_BLE_OWNER_LAST)) != NULL) {
+            int owner = 0;
+            long at = 0;
+            if (sscanf(v, "%d %ld", &owner, &at) == 2 && owner > 0) {
+                if (is_b6_file) { b6_last_owner = owner; b6_last_at = (time_t)at; }
+                else { b7_last_owner = owner; b7_last_at = (time_t)at; }
+            }
+        }
+    }
+    fclose(f);
+}
+
+/**
+ * 读取双状态文件中的 BLE 连接状态
+ */
+static void read_status_ble_both(void) {
+    // 同一 1s 拍内 read_cooler_params 已解析过其中一台的文件 → 复用那份结果，只现场读另一台（R40）。
+    // 跨拍缓存失效（序号不等），模块改写后下一次调用必然重读；值/判定语义与两次 read_single_status 完全一致。
+    int b6_fresh = status_meta_valid && status_meta_seq == status_seq && status_meta_is_b6;
+    int b7_fresh = status_meta_valid && status_meta_seq == status_seq && !status_meta_is_b6;
+
+    if (b6_fresh) {
+        b6_connected = meta_connected;
+        b6_connected_at = meta_connected_at;
+        b6_model = 0;                                   // 与 read_single_status 先清 out_model 一致
+        if (meta_owner_ble) b6_owner = meta_owner_ble;  // BLE=1/2 才写；缺失不改全局（同原语义）
+        if (meta_last_owner > 0) { b6_last_owner = meta_last_owner; b6_last_at = meta_last_at; }
+    } else {
+        read_single_status(status_file_path_b6, 1, &b6_connected, &b6_connected_at, &b6_model);
+    }
+
+    if (b7_fresh) {
+        b7_connected = meta_connected;
+        b7_connected_at = meta_connected_at;
+        b7_model = meta_model;                          // BLE=6/7 的型号；其余留 0
+        if (meta_last_owner > 0) { b7_last_owner = meta_last_owner; b7_last_at = meta_last_at; }
+    } else {
+        read_single_status(status_file_path_b7, 0, &b7_connected, &b7_connected_at, &b7_model);
+    }
+    // B6X BLE=1/2 型号未知 → 按文件路径兜底（B6X app 默认连 B6X 散热器，型号按 6）
+    if (b6_connected && b6_model == 0) b6_model = 6;
+    // B7X BLE≠6/7（旧编码 1/2）→ 按文件路径兜底型号 7
+    if (b7_connected && b7_model == 0) b7_model = 7;
+    // BLE_OWNER_LAST 跨文件合并——取最近一次连接者（时间最新者）。
+    // 时间戳相等（同秒连接，1 秒分辨率）时固定选 B6X 侧；两文件均无记录时 last_owner=0
+    if (b7_last_at > b6_last_at) { last_owner = b7_last_owner; last_owner_at = b7_last_at; }
+    else { last_owner = b6_last_owner; last_owner_at = b6_last_at; }
+}
+
+/** 设备仲裁：仅一台连→那台；两台都连→先连者优先（CONNECTED_AT 小者）；都断→DEVICE_NONE。 */
+static DeviceType select_active_device(void) {
+    if (b6_connected && !b7_connected) return DEVICE_B6X;
+    if (!b6_connected && b7_connected) return DEVICE_B7X;
+    if (!b6_connected && !b7_connected) return DEVICE_NONE;
+
+    // 两者都连：比较时间戳
+    if (b6_connected_at > 0 && b7_connected_at > 0)
+        return (b6_connected_at <= b7_connected_at) ? DEVICE_B6X : DEVICE_B7X;
+    if (b6_connected_at > 0) return DEVICE_B6X;  // 仅 B6X 有精确时间戳
+    if (b7_connected_at > 0) return DEVICE_B7X;  // 仅 B7X 有精确时间戳
+    return DEVICE_B6X;  // 都无时间戳，B6X 优先
+}
+
+/**
+ * 设置运行时动态限制（根据 active_device）
+ * 切换设备时调用
+ */
+static void update_active_limits(void) {
+    // 按 status 回传的实际设备型号选择限制，而非按包名猜测。
+    // （B7X 文件 BLE=6/7 回传实际型号；B6X 文件 BLE=1/2 型号未知，b6_model 已兜底为 6）
+    int model = (active_device == DEVICE_B7X) ? b7_model : b6_model;
+    if (model != 6 && model != 7)
+        model = (active_device == DEVICE_B7X) ? 7 : 6;  // 型号未知按包名兜底
+    if (model == 7) {
+        active_fan_max  = b7_fan_rpm_max;    // FAN_RPM_RANGE 第三值（B7X），默认同 B6X
+        active_pid_cold_max = b7_pid_cold_max; // PID_COLD_RANGE 第三值（B7X），默认同 B6X
+    } else {
+        active_fan_max  = fan_rpm_max;        // 使用 profile.conf 中的配置值
+        active_pid_cold_max = pid_cold_max;   // 使用 profile.conf 中的配置值
+    }
+    // 基准上限变了（切设备 / 改配置）：旧的「相对削减量」及其冷却一并清零。
+    // 否则旧基线（如 B7X 上 actual_cold>190）会算出负的 hot_derate，使生效上限反向高于配置（审查 S2-4）。
+    hot_derate = 0;
+    hot_derate_cooldown = 0;
+    hot_recover_cooldown = 0;
+}
+
+// active status 文件的 mtime 缓存：read_cooler_params 每次成功打开时刷新（打开失败清 0），
+// 供 is_app_alive 复用。0 = 本拍尚未成功读到。
+static time_t active_status_mtime = 0;
+
+/**
+ * 作废「回传就绪」判定：本帧无有效回传（status 读不到 / 缺 RUN_MODE / 冷或转速值非法）。
+ * 长断连重连后必须重新累计 REPORT_OK_N 帧真实回传，否则 try_align_actual 会立即用 -1
+ * 兜底成 冷=下限/rpm=下限 并强制下发，绕开「等真实回传再对齐」。
+ */
+static void invalidate_report_ok(void) {
+    report_ok_streak = 0;
+    if (report_ok) write_log("回传就绪标志回退，需重新累计 %d 帧真实回传", REPORT_OK_N);
+    report_ok = 0;
+}
+
+/**
+ * 读取 active_device 对应的状态文件中的散热器回传参数
+ * 在仲裁确定 active_device 后调用
+ */
+static void read_cooler_params(void) {
+    const char *path = (active_device == DEVICE_B7X) ? status_file_path_b7 : status_file_path_b6;
+    const int is_b6_path = (active_device != DEVICE_B7X);
+    active_status_mtime = 0;   // 本拍先置未知；下面成功打开后刷新
+    status_meta_valid = 0;     // 缓存作废；本帧成功读完后重新置有效
+
+    // 元数据缓存字段按 read_single_status 的「先清零」语义初始化（R40）
+    meta_connected = 0; meta_connected_at = 0; meta_model = 0;
+    meta_owner_ble = 0; meta_last_owner = 0; meta_last_at = 0;
+
+    cooler_hot_temp = -1; cooler_cold_temp = -1;
+    cooler_rpm_real = -1; cooler_rpm_run = -1; cooler_cold_real = -1; cooler_cold_run = -1;
+
+    FILE *f = fopen(path, "r");
+    if (!f) {   // 本帧读不到 status：按异常帧处理，不许沿用断连前的「已就绪」
+        invalidate_report_ok();
+        return;
+    }
+    {   // 复用已打开的 fd 取 mtime（is_app_alive 同拍紧随其后调用，见其注释）
+        struct stat fst;
+        if (fstat(fileno(f), &fst) == 0) active_status_mtime = fst.st_mtime;
+    }
+    char line[64];
+    int run_mode_seen = 0;   // 本帧是否读到 RUN_MODE（与 COLD_REAL 同块写入，lastWaspWingInfo 就绪才有）
+    int rpm_run_seen = 0;    // 本帧是否读到 RPM_RUN（诊断旧模块 / getSpeed 不可用）
+    while (fgets(line, sizeof(line), f)) {
+        const char *v;
+        if ((v = status_field_value(line, STF_BLE)) != NULL) {
+            int ble = atoi(v);
+            app_ble_connected = (ble != 0);
+            meta_connected = (ble != 0);
+            if (is_b6_path) {
+                if (ble == 1 || ble == 2) meta_owner_ble = ble;
+            } else if (ble == 6 || ble == 7) {
+                meta_model = ble;
+            }
+        } else if ((v = status_field_value(line, STF_CONNECTED_AT)) != NULL) {
+            meta_connected_at = (time_t)atol(v);
+        } else if ((v = status_field_value(line, STF_BLE_OWNER_LAST)) != NULL) {
+            int owner = 0;
+            long at = 0;
+            if (sscanf(v, "%d %ld", &owner, &at) == 2 && owner > 0) {
+                meta_last_owner = owner;
+                meta_last_at = (time_t)at;
+            }
+        } else if ((v = status_field_value(line, STF_HOT_TEMP)) != NULL) {
+            cooler_hot_temp = atoi(v);
+        } else if ((v = status_field_value(line, STF_COLD_TEMP)) != NULL) {
+            cooler_cold_temp = atoi(v);
+        } else if (status_field_value(line, STF_RUN_MODE) != NULL) {
+            run_mode_seen = 1;
+        } else if ((v = status_field_value(line, STF_RPM_REAL)) != NULL) {
+            cooler_rpm_real = atoi(v);
+        } else if ((v = status_field_value(line, STF_RPM_RUN)) != NULL) {
+            // 旧 status 文件缺该行时保持上面重置的 -1，不沿用旧值；非法值同样写 -1
+            rpm_run_seen = 1;
+            char *end = NULL;
+            long run_rpm = strtol(v, &end, 10);
+            while (*end == ' ' || *end == '\r' || *end == '\n') end++;
+            cooler_rpm_run = (end != v && *end == '\0' && run_rpm >= 0) ? (int)run_rpm : -1;
+        } else if ((v = status_field_value(line, STF_COLD_REAL)) != NULL) {
+            cooler_cold_real = atoi(v);
+        } else if ((v = status_field_value(line, STF_COLD_RUN)) != NULL) {
+            // 缺失保持 -1；非法（非整数/负数/尾随垃圾）同样写 -1
+            char *end = NULL;
+            long run = strtol(v, &end, 10);
+            while (*end == ' ' || *end == '\r' || *end == '\n') end++;
+            cooler_cold_run = (end != v && *end == '\0' && run >= 0) ? (int)run : -1;
+        }
+    }
+    fclose(f);
+
+    // 本帧解析结果可供同一拍的 read_status_ble_both 复用（R40）；跨拍由序号不等自动失效。
+    status_meta_is_b6 = is_b6_path;
+    status_meta_seq = status_seq;
+    status_meta_valid = 1;
+
+    // 诊断：模块已在写真实回传（RUN_MODE）却连续 3 帧无 RPM_RUN → 旧模块或 getSpeed 不可用；
+    // 只打一条，避免每秒刷日志。实际转速列此时恒为 -1。
+    if (run_mode_seen && app_ble_connected && !rpm_run_seen) {
+        if (rpm_run_missing_streak < 3) rpm_run_missing_streak++;
+        if (rpm_run_missing_streak >= 3 && !rpm_run_missing_logged) {
+            rpm_run_missing_logged = 1;
+            write_log("status 缺少 RPM_RUN（模块未更新或 getSpeed 不可用），曲线实际转速列将为 -1");
+        }
+    } else if (rpm_run_seen) {
+        rpm_run_missing_streak = 0;
+    }
+
+    // 回传可信判定：本帧 RUN_MODE 存在（真实回传已就绪）+ 冷/rpm 值合法 → 累计连续帧；
+    // 任一帧缺失/异常即清零。连续 REPORT_OK_N 帧（≈N 秒）才置 report_ok=1，用于启动/重连对齐。
+    int frame_ok = (run_mode_seen && cooler_cold_real >= COLD_MIN && cooler_rpm_real >= fan_rpm_min);
+    if (frame_ok) {
+        if (report_ok_streak < REPORT_OK_N) report_ok_streak++;
+        if (report_ok_streak >= REPORT_OK_N) report_ok = 1;
+    } else {
+        invalidate_report_ok();   // 异常帧不只清 streak，还要作废「已就绪」
+    }
+}
+
+// ======================== sysfs 读取工具 ========================
+
+/**
+ * 从 sysfs 文件读取一个整数值
+ * 失败（文件不可读或解析失败）返回 -1
+ */
+static int read_sysfs_int(const char *path) {
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+    int val;
+    if (fscanf(f, "%d", &val) != 1) {
+        fclose(f);
+        return -1;
+    }
+    fclose(f);
+    return val;
+}
+
+/**
+ * 读取指定 thermal_zone 的原始温度值（m°C），含异常值过滤
+ * 失败或值不合法返回 -1
+ */
+static int read_thermal_zone_raw(int zone_id) {
+    char path[128];
+    snprintf(path, sizeof(path), CPU_TEMP_PATH_FMT, zone_id);
+    int raw = read_sysfs_int(path);
+    if (raw <= 0 || raw > 150000) return -1;
+    return raw;
+}
+
+// ======================== 温度读取 ========================
+
+/**
+ * 读取电池温度，返回 0.1°C（如 350 = 35.0°C）
+ * 文件路径：默认 /sys/class/power_supply/battery/temp（可配置 BATT_TEMP_PATH）
+ * 失败返回 -1
+ */
+static int read_battery_temp(void) {
+    // 值比较为主 + mtime 更新作为补充刷新信号（部分内核 mtime 不可靠）；见 逻辑说明.md「温度变化检测」。
+    int raw = read_sysfs_int(BATT_TEMP_PATH);
+    if (raw < 0) {
+        batt_temp_updated = 0;
+        return -1;
+    }
+    int val = raw / BATT_TEMP_DIVISOR;
+    debug_log(debug_sensor, "batt_temp 原始 %d 除数 %d = %d (%.1f°C)",
+              raw, BATT_TEMP_DIVISOR, val, val / 10.0);
+    // 只在「值未变」时才需要 mtime 判刷新：值变了本拍 updated 必为 1，stat 对结果无影响（R39）。
+    // 值变化那一拍记 stale，下一次成功 stat 只重建基线（旧实现已在值变化拍记录过该 mtime，不重复计）。
+    int mtime_changed = 0;
+    if (val != batt_cached_temp) {
+        batt_mtime_stale = 1;
+    } else {
+        struct stat st;
+        if (stat(BATT_TEMP_PATH, &st) == 0) {
+            if (st.st_mtime != batt_temp_mtime) {
+                if (!batt_mtime_stale) mtime_changed = 1;
+                batt_temp_mtime = st.st_mtime;
+            }
+            batt_mtime_stale = 0;
+        }
+    }
+    batt_temp_updated = (val != batt_cached_temp) || mtime_changed;
+    batt_cached_temp = val;
+    return val;
+}
+
+/**
+ * 缓存已发现的 CPU 温度 zone（首次全量扫描后记录）
+ */
+#define CPU_ZONE_MAX_CACHE 64
+static int cpu_zone_cache[CPU_ZONE_MAX_CACHE];
+static int cpu_zone_valid[CPU_ZONE_MAX_CACHE];   // 首次全量扫描发现的有效 zone 候选名单（固定，不随重扫增减）
+static int cpu_zone_valid_count = 0;
+static int cpu_zone_count = 0;
+static int cpu_zone_scanned = 0;
+static time_t cpu_zone_last_scan = 0;        // 上次全量扫描时间（每 cpu_zone_rescan_cycles 秒重扫一次）
+
+// —— 保留 zone 的常驻 fd（性能优化）——
+// 稳态每秒读取 cpu_zone_cache 里保留的 zone 时不再反复 fopen：各持一个常驻 fd，
+// 读前 lseek(fd,0,SEEK_SET) 复位后 read 解析。rescan_cpu_zones() 更新保留列表后由
+// refresh_cpu_zone_fds() 先关旧 fd 再按新列表打开，保证 fd 与列表一致、无陈旧 fd。
+// 打开失败或运行时失效回落原 fopen 路径（read_thermal_zone_raw），读值语义不变。
+#define CPU_ZONE_FD_INVALID (-1)
+static int cpu_zone_fd[CPU_ZONE_MAX_CACHE];
+static int cpu_zone_fd_inited = 0;   // 数组是否已初始化为 -1（静态零初值是 0=stdin，绝不能当有效 fd 关闭）
+
+/** 关闭全部常驻 zone fd 并置无效；首次调用先初始化数组（避免误关 fd 0） */
+static void close_cpu_zone_fds(void) {
+    if (!cpu_zone_fd_inited) {
+        for (int i = 0; i < CPU_ZONE_MAX_CACHE; i++) cpu_zone_fd[i] = CPU_ZONE_FD_INVALID;
+        cpu_zone_fd_inited = 1;
+        return;
+    }
+    for (int i = 0; i < CPU_ZONE_MAX_CACHE; i++) {
+        if (cpu_zone_fd[i] >= 0) close(cpu_zone_fd[i]);
+        cpu_zone_fd[i] = CPU_ZONE_FD_INVALID;
+    }
+}
+
+/** 按当前 cpu_zone_cache[0..cpu_zone_count-1] 重建常驻 fd（先关旧再开新）；单个打开失败留无效由读取回落 */
+static void refresh_cpu_zone_fds(void) {
+    close_cpu_zone_fds();
+    for (int i = 0; i < cpu_zone_count && i < CPU_ZONE_MAX_CACHE; i++) {
+        char path[128];
+        snprintf(path, sizeof(path), CPU_TEMP_PATH_FMT, cpu_zone_cache[i]);
+        cpu_zone_fd[i] = open(path, O_RDONLY | O_CLOEXEC);   // O_CLOEXEC：不被 fork 出的子进程（am/dumpsys/看门狗孙进程）继承；失败=-1，读取时回落 fopen
+    }
+}
+
+/**
+ * 读取保留 zone（cpu_zone_cache[idx]）的原始温度（m°C），优先走常驻 fd。
+ * 常驻 fd 无效或 lseek/read 失败 → 回落 read_thermal_zone_raw（原 fopen 路径）；异常值过滤口径一致。
+ */
+static int read_kept_zone_raw(int idx) {
+    if (idx >= 0 && idx < CPU_ZONE_MAX_CACHE && cpu_zone_fd[idx] >= 0) {
+        char rbuf[32];
+        if (lseek(cpu_zone_fd[idx], 0, SEEK_SET) != (off_t)-1) {
+            ssize_t n = read(cpu_zone_fd[idx], rbuf, sizeof(rbuf) - 1);
+            if (n > 0) {
+                rbuf[n] = '\0';
+                int raw = atoi(rbuf);
+                if (raw <= 0 || raw > 150000) return -1;   // 与 read_thermal_zone_raw 同口径
+                return raw;
+            }
+        }
+        // lseek/read 失败：关闭失效 fd，回落 fopen
+        close(cpu_zone_fd[idx]);
+        cpu_zone_fd[idx] = CPU_ZONE_FD_INVALID;
+    }
+    return read_thermal_zone_raw(cpu_zone_cache[idx]);
+}
+
+// —— 有效候选 zone 的常驻 fd（R41）：周期重扫不再逐 zone fopen ——
+static int cpu_zone_valid_fd[CPU_ZONE_MAX_CACHE];
+static int cpu_zone_valid_fd_inited = 0;
+
+/** 关闭全部分量候选 zone 的常驻 fd 并置无效（做法同 close_cpu_zone_fds，避免误关 fd 0） */
+static void close_valid_zone_fds(void) {
+    if (!cpu_zone_valid_fd_inited) {
+        for (int i = 0; i < CPU_ZONE_MAX_CACHE; i++) cpu_zone_valid_fd[i] = CPU_ZONE_FD_INVALID;
+        cpu_zone_valid_fd_inited = 1;
+    }
+    for (int i = 0; i < CPU_ZONE_MAX_CACHE; i++) {
+        if (cpu_zone_valid_fd[i] >= 0) close(cpu_zone_valid_fd[i]);
+        cpu_zone_valid_fd[i] = CPU_ZONE_FD_INVALID;
+    }
+}
+
+/** 按当前有效候选名单重开常驻 fd（名单只在首次/区间变化时重建，故重开频率很低） */
+static void refresh_valid_zone_fds(void) {
+    close_valid_zone_fds();
+    for (int i = 0; i < cpu_zone_valid_count && i < CPU_ZONE_MAX_CACHE; i++) {
+        char path[128];
+        snprintf(path, sizeof(path), CPU_TEMP_PATH_FMT, cpu_zone_valid[i]);
+        cpu_zone_valid_fd[i] = open(path, O_RDONLY | O_CLOEXEC);   // 失败=-1，读取时回落 fopen
+    }
+}
+
+/**
+ * 读有效候选 zone（名单下标）的原始温度（m°C），优先走常驻 fd。
+ * 失败/失效回落 read_thermal_zone_raw，异常值过滤口径与之一致；返回值与逐次 fopen 完全相同。
+ */
+static int read_valid_zone_raw(int idx) {
+    if (idx >= 0 && idx < cpu_zone_valid_count && cpu_zone_valid_fd[idx] >= 0) {
+        char rbuf[32];
+        if (lseek(cpu_zone_valid_fd[idx], 0, SEEK_SET) != (off_t)-1) {
+            ssize_t n = read(cpu_zone_valid_fd[idx], rbuf, sizeof(rbuf) - 1);
+            if (n > 0) {
+                rbuf[n] = '\0';
+                int raw = atoi(rbuf);
+                if (raw <= 0 || raw > 150000) return -1;   // 与 read_thermal_zone_raw 同口径
+                return raw;
+            }
+        }
+        close(cpu_zone_valid_fd[idx]);
+        cpu_zone_valid_fd[idx] = CPU_ZONE_FD_INVALID;
+    }
+    return read_thermal_zone_raw(cpu_zone_valid[idx]);
+}
+
+// 初始扫描时暂存 zone 编号 + 温度（用于排序筛选）
+
+/**
+ * 扫描 thermal_zone，保留最高温的 cpu_zone_keep 个。
+ * 首次、或 CPU_ZONE 区间变化时做全量扫描重建候选名单；其余周期只在名单内重排。
+ * 全量扫描 ~100 个 zone 阻塞近 1s，故周期重扫放 5s 控制块（见 逻辑说明.md「注意事项」）。
+ */
+static void rescan_cpu_zones(void) {
+    time_t now = mono_now();   // 重扫间隔用单调时钟
+    ZoneReading readings[CPU_ZONE_MAX_CACHE];
+    int count = 0;
+
+    if (!cpu_zone_scanned || cpu_zone_list_dirty) {
+        // 首次/区间变化：全量扫描当前 CPU_ZONE_MIN~MAX，重建有效 zone 候选名单
+        for (int i = CPU_ZONE_MIN; i <= CPU_ZONE_MAX; i++) {
+            int raw = read_thermal_zone_raw(i);
+            if (raw < 0) continue;
+            if (count < CPU_ZONE_MAX_CACHE) {
+                readings[count].id  = i;
+                readings[count].raw = raw;
+                count++;
+            }
+        }
+        cpu_zone_valid_count = count;
+        for (int i = 0; i < count; i++) cpu_zone_valid[i] = readings[i].id;
+        cpu_zone_list_dirty = 0;
+        refresh_valid_zone_fds();   // 名单已重建：按新名单开常驻 fd，后续重扫不再逐 zone fopen（R41）
+    } else {
+        // 后续重扫：只在有效候选名单内读值重排，不扫描区间外、不发现新 zone；
+        // 名单中本轮无效（≤0/读失败）的 zone 不入列。无回退全量兜底。
+        for (int i = 0; i < cpu_zone_valid_count; i++) {
+            int raw = read_valid_zone_raw(i);
+            if (raw < 0) continue;
+            if (count < CPU_ZONE_MAX_CACHE) {
+                readings[count].id  = cpu_zone_valid[i];
+                readings[count].raw = raw;
+                count++;
+            }
+        }
+    }
+
+    // 按温度降序排列，保留温度最高的 cpu_zone_keep 个
+    qsort(readings, count, sizeof(ZoneReading), cmp_zone_desc);
+    int keep = count < cpu_zone_keep ? count : cpu_zone_keep;
+    // 保留列表与上次相同且 fd 均有效 → 不必关/重开（R41）。失效 fd 会在读取时被置无效，
+    // 下一次重扫据此强制重开；列表变化也必然重开。
+    int keep_same = cpu_zone_fd_inited && (keep == cpu_zone_count);
+    for (int i = 0; keep_same && i < keep; i++) {
+        if (readings[i].id != cpu_zone_cache[i] || cpu_zone_fd[i] < 0) keep_same = 0;
+    }
+    for (int i = 0; i < keep; i++)
+        cpu_zone_cache[i] = readings[i].id;
+    cpu_zone_count = keep;
+    if (!keep_same)
+        refresh_cpu_zone_fds();   // 保留列表变了（或首次/有失效 fd）：关旧 fd、按新列表重开
+    cpu_zone_scanned = 1;
+    cpu_zone_last_scan = now;
+
+    if (keep == 0) {
+        debug_log(debug_sensor, "thermal_zone 扫描 无可读 zone（路径 %s），CPU 紧急无法触发",
+                  CPU_TEMP_PATH_FMT);
+    } else {
+        debug_log(debug_sensor, "thermal_zone 扫描 有效 %d 个，保留 %d 个最高温（%d 个控制周期≈%d 秒后重扫）",
+                  count, keep, cpu_zone_rescan_cycles, cpu_zone_rescan_cycles * 5);
+    }
+}
+
+/** 周期重扫（5s 控制块调用）：区间变化立即重建；否则距上次扫描达到配置周期数时重建 */
+static void maybe_rescan_cpu_zones(void) {
+    if (cpu_zone_list_dirty) {   // CPU_ZONE 区间变化：不等重扫间隔
+        rescan_cpu_zones();
+        return;
+    }
+    if (!cpu_zone_scanned) return;   // 首次扫描由 read_cpu_temp_max 同步完成
+    time_t now = mono_now();
+    if (now - cpu_zone_last_scan < (time_t)cpu_zone_rescan_cycles * 5) return;
+    rescan_cpu_zones();
+}
+
+/**
+ * 读取 CPU 最高温度，返回 0.1°C（如 753 = 75.3°C）
+ *
+ * 首次调用：同步全量扫描 thermal_zone0~99 一次，记录所有能读到有效值的 zone
+ * 后续调用：只扫描已记录的 zone 列表，取最高值（周期重扫在 5s 控制块 maybe_rescan_cpu_zones）
+ *
+ * 原始值 m°C，除以 100 转 0.1°C
+ * 全部失败返回 -1
+ */
+static int read_cpu_temp_max(void) {
+    // 首次调用：同步全量扫描一次（保证首个读数可用）。
+    // 周期重扫已迁至 5s 控制块：全量扫描 ~100 个 zone 阻塞近 1s，不能放 1s 采集热路径。
+    if (!cpu_zone_scanned) rescan_cpu_zones();
+
+    // 后续调用 → 只扫描已保留的 zone（走常驻 fd，不再逐个 fopen）
+    int max_temp = -1;
+    for (int j = 0; j < cpu_zone_count; j++) {
+        int raw = read_kept_zone_raw(j);
+        if (raw < 0) continue;
+
+        int decic = raw / CPU_TEMP_DIVISOR;
+        if (decic > max_temp) max_temp = decic;
+    }
+    if (max_temp >= 0) {
+        debug_log(debug_sensor, "cpu_temp zone=%d max=%d (%.1f°C)",
+                  cpu_zone_count, max_temp, max_temp / 10.0);
+    }
+    return max_temp;
+}
+
+// ======================== 热端过温制冷削减 ========================
+
+/** 当前生效的制冷强度上限 = 基准上限（配置上限）- 热端过温削减，下限不低于冷端最小强度 */
+static inline int eff_cold_max(int base_max, int cold_min) {
+    int m = base_max - hot_derate;
+    if (m < cold_min) m = cold_min;
+    return m;
+}
+
+// 当前模式有效制冷范围（每 5s 周期由 update_active_cold_range 统一计算，下发/去重/映射共用）
+static int active_cold_eff_min = 1;    // 有效制冷下限（PID=pid_cold_min）
+static int active_cold_eff_max = 190;  // 有效制冷上限（含热端过温削减）
+
+/** 每 5s 周期按热端温度更新制冷上限削减量（热端无效时保持）。规则见 逻辑说明.md「热端过温制冷削减」。 */
+static void update_hot_derate(void) {
+    if (hot_derate_cooldown > 0) hot_derate_cooldown--;
+    if (hot_recover_cooldown > 0) hot_recover_cooldown--;
+    if (cooler_hot_temp < 0) return;   // 热端无效：保持当前削减
+
+    if (cooler_hot_temp > HOT_DERATE_THRESHOLD) {
+        if (hot_derate_cooldown == 0) {
+            int reduction = (cooler_hot_temp - HOT_DERATE_THRESHOLD) * HOT_DERATE_MULT / 10;
+            if (reduction > 0) {   // 刚过阈值整数截断为 0 时跳过，不触发冷却
+                int before = eff_cold_max(active_pid_cold_max, pid_cold_min);
+                if (hot_derate == 0) {
+                    // 首次削减：就地把上限压到「当前实际制冷值 − 削减量」（未就绪时按配置上限算）。
+                    // cold_now 必须先钳进 [COLD_MIN, active_pid_cold_max]：跨设备时实际值可能高于
+                    // 当前上限（B7X 实际 255 → 切到 B6X 上限 194），否则 hot_derate 为负、上限反向抬高。
+                    int cold_now = (actual_cold >= COLD_MIN) ? actual_cold : active_pid_cold_max;
+                    if (cold_now > active_pid_cold_max) cold_now = active_pid_cold_max;
+                    if (cold_now < COLD_MIN) cold_now = COLD_MIN;
+                    hot_derate = active_pid_cold_max - cold_now + reduction;
+                } else {
+                    hot_derate += reduction;   // 再次触发：在当前生效上限上累减
+                }
+                if (hot_derate < 0) hot_derate = 0;   // 兜底：削减量恒 ≥0
+                hot_derate_cooldown = HOT_DERATE_COOLDOWN;
+                write_log("热端过温 %d.%d°C 削减制冷上限 %d→%d（削减量 %d）",
+                          cooler_hot_temp / 10, cooler_hot_temp % 10,
+                          before, eff_cold_max(active_pid_cold_max, pid_cold_min), reduction);
+            }
+        }
+    } else {
+        if (hot_derate > 0 && hot_recover_cooldown == 0) {
+            int before = eff_cold_max(active_pid_cold_max, pid_cold_min);
+            hot_derate -= HOT_DERATE_MULT;
+            if (hot_derate < 0) hot_derate = 0;   // 归零=封顶配置上限
+            hot_recover_cooldown = HOT_DERATE_COOLDOWN;
+            write_log("热端回落 %d.%d°C 恢复制冷上限 %d→%d（恢复量 %d）",
+                      cooler_hot_temp / 10, cooler_hot_temp % 10,
+                      before, eff_cold_max(active_pid_cold_max, pid_cold_min), HOT_DERATE_MULT);
+        }
+    }
+}
+
+/**
+ * 计算 PID 模式有效制冷范围（默认上限 = PID_COLD_RANGE 上限，含热端过温削减）。
+ * 每 5s 周期在 update_hot_derate 之后调用，供下发/去重/映射统一使用。
+ */
+static void update_active_cold_range(void) {
+    active_cold_eff_min = pid_cold_min;
+    active_cold_eff_max = eff_cold_max(active_pid_cold_max, pid_cold_min);
+}
+
+// ======================== 控制参数计算与下发 ========================
+
+// ======================== 广播协议（须与 MainHook.java 侧一致） ========================
+// Action / extra 名单由上方 protocol-const 区块生成（唯一手写处 protocol.def.json）；
+// 完整协议见 README「广播协议」（唯一规范处）。
+
+// 外部命令（dumpsys/am/pm/svc）单次执行上限：正常 100~300ms，5s 已远超；挂死时按此界限回收。
+
+/** 单调毫秒时钟：只用于外部命令的超时预算（墙钟被回拨不影响，见 逻辑说明.md）。 */
+
+/**
+ * 单调秒时钟（CLOCK_MONOTONIC）：节拍、冷却、超时的统一时基。
+ * 墙钟被 NTP 校正/手动改时间回拨时不会倒退；但**不含设备休眠时间**（休眠期间主循环也不跑），
+ * 故跨休眠后各冷却按「实际运行时长」继续，而不是按自然时间。墙钟语义的场合
+ * （日志时间戳、曲线 epoch 列、status/config mtime、开蓝牙 token、看门狗持久化时间戳）仍用 time()。
+ */
+
+/**
+ * 等 fd 可读，最多等到 deadline_ms（mono_ms 口径）。
+ * @return 1=可读；0=超时；-1=错误或被信号打断（调用方按 errno==EINTR 决定是否重试）
+ */
+
+/**
+ * 限时回收子进程：timeout_sec 内未退出则 SIGTERM，宽限 CMD_KILL_GRACE_SEC 秒后仍未退出则 SIGKILL；
+ * SIGKILL 后轮询回收，绝不无限等待（子进程若卡在 D 状态，kill 也无法立刻生效，阻塞会拖停主循环）。
+ * 必须显式 sigaction 且 sa_flags=0——本文件 signal() 是 BSD 语义带 SA_RESTART，会重启 waitpid
+ * 使超时分支成死代码（详见 逻辑说明.md「看门狗反向保活」）。
+ * @return 1=已正常回收（*out_status 有效）；0=超时（已按 SIGTERM→SIGKILL 回收，*out_status 无意义）
+ */
+
+// ---- 非阻塞广播：fork 后不等待，由主循环每拍回收 ----
+// 每秒一条时同步 wait 会把 1s 节拍拖到 1.5~2s，故改异步；错误日志在回收时补记。
+
+/** 回收已结束的 am 子进程；未退出的超过 3 秒强杀，日志口径与原同步等待一致。 */
+
+/**
+ * 通过 am broadcast 下发控制参数到 LSPosed 模块（fork+exec，非阻塞）
+ */
+
+/**
+ * 计算速率上限：风扇升降共用固定步长（防抖在 rate_limit_fan 内单独判定）；制冷强度按电池温差动态算
+ * @param out_fan_step  风扇每周期最大变化量（RPM，= RATE_LIMIT_FAN 固定值，升/降共用）
+ * @param out_cold_up   制冷强度升速上限（有符号温差，负值→0=禁止升）
+ * @param out_cold_down 制冷强度降速上限（有符号温差，负值→0=禁止降）
+ */
+static void calc_dynamic_rates(int *out_fan_step, int *out_cold_up, int *out_cold_down) {
+    *out_fan_step = RATE_LIMIT_FAN;
+    // 制冷强度：有符号温差 dev，升速/降速独立；负值 → clamp 到 0（禁止该方向）
+    int dev = 0;
+    if (cycle_batt_temp >= 0) dev = cycle_batt_temp - BATT_BASELINE;
+    int up   = RATE_LIMIT_COLD + dev * RATE_LIMIT_COLD_MULT / 10;
+    int down = RATE_LIMIT_COLD - dev * RATE_LIMIT_COLD_MULT / 10;
+    *out_cold_up   = (up   > 0) ? up   : 0;
+    *out_cold_down = (down > 0) ? down : 0;
+}
+
+/**
+ * 制冷强度限速（升降独立，负值方向已 clamp 到 0）。
+ * 更新 actual_cold；调用方随后用限速后的实际制冷重算风扇目标。
+ */
+static void rate_limit_cold(int desired_cold) {
+    dispatch_target_cold = desired_cold;   // 供下发日志判定「决策目标是否变化」
+    int fan_step, cold_up, cold_down;
+    calc_dynamic_rates(&fan_step, &cold_up, &cold_down);
+    int old_cold = actual_cold;
+    cold_rate_bound = (desired_cold >= old_cold) ? cold_up : cold_down;   // 方向对应的上限，供平滑下发拆步长
+    rate_limit(&actual_cold, desired_cold, cold_up, cold_down);
+    debug_log(debug_exec, "cold 限速 %d→%d desired=%d（升%d 降%d）",
+              old_cold, actual_cold, desired_cold, cold_up, cold_down);
+}
+
+/**
+ * 风扇转速限速（升/降共用同一步长，两个方向各带一段防抖）。
+ * 返回限速后的实际风扇转速，就近取整到 RATE_LIMIT_FAN 第三值（取整单位）的倍数并钳制到设备范围。
+ *
+ * 防抖是「幅度阈值」：本周期变化量不超过阈值就整步不做（不看时间、不计数）；
+ * 距最低转速（降）/最高转速（升）< 阈值×1.5 时防抖失效（贴近端点无需再抑制）。
+ */
+static int rate_limit_fan(int desired_rpm) {
+    dispatch_target_rpm = desired_rpm;     // 供下发日志判定「决策目标是否变化」（取防抖改写前的值）
+    int fan_step, cold_up, cold_down;
+    calc_dynamic_rates(&fan_step, &cold_up, &cold_down);
+
+    // 防抖判定：升/降两条同构守卫已收敛为一次求值，方向由 rising 定死；
+    // 原实现靠「降速分支先改写 desired」隐式保证两条互斥，勿拆回两条。
+    int rising = (desired_rpm > actual_rpm);
+    int ref_room = rising ? (active_fan_max - actual_rpm)    // 升速：距最高转速（现场读，active_fan_max 为运行时量）
+                          : (actual_rpm - fan_rpm_min);      // 降速：距最低转速
+    int delta = abs(desired_rpm - actual_rpm);
+    // 阈值 ×1.5 先乘后除且向上取整 ((x*3+1)/2；写成 /2*3 或截断式 x*3/2 都会少 1 RPM)；
+    // 与冷端死区豁免带宽 ceil(死区×1.5) 同一取整口径；见 逻辑说明.md「主循环逻辑」
+    int hold = delta > 0 &&
+               ref_room >= (RATE_LIMIT_FAN_DEBOUNCE * 3 + 1) / 2 &&
+               delta <= RATE_LIMIT_FAN_DEBOUNCE;
+    if (hold) desired_rpm = actual_rpm;   // 防抖：变化量不超阈值 → 本周期保持不动
+    int drop_hold = hold && !rising;      // 降速防抖命中
+    int rise_hold = hold && rising;       // 升速防抖命中
+
+    // 单键语义：两个实参必须同值
+    rate_limit(&actual_rpm, desired_rpm, fan_step, fan_step);
+    // 下限钳制（否则 fan_rpm_min 下穿会让就绪守卫误判"未就绪"永久跳过下发）；见 逻辑说明.md「主循环逻辑」
+    actual_rpm = clamp(actual_rpm, fan_rpm_min, active_fan_max);
+
+    // ---- 就近取整到 RATE_LIMIT_FAN 第三值的倍数（默认 10：2044→2040、2045→2050）----
+    int round_unit = (fan_rpm_round_unit > 0) ? fan_rpm_round_unit : 1;
+    int send_rpm = ((actual_rpm + round_unit / 2) / round_unit) * round_unit;
+    send_rpm = clamp(send_rpm, fan_rpm_min, active_fan_max);
+    debug_log(debug_exec, "rpm 限速 desired=%d → %d（降防抖=%d 升防抖=%d）",
+              desired_rpm, send_rpm, drop_hold, rise_hold);
+    return send_rpm;
+}
+
+/** 死区带宽：ceil(死区×1.5)，冷值与风扇共用（先乘后除且向上取整，写成 /2*3 或截断式会差 1）。 */
+
+/**
+ * 死区判定（冷值 / 风扇共用）：|diff| < deadzone 且该方向余量 ≥ ceil(deadzone×1.5) → 1=在死区内（保持）。
+ * 余量不足视为超出（贴近端点无需再抑制）；deadzone=0 时恒不保持（等价于关闭死区）。
+ */
+
+/**
+ * 下发去重 + 双死区判定（冷值 / 风扇，均以散热器实际回传为准）：两者都未超出各自死区才跳过；
+ * 任一超出 → 冷值与风扇一起下发。规则见 逻辑说明.md「注意事项→去重逻辑」。返回 1=跳过下发。
+ * @param force_dispatch 本轮 cold 是否被热端过温削减「硬钳制」下压（=最高优先级，死区不拦；由 apply_gear_direct 传入）
+ */
+static int should_skip_dispatch(int mode, int target, int windOC, int cold, int windLevel, int force_dispatch) {
+    int send_rpm = (mode == 0) ? windLevel : windOC;
+
+    // 全 0 回传 = 未就绪（刚连上/通知未生效）：与 -1 同等对待，走下方 last_* 退化分支。
+    // 否则「目标冷=1、回传冷=0」会被制冷死区判成已到位，首条命令永远发不出去。
+    int feedback_invalid = (cooler_cold_real <= 0 && cooler_rpm_real <= 0);
+    if (!feedback_invalid && cooler_cold_real >= 0 && cooler_rpm_real >= 0) {
+        if (mode == 0) {
+            // mode=0 智能温控：散热器自管理制冷，故只需比较风扇上限（windLevel/RPM），制冷不参与去重。
+            if (send_rpm == cooler_rpm_real) {
+                debug_log(debug_exec, "skip 已到位（mode=0 仅比较风扇）：目标RPM%d == 回传RPM%d，跳过下发",
+                          send_rpm, cooler_rpm_real);
+                return 1;   // 风扇已到位（制冷由散热器自管理，不判）
+            }
+            return 0;
+        }
+
+        // 冷值与风扇各按自己的死区判定（同一套 within_deadzone）：两者都在死区内才跳过；
+        // 任一超出死区 → 冷值和风扇一起下发。两边的边界口径统一为「|差| < 死区」。
+        int cold_diff = cold - cooler_cold_real;
+        int rpm_diff  = send_rpm - cooler_rpm_real;
+        int cold_hold = 1, rpm_hold = 1;
+
+        if (cold_diff != 0) {
+            int room = (cold_diff > 0) ? (active_cold_eff_max - cooler_cold_real)    // 要升：只看距上限
+                                       : (cooler_cold_real - active_cold_eff_min);   // 要降：只看距下限
+            cold_hold = !force_dispatch && within_deadzone(cold_diff, COLD_DEADZONE, room);
+            if (abs(cold_diff) < COLD_DEADZONE) {
+                if (force_dispatch) {
+                    // 热端过温削减下压：最高优先级，死区一律放行（判据可解释：本轮 cold 确被硬钳制下压）
+                    debug_log(debug_exec, "豁免 死区（过温削减下压）：目标冷%d 回传冷%d |diff|=%d <%d，强制下发",
+                              cold, cooler_cold_real, abs(cold_diff), COLD_DEADZONE);
+                } else if (room < deadzone_band(COLD_DEADZONE)) {
+                    debug_log(debug_exec, "豁免 死区（%s 余量%d<%d）：目标冷%d 回传冷%d 放行",
+                              cold_diff > 0 ? "升" : "降", room, deadzone_band(COLD_DEADZONE),
+                              cold, cooler_cold_real);
+                }
+            }
+        }
+
+        if (rpm_diff != 0) {
+            int room = (rpm_diff > 0) ? (active_fan_max - cooler_rpm_real)   // 要升：只看距最高
+                                      : (cooler_rpm_real - fan_rpm_min);     // 要降：只看距最低
+            rpm_hold = within_deadzone(rpm_diff, RATE_LIMIT_FAN_DEBOUNCE, room);
+        }
+
+        if (cold_hold && rpm_hold) {
+            debug_log(debug_exec, "skip 双双在死区内：目标冷%d 回传冷%d（差%d<%d），目标RPM%d 回传RPM%d（差%d<%d）",
+                      cold, cooler_cold_real, abs(cold_diff), COLD_DEADZONE,
+                      send_rpm, cooler_rpm_real, abs(rpm_diff), RATE_LIMIT_FAN_DEBOUNCE);
+            return 1;   // 冷值与风扇都未超出各自死区 → 不下发
+        }
+        return 0;
+    }
+
+    // 回传异常：退化用 last_* 缓存对比（异常路径必须常驻可见，不走 debug 分区）
+    int skip = last_bcast_valid &&
+               mode == last_mode && target == last_target_temp &&
+               windOC == last_rpm && cold == last_cold &&
+               windLevel == last_wind_level;
+    if (skip)
+        write_log("下发去重 回传异常（冷%d RPM%d 不可用/全 0），按上次参数缓存判定跳过 mode=%d 冷%d RPM%d",
+                  cooler_cold_real, cooler_rpm_real, last_mode, last_cold, last_rpm);
+    return skip;
+}
+
+// ======================== App 进程 + 心跳检测 ========================
+
+// status mtime 的「变化观测」：mtime 是墙钟值，不能直接和单调时钟相减；
+// 改为记录「何时（单调）第一次看到这个 mtime」，用单调时长度量它有多久没变。
+static time_t status_mtime_seen = 0;   // 上次观察到的 status mtime
+static time_t status_fresh_at   = 0;   // 观察到该 mtime 的单调时刻
+
+/**
+ * 检测 App 是否存活：状态文件 mtime 在 STATUS_TIMEOUT 秒内发生过变化。
+ * LSP 每 1 秒写一次 status 文件，mtime 持续不变超过阈值即判进程死。
+ * 用「mtime 变化 + 单调时钟计时」而非 time(NULL)−mtime：墙钟回拨时后者为负、会恒判存活。
+ */
+static int is_app_alive(void) {
+    // 复用本拍 read_cooler_params 打开 active 状态文件时读到的 mtime（两个调用点都在同一拍紧随其后，
+    // 陈旧度上界 = 一条主循环语句之间）。未读到（打开失败 / 尚未调用）则自行 stat。
+    time_t mt = active_status_mtime;
+    if (mt == 0) {
+        const char *path = (active_device == DEVICE_B7X) ? status_file_path_b7 : status_file_path_b6;
+        struct stat st;
+        if (stat(path, &st) != 0) return 0;
+        mt = st.st_mtime;
+    }
+    time_t now = mono_now();
+    if (mt != status_mtime_seen) {   // 本拍观察到的 mtime 与上次不同 = 刚写过
+        status_mtime_seen = mt;
+        status_fresh_at   = now;
+        return 1;
+    }
+    return (now - status_fresh_at <= STATUS_TIMEOUT);
+}
+
+// ======================== 双 app 存活仲裁 ========================
+// 需求与保留优先级见 逻辑说明.md「三方 app 存活仲裁」（farsef 仅在最近连 B6X 时参与）。
+
+/**
+ * 单次遍历 /proc 同时检测多包存活（合并扫描）。直读 /proc/<pid>/cmdline 精确比对、不经 shell
+ * （避免 pgrep 自匹配误判）；理由见 逻辑说明.md「自动拉起」。
+ */
+void app_process_scan(const char *pkgs[], int alive[], int count) {
+    for (int i = 0; i < count; i++) alive[i] = 0;
+    DIR *d = opendir("/proc");
+    if (!d) return;
+    struct dirent *de;
+    char buf[4096];
+    int found_all = 0;
+    while (!found_all && (de = readdir(d)) != NULL) {
+        if (de->d_name[0] < '0' || de->d_name[0] > '9') continue;
+        char path[64];
+        snprintf(path, sizeof(path), "/proc/%s/cmdline", de->d_name);
+        int fd = open(path, O_RDONLY);
+        if (fd < 0) continue;
+        ssize_t n = read(fd, buf, sizeof(buf) - 1);
+        close(fd);
+        if (n <= 0) continue;
+        buf[n] = '\0';
+        for (char *tok = buf; tok < buf + n; ) {
+            size_t len = strnlen(tok, (size_t)(buf + n - tok));
+            if (len > 0) {
+                for (int i = 0; i < count; i++) {
+                    if (!alive[i] &&
+                        (strcmp(tok, pkgs[i]) == 0 ||
+                         (strncmp(tok, "--nice-name=", 12) == 0 && strcmp(tok + 12, pkgs[i]) == 0))) {
+                        alive[i] = 1;
+                        install_cache_mark(pkgs[i]);   // 进程在跑 ⇒ 必然已安装：正向标记缓存=1（只写 1，不改 alive/found_all 语义）
+                    }
+                }
+            }
+            tok += len + 1;
+        }
+        found_all = 1;
+        for (int i = 0; i < count; i++) if (!alive[i]) { found_all = 0; break; }
+    }
+    closedir(d);
+}
+
+/** 从一行 dumpsys 取 mWakefulness 的值。与旧 awk 的两处有意偏离见 逻辑说明.md「自动拉起」。命中返回 1。 */
+
+/**
+ * 屏幕状态（dumpsys power 的 mWakefulness）：仅 Awake 亮屏。
+ * 返回 1=Awake / 2=Dozing / 0=Asleep或其余 / -1=读取失败。不走 shell 管线（1 进程一段），
+ * 为何省在进程数而非 binder 往返见 逻辑说明.md「自动拉起→开销收敛」。行缓冲 512 字节。
+ * 调用频率由 launch_last_app 的 APP_LAUNCH_PROBE_INTERVAL / APP_LAUNCH_PROBE_OFF_INTERVAL
+ * 统一限流（唯一调用点即在该门禁内），本函数自身不做结果缓存。
+ */
+
+/** 判断指定包名是否为当前前台/top Activity（dumpsys 开销约 100~300ms，仅在要 kill 时调用） */
+
+/**
+ * fork + exec sh -c 执行外部命令并限时回收（输出须在命令内重定向）。
+ * 取代 system()：命令挂死（binder 卡住等）时按 SIGTERM→SIGKILL 收回，主循环不停摆。
+ * @return 与 system() 相同的 wait 状态（WIFEXITED/WEXITSTATUS 可用）；
+ *         CMD_RESULT_TIMEOUT=命令超时、-1=fork 失败——两者都无法判定，调用方不得当作命令结果
+ */
+
+/** 构建命令并静默执行（输出重定向到 /dev/null），返回与 system() 相同的 wait 状态（超时为 CMD_RESULT_TIMEOUT） */
+
+/**
+ * 包安装实时探测（pm path）：1=已安装、0=未安装（pm 明确报"包未找到"，退出码 1）、
+ * -1=无法判定、CMD_RESULT_TIMEOUT=pm 超时（未知，与「未安装」严格区分）。
+ * 退出码口径（只有 rc=1 算不存在）见 逻辑说明.md「自动拉起」；每次 fork+exec pm（~100~300ms），
+ * 故探测链上走带缓存的 app_installed()，只有宿主卸载探测直接用它。
+ */
+
+// —— 包安装状态缓存 ——
+// 生命周期（≈一次开机周期、无过期、不落盘）与「无法判定不缓存」见 逻辑说明.md「自动拉起」。
+#define INSTALL_CACHE_SLOTS 3   // 探测链只会问这三个包（老/新 B6X app、farsef），容量取 3
+static const char *install_cache_pkg[INSTALL_CACHE_SLOTS];   // 缓存键：包名指针（调用方传入的都是 #define 字面量，静态存储期；若将来传栈上缓冲须改为拷贝）
+static int install_cache_val[INSTALL_CACHE_SLOTS];           // 缓存值：1=已确认安装，0=已确认未安装
+static time_t install_cache_at[INSTALL_CACHE_SLOTS];         // 结论写入时间（唯一用途：表满时挑最旧一条淘汰）
+static int install_cache_used = 0;                           // 已用槽数（0..INSTALL_CACHE_SLOTS）
+
+/**
+ * 判断指定包名是否已安装（带缓存：同一包名在一次开机周期内只 fork 一次 pm）。
+ * @return 1=已安装；0=未安装（含非超时的「无法判定」，沿用既有语义）；-1=pm 超时（未知，
+ *         调用方不得按 false 处理：不清理、不据此否定，只记日志并跳过本轮判断）
+ */
+static int app_installed(const char *pkg) {
+    for (int i = 0; i < install_cache_used; i++)
+        if (strcmp(install_cache_pkg[i], pkg) == 0) return install_cache_val[i];
+
+    int r = app_installed_probe(pkg);
+    if (r == CMD_RESULT_TIMEOUT) return -1;   // 超时→未知：不写缓存，调用方按「判不了」处理
+    if (r < 0) return 0;   // 其它无法判定：沿用加缓存前的语义按「未安装」返回（由调用方日志暴露），但不写缓存
+
+    int slot = install_cache_used;
+    if (slot >= INSTALL_CACHE_SLOTS) {   // 表满：淘汰最旧一条，保证表长有界
+        slot = 0;
+        for (int i = 1; i < INSTALL_CACHE_SLOTS; i++)
+            if (install_cache_at[i] < install_cache_at[slot]) slot = i;
+    } else {
+        install_cache_used++;
+    }
+    install_cache_pkg[slot] = pkg;
+    install_cache_val[slot] = r;
+    install_cache_at[slot]  = time(NULL);
+    return r;
+}
+
+/**
+ * 只查安装缓存、不触发 pm 探测：1=缓存确认已安装、0=缓存确认未安装、-1=无缓存/无法判定。
+ * 供 /proc 扫描列表过滤使用——绝不能为此额外 fork pm；未探测过或无法判定的包一律返回 -1（保留扫描）。
+ */
+static int app_installed_cached(const char *pkg) {
+    for (int i = 0; i < install_cache_used; i++)
+        if (strcmp(install_cache_pkg[i], pkg) == 0) return install_cache_val[i];
+    return -1;
+}
+
+/**
+ * 把某包标记为「已安装」（缓存值 1）——只用于 /proc 命中的正向证据（进程在跑 ⇒ 必已安装）。
+ * 规则：**只写 1，永不写 0，unknown 不写**。若该包此前缓存为 0（探测为未安装）后又被命中，
+ * 说明期间被重装 → 改写为 1 自纠。不改变任何决策语义（found_all/alive[] 均不依赖缓存）。
+ */
+static void install_cache_mark(const char *pkg) {
+    for (int i = 0; i < install_cache_used; i++) {
+        if (strcmp(install_cache_pkg[i], pkg) == 0) { install_cache_val[i] = 1; return; }
+    }
+    int slot = install_cache_used;
+    if (slot >= INSTALL_CACHE_SLOTS) {   // 表满：淘汰最旧一条（三包三槽，正常不会走到）
+        slot = 0;
+        for (int i = 1; i < INSTALL_CACHE_SLOTS; i++)
+            if (install_cache_at[i] < install_cache_at[slot]) slot = i;
+    } else {
+        install_cache_used++;
+    }
+    install_cache_pkg[slot] = pkg;
+    install_cache_val[slot] = 1;
+    install_cache_at[slot]  = time(NULL);
+}
+
+// —— 启动预热：让「已确认未安装」的结论在默认配置（APP_LAUNCH_ENABLED=0）下也能建立 ——
+// 默认配置下拉起链全程不跑，安装缓存永不填充 → arbitrate_apps 的 /proc 过滤恒为空、不生效。
+// 故在等待设备循环内预热：对三个候选包各探一次；对仍「无法判定」的包有界重试，随后放弃。
+// **绝不周期性重试**——app_installed() 在 unknown 时返回 0/-1 且不写缓存，无界重试＝每轮 fork pm。
+#define INSTALL_WARMUP_MAX_TRIES 3
+static const char *const INSTALL_WARMUP_PKGS[] = { APP_PKG_B6X_OLD, APP_PKG_B6X_NEW, APP_PKG_B7X };
+#define INSTALL_WARMUP_PKGS_N ((int)(sizeof(INSTALL_WARMUP_PKGS) / sizeof(INSTALL_WARMUP_PKGS[0])))
+static int install_warmup_tries = 0;   // 已尝试轮数
+static int install_warmup_done  = 0;   // 已完成（全部有结论或达上限）→ 之后不再探测
+
+/**
+ * 预热安装缓存（有界、幂等）：等待设备循环每轮调用一次；已有结论的包跳过，未判定的各探一次。
+ * 全部有结论、或达 INSTALL_WARMUP_MAX_TRIES 上限后置 done，之后立即返回（不再 fork pm）。
+ * 只影响 /proc 过滤能否生效；对存活判断本身是 no-op（unknown 保留在扫描列表）。
+ */
+static void install_cache_warmup(void) {
+    if (install_warmup_done) return;
+    int pending = 0;
+    for (int i = 0; i < INSTALL_WARMUP_PKGS_N; i++) {
+        if (app_installed_cached(INSTALL_WARMUP_PKGS[i]) >= 0) continue;   // 已有结论
+        app_installed(INSTALL_WARMUP_PKGS[i]);   // 探一次：confirmed 写入缓存，unknown 不写
+        if (app_installed_cached(INSTALL_WARMUP_PKGS[i]) < 0) pending++;   // 仍无法判定
+    }
+    if (pending == 0) { install_warmup_done = 1; return; }
+    if (++install_warmup_tries >= INSTALL_WARMUP_MAX_TRIES) {
+        install_warmup_done = 1;
+        write_log("安装缓存预热 %d 次后仍有 %d 个包无法判定，放弃（/proc 过滤对这些包按「保留」处理）",
+                  install_warmup_tries, pending);
+    }
+}
+
+/**
+ * 解析自动拉起的包名：优先 BLE_OWNER_LAST 记录的上次连接者；
+ * 目标 B6X app 未安装时回退另一个 B6X app（老 app 未安装→新 app，反之亦然）。
+ * @param out_installed 可空；返回所选包的安装状态（1=已安装、0=确定未安装、-1=pm 超时未知），
+ *                      供调用方免去一次重复 pm 探测（超时时重复探测会再加一个超时周期）
+ */
+const char *resolve_launch_pkg(int *out_installed) {
+    const char *pkg;
+    if      (last_owner == 2)                     pkg = APP_PKG_B6X_NEW;
+    else if (last_owner == 6 || last_owner == 7)  pkg = APP_PKG_B7X;
+    else                                          pkg = APP_PKG_B6X_OLD;  // 无记录/老 app
+
+    int installed = app_installed(pkg);
+    if (installed < 0) {   // pm 超时=未知：不据此切换（切换只认确定的「未安装」），由调用方记日志
+        if (out_installed) *out_installed = installed;
+        return pkg;
+    }
+    if (installed == 0
+        && strcmp(pkg, APP_PKG_B6X_OLD) == 0 && app_installed(APP_PKG_B6X_NEW) == 1) {
+        debug_log(debug_launch, "自动拉起 老 B6X app 未安装，改用新 app");
+        pkg = APP_PKG_B6X_NEW;
+        installed = 1;   // 回退目标已确认为已安装
+    } else if (installed == 0
+        && strcmp(pkg, APP_PKG_B6X_NEW) == 0 && app_installed(APP_PKG_B6X_OLD) == 1) {
+        debug_log(debug_launch, "自动拉起 新 B6X app 未安装，改用老 app");
+        pkg = APP_PKG_B6X_OLD;
+        installed = 1;
+    }
+    if (out_installed) *out_installed = installed;
+    return pkg;
+}
+
+/** 构建并执行 am start 拉起指定包名（显式组件优先，未知 launcher 回退 -p），返回 wait 状态（超时为 CMD_RESULT_TIMEOUT） */
+
+/**
+ * 自动拉起上次使用的散热器 app（带冷却）
+ * 包名按 last_owner 选择：2→新 B6X app，6/7→farsef，其余/无记录→老 B6X app；
+ * 目标 B6X app 未安装时回退另一个 B6X app。
+ * 拉起用 am start（显式 launcher 组件 -n）+ b6x_auto_launch 标志（LSP 读到后连接完成自动后台化，几乎无感）。
+ * 仅在 APP_LAUNCH_ENABLED=1 且目标 app 已安装、未运行时执行。
+ *
+ * @param pkg_known_dead 调用方是否已确认「本轮候选目标进程必定不存在」：
+ *   1 = 已确认 —— arbitrate_apps 刚在同一轮用三包合并扫描确认三方 app 全灭，而候选目标必是这三者之一
+ *       （resolve_launch_pkg 只会返回 APP_PKG_B6X_OLD/NEW/B7X）。此时内部不再重复一次全量 /proc 扫描。
+ *   0 = 无此已知信息（断连分支）→ 内部自行单包扫描。
+ */
+static void launch_last_app(int pkg_known_dead) {
+    // 临时停止期间保持现场：任何调用点（断联分支、仲裁）都不得拉起宿主 app。
+    if (temp_stop_active()) {
+        debug_log(debug_launch, "临时停止 生效，跳过自动拉起");
+        return;
+    }
+    time_t now = mono_now();   // 拉起/探测节流全用单调时钟（墙钟回拨不会把冷却拉长）
+    if (now - last_launch_attempt < app_launch_cooldown) return;   // 冷却节流（仅在真正 am start 前记录尝试）
+    if (!APP_LAUNCH_ENABLED) {
+        debug_log(debug_launch, "自动拉起 开关关闭，跳过");
+        return;
+    }
+
+    // 独立探测节流：整条链（屏检 + 进程扫描 + 拉起判定）限到 ≤1 次/probe_interval。
+    // 只限频、不参与 am start 冷却（后者只由 last_launch_attempt 管）。**代价**：app 死亡后的
+    // 检测延迟上限 = 本间隔——这是「存活态也降频」的必然代价。
+    // 断联初期（last_disconnect_time 起 APP_LAUNCH_PROBE_FAST_WINDOW 秒内）收窄到 5s，使「App 真死了」
+    // 更快被发现并拉起；之后、或未处于断联时回到 12s。息屏退避（下方屏幕门禁的 10s）在此之后仍生效。
+    int probe_interval = APP_LAUNCH_PROBE_INTERVAL;                 // 12s（冷淡期）
+    if (last_disconnect_time > 0
+            && now - last_disconnect_time < APP_LAUNCH_PROBE_FAST_WINDOW)
+        probe_interval = APP_LAUNCH_PROBE_FAST_INTERVAL;            // 5s（断联初期）
+    if (now - last_launch_probe_at < probe_interval) return;
+    last_launch_probe_at = now;
+
+    // —— 屏幕门禁 + 息屏退避（APP_LAUNCH_SCREEN_GATE）：前移到最贵探测之前，屏检只取一次 ——
+    // 代价与决策见 逻辑说明.md「自动拉起→开销收敛」。
+    if (app_launch_screen_gate_enabled) {
+        // 息屏退避闸门（用户拍板 10s）：上次已判定息屏且未到间隔 → 本次连屏检都不做。
+        // 注：入口节流现为 12s（冷淡期）或 5s（断联初期 60s 内）。冷淡期入口更严（12s>10s），本闸门
+        // 不单独触发；断联初期入口放宽到 5s，本闸门的 10s 即成为实际生效者——这正是「息屏仍按 10s
+        // 退避、不被 5s 快探测覆盖」的落点，保留作防御。
+        if (last_screen_off && now - last_probe_off_at < APP_LAUNCH_PROBE_OFF_INTERVAL) return;
+
+        int sc = is_screen_awake();
+        if (sc == 2) sc = app_launch_screen_dozing_on ? 1 : 0;   // Dozing 按配置是否算亮屏（默认 0=算灭）
+        if (sc < 0) sc = 1;                                      // 读取失败一律按可拉起兜底（防探测坏掉后永久不拉起）
+        if (sc != 1) {
+            // 息屏：记下锚点与「上次已知息屏」，此后只留低频屏检复核（不屏检就永远发现不了屏幕
+            // 已变亮），中间各轮在上一道闸门与函数入口的探测节流被挡掉 —— 省掉的是整条链，含屏检。
+            // 代价（必须知道，不绕开）：上界由函数入口的 APP_LAUNCH_PROBE_INTERVAL(12s) 与本闸门
+            // 的 APP_LAUNCH_PROBE_OFF_INTERVAL(10s) 中较大者决定，即息屏→亮屏最长滞后 ≈12s
+            //（从前 ≤5s）；故息屏期间若散热器 app 被系统回收，自动拉起也最晚 ~12s 后才开始。
+            last_screen_off = 1;
+            last_probe_off_at = now;
+            debug_log(debug_launch, "自动拉起 屏幕未亮（mWakefulness 非 Awake），本周期跳过");
+            return;
+        }
+        last_screen_off = 0;   // 屏检确认亮屏（含 -1 兜底）→ 恢复每轮一次屏检，节奏与改动前完全一致
+    }
+
+    int installed = 1;
+    const char *pkg = resolve_launch_pkg(&installed);
+    debug_log(debug_launch, "自动拉起 目标 %s（last_owner=%d）", pkg, last_owner);
+    if (installed == 0) {
+        write_log("自动拉起 目标 app 未安装 %s", pkg);
+        return;
+    }
+    if (installed < 0)   // pm 超时=未知：不当作「未安装」跳过，仍尝试拉起（失败由 am 的 rc 暴露）
+        write_log("自动拉起 安装状态无法判定（pm 超时），仍尝试拉起 %s", pkg);
+    if (!pkg_known_dead) {   // 有已知「已全灭」结论时跳过本次单包扫描
+        int pkg_alive = 0;
+        app_process_scan(&pkg, &pkg_alive, 1);   // 单包扫描（复用合并遍历逻辑）
+        if (pkg_alive) {
+            debug_log(debug_launch, "自动拉起 目标已在运行 %s，跳过", pkg);
+            return;   // 存活态降频由函数入口的 APP_LAUNCH_PROBE_INTERVAL 负责，不推进 am start 冷却
+        }
+    }
+
+    last_launch_attempt = now;   // 真正下发 am start 才记冷却，避免屏灭轮询消耗冷却
+    int rc = am_start_app(pkg);
+    write_log("自动拉起散热器 app %s（后台化）rc=%d", pkg, rc);
+}
+
+/** kill 目标散热器 app 并重新拉起（绕过 APP_LAUNCH_ENABLED 开关：本处主动 kill 必须拉起） */
+
+/**
+ * 锁死自动重启检测：实际停滞且未达目标连续 N 次 → kill 散热器 app 重新拉起（重建连接栈）。
+ * 判定细节见 逻辑说明.md「主循环逻辑→锁死自动重启」。
+ */
+static void watchdog_check(void) {
+    if (app_watchdog_cycles <= 0)      { watchdog_stall_count = 0; return; }  // 关闭
+    if (cooler_cold_real < 0)          { watchdog_stall_count = 0; return; }  // 无实际回传不判
+    if (last_cold < 0)                 { watchdog_stall_count = 0; return; }  // 从未下发不判
+    if (active_device == DEVICE_NONE)  { watchdog_stall_count = 0; return; }  // 无连接设备不判
+    // mode=0 不计数：散热器自管理制冷，实际制冷不跟随下发是正常现象；
+    // 同时刷新锚点，切回 mode=1 时以最新实际/下发为基准。
+    if (last_mode == 0) {
+        watchdog_stall_count = 0;
+        watchdog_last_cold = cooler_cold_real;
+        watchdog_last_cmd  = last_cold;
+        return;
+    }
+    time_t now = mono_now();   // kill 冷却用单调时钟
+
+    // 首次锚定：记录上周期实际 + 上周期下发基准，不计数
+    if (watchdog_last_cold < 0 || watchdog_last_cmd < 0) {
+        watchdog_last_cold = cooler_cold_real;
+        watchdog_last_cmd  = last_cold;
+        return;
+    }
+    // kill 冷却期内每周期刷新锚点（防冷却期锚点不更新误判）。
+    if (now - watchdog_last_kill_at < 300) {   // kill 冷却：5 分钟内不重复 kill
+        watchdog_last_cold = cooler_cold_real;
+        watchdog_last_cmd  = last_cold;
+        return;
+    }
+    // 双条件都满足才计数：实际 = 上周期实际（停滞）且 实际 ≠ 上周期下发（未达目标）；
+    // 任一不满足 → 清零（实际在变=设备在响应；已达目标=设备正常）
+    if (cooler_cold_real == watchdog_last_cold && cooler_cold_real != watchdog_last_cmd) {
+        watchdog_stall_count++;
+    } else {
+        watchdog_stall_count = 0;
+    }
+    // 更新基准：本次实际/本次下发成为下次判定的"上周期"
+    watchdog_last_cold = cooler_cold_real;
+    watchdog_last_cmd  = last_cold;
+
+    // 触发：计数 ≥ N 次
+    if (watchdog_stall_count >= app_watchdog_cycles) {
+        write_log("锁死自动重启 实际制冷 %d 停滞且≠上周期下发 %d 连续 %d 次，kill app 并重新拉起",
+                  cooler_cold_real, watchdog_last_cmd, app_watchdog_cycles);
+        watchdog_stall_count = 0;
+        watchdog_last_kill_at = now;
+        force_kill_and_relaunch();
+    }
+}
+
+/**
+ * 死链检测：BLE 已连接、但冷/热/转速回传同时为全 0 / 无效——宿主连接对象仍是 connect 时的
+ * 默认值（convertFromDevice），说明通知没订阅上或设备不回报。模块侧重连无法恢复，重启宿主
+ * 进程可重建（实测 5s 内恢复）。判定细节见 逻辑说明.md「主循环逻辑→死链自动重启」。
+ * 判定不要求「已下发过命令」：本轮故障中守护进程因制冷死区从未下发，若保留该门槛则永远不会计数；
+ * 启动窗口由 pending_align（15s 对齐）+ 3 个周期（15s）共同兜住，正常首包 1.2~2.8s，不会误杀。
+ */
+static void deadlink_check(void) {
+    if (pending_align)                       { deadlink_cycles = 0; return; }  // 待对齐窗口内不判
+    if (!app_ble_connected || active_device == DEVICE_NONE) { deadlink_cycles = 0; return; }
+    int dead = (cooler_cold_real == 0 && cooler_rpm_real == 0
+                && cooler_hot_temp <= 0 && cooler_cold_temp <= 0);
+    if (!dead)                               { deadlink_cycles = 0; return; }
+    time_t now = mono_now();   // 与锁死重启共用同一单调时基
+    if (watchdog_last_kill_at > 0 && now - watchdog_last_kill_at < 300) {
+        deadlink_cycles = 0;   // 与锁死重启共用 5 分钟冷却，防风暴
+        return;
+    }
+    if (++deadlink_cycles < DEADLINK_CYCLES) return;
+    write_log("死链自动重启 BLE 已连但冷/热/转速回传全 0 连续 %d 次，kill app 并重新拉起",
+              DEADLINK_CYCLES);
+    deadlink_cycles = 0;
+    watchdog_last_kill_at = now;
+    force_kill_and_relaunch();
+}
+
+/** 淘汰存活参与者：非保留者且非前台时 force-stop（在前台则等下周期再试） */
+
+/** 三方 app 存活仲裁（保留优先级与 farsef 参与条件见 逻辑说明.md「三方 app 存活仲裁」）。 */
+static void arbitrate_apps(void) {
+    // 单次遍历 /proc 同时检测 3 个包名（合并扫描，不再逐包名全量遍历）。
+    // 扫描列表剔除「安装缓存已确认未安装」的包（未安装必不存活，剔除不改变仲裁结论），
+    // 使列表缩到仅剩可能存活的包，app_process_scan 的 found_all 得以提前退出。
+    // 「无缓存 / 无法判定」（app_installed_cached<0）一律保留，避免漏判存活；且不得为此 fork pm。
+    const char *cand[3] = { APP_PKG_B6X_OLD, APP_PKG_B6X_NEW, APP_PKG_B7X };
+    const char *scan_pkgs[3];
+    int scan_orig[3];
+    int scan_n = 0;
+    for (int i = 0; i < 3; i++) {
+        if (app_installed_cached(cand[i]) == 0) continue;   // 仅剔除「已确认未安装」
+        scan_pkgs[scan_n] = cand[i];
+        scan_orig[scan_n] = i;
+        scan_n++;
+    }
+    // 短路：候选 ≤1 且自动拉起关闭时，本函数后续不可能改变任何结论——scan_n ≤1 → 至多一个包可存活
+    // → old+new+far_in ≤1 <2，必在下方 `if (old_alive + new_alive + far_in < 2) return;` 处返回，
+    // 永不进入淘汰分支；唯一另一分支「三方全灭 → launch_last_app(1)」在 APP_LAUNCH_ENABLED=0 时
+    // 于其入口立即 return。故零可观测副作用（含 install_cache_mark：该缓存「只写 1、不改 alive[]/
+    // found_all 语义」，scan_n≤1 时被扫包的缓存非 0，跳过最多少一次 1→1 幂等写，或 unknown→1——
+    // 后者只影响自动拉起路径下 app_installed() 免一次 pm 探测，而该路径正被本条件排除）。
+    if (scan_n <= 1 && !APP_LAUNCH_ENABLED) return;
+    int alive[3] = { 0, 0, 0 };
+    if (scan_n > 0) {
+        int scan_alive[3];
+        app_process_scan(scan_pkgs, scan_alive, scan_n);
+        for (int k = 0; k < scan_n; k++) alive[scan_orig[k]] = scan_alive[k];
+    }
+    int old_alive = alive[0];
+    int new_alive = alive[1];
+    int far_alive = alive[2];
+    int far_in = far_alive && (last_owner == 6);  // farsef 上次连的是 B6X 散热器才参与
+
+    // 无任何散热器 app 存活 → 自动拉起上次使用的 app（复用下方 keep 的选择逻辑，冷却节流）
+    if (old_alive + new_alive + far_alive == 0) {
+        // 临时停止期间只做仲裁/状态判定，不拉起（保持散热器现场）
+        if (temp_stop_active()) {
+            debug_log(debug_launch, "临时停止 生效，跳过自动拉起");
+            return;
+        }
+        // 传 1：上面那次三包合并扫描刚确认三方 app 全灭，候选目标必是这三者之一 → 内部免去重复的全量 /proc 扫描
+        launch_last_app(1);
+        return;
+    }
+
+    if (old_alive + new_alive + far_in < 2) return;  // 只有一个（或没有）存活，无需仲裁
+
+    // 优先保留 BLE_OWNER_LAST 值代表的 app；无记录时回退当前连接者 b6_owner；兜底老 app
+    const char *keep = APP_PKG_B6X_OLD;
+    if (last_owner == 2) keep = APP_PKG_B6X_NEW;
+    else if (last_owner == 1) keep = APP_PKG_B6X_OLD;
+    else if (last_owner == 6 && far_alive) keep = APP_PKG_B7X;  // farsef 已死时不得保留它，回退 b6_owner 兜底
+    else if (b6_owner == 2) keep = APP_PKG_B6X_NEW;
+    else if (b6_owner == 1) keep = APP_PKG_B6X_OLD;
+
+    // 保留者涉及 farsef：与另一方（B6X app）的连接时间比较，保留更晚者。
+    // 注意：B6X app 连接事件会同时更新本文件 CONNECTED_AT 与 BLE_OWNER_LAST，
+    // 故常规流程下 b6_connected_at 与 b6_last_at 同值、此分支实际不可达；
+    // 保留作为对写入方时序不一致 / 旧版 LSP 的防御性兜底。
+    if (strcmp(keep, APP_PKG_B7X) == 0 && b6_connected_at > last_owner_at)
+        keep = (b6_owner == 2) ? APP_PKG_B6X_NEW : APP_PKG_B6X_OLD;
+
+    // 淘汰其他存活参与者（非前台才 force-stop）
+    evict_app_if_eligible(old_alive, keep, APP_PKG_B6X_OLD);
+    evict_app_if_eligible(new_alive, keep, APP_PKG_B6X_NEW);
+    evict_app_if_eligible(far_in, keep, APP_PKG_B7X);
+}
+
+// ======================== 已删除机制（Gear / PID 方差门控） ========================
+// 原「电池温度分档控制 / 紧急恢复期推进 / CPU 紧急干预 / 电流-挡位映射 / Gear 温度预测 /
+// PID 方差门控」等成套机制已删除，函数名与职责见 逻辑说明.md「已删除机制索引」。
+
+// ======================== 输入补偿 ========================
+
+/**
+ * CPU 补偿值（0.1°C）：comp=(cpu滤波温度 − 电池 − 偏移)/divisor，clamp≥0，按专属系数 EMA 平滑；
+ * 门控滞回、始终生效无开关（细节见 逻辑说明.md「CPU 补偿」）。
+ * @param batt 当前电池温度（0.1°C，用原始电池温度口径）
+ */
+static int cpu_comp_now(int batt) {
+    if (cpu_filtered_temp < 0) return 0;
+    float raw = (float)(cpu_filtered_temp - batt - pid_cpu_comp_offset) / (pid_cpu_comp_divisor * 10);
+    if (raw < 0.0f) raw = 0.0f;
+    // 进入门控：条件满足（CPU 高于电池+偏移，raw>0）→ 激活补偿
+    if (raw > 0.0f) pid_cpu_comp_active = 1;
+    // 未激活（从未满足条件，或已归零退出）→ 无补偿输出
+    if (!pid_cpu_comp_active) return 0;
+    // 首次滤波：上次值使用 0（从 0 开始 EMA 爬升，而非直接取 raw 首值跳变）
+    float prev = pid_cpu_comp_ready ? pid_cpu_comp_smooth : 0.0f;
+    pid_cpu_comp_smooth = (pid_cpu_comp_filter_alpha * raw +
+                          (100 - pid_cpu_comp_filter_alpha) * prev) / 100.0f;
+    pid_cpu_comp_ready = 1;
+    // 退出门控：滤波值归零才退出（raw=0 时 EMA 使平滑值渐进收敛，不瞬间切断）
+    if (pid_cpu_comp_smooth <= 0.0001f) {
+        pid_cpu_comp_active = 0;
+        pid_cpu_comp_smooth = 0.0f;
+    }
+    return (int)(pid_cpu_comp_smooth * 10 + 0.5f);
+}
+
+// ======================== PID 分段倍率表 ========================
+// 冷值 → 各簇折线插值 → 多簇逐轴取最小 → KDP / KI 升 / KI 降倍率；算法、取样与单位见 逻辑说明.md「PID 分段倍率表」。
+// 求值核心（排序/去重/按轴剔除留空点/插值/多簇取最小）在只依赖自身的 ki_cut.h 内，与 CI 跨端对拍程序共用同一实现。
+
+/** 解析一个（不要求 NUL 结尾的）十进制 token：整段须为合法整数（可带前导 +/-）。成功写 *out 返回 1 */
+
+/**
+ * 解析一行 PID_CUT_<簇号>：**仅逗号分隔**的重复四元组「冷值,KDP倍率,升倍率,降倍率」。
+ * **每段按逗号切分、允许留空**（两次逗号之间什么都不写）：三个倍率字段留空 = 该点在该轴上
+ * 不作为控制点（求值时剔除，语义与实现见 ki_cut.h）。
+ * 逐字段按生成头给出的边界钳位。
+ *
+ * <b>「空表」哨兵（0 簇 = 全段不削）与「解析失败」严格区分</b>：
+ *   · **值整体为空/仅空白**（`PID_CUT_1=`）或无有效点且**所有点冷值都留空**（如 `PID_CUT_1=,,,`）
+ *     → **清空该簇**（ki_cut_cnt = 0），即该簇不产生任何削减；这是用户「删光/清空该行」的落盘形态。
+ *   · **冷值非空但非整数**（打错字，如 `PID_CUT_1=abc,100,100,50`）或**倍率位非空非整数**或
+ *     段数非 4 的整数倍 → **整行忽略、保持该簇上次值**（绝不静默清空）。
+ *   · 冷值留空的单个点＝占位点（该点整点忽略），与其它有效点混在同一行时只忽略该点、其余照常装载。
+ *
+ * 超过 KI_CUT_MAX_POINTS 点的多余部分忽略（并记一条日志）。纯空格分隔（无逗号）的行会因段数
+ * 不符而被忽略。排序与同冷值取舍在求值时做（ki_cut_normalize）。
+ */
+static void ki_cut_parse_row(const char *idx_str, const char *val_str) {
+    char *endp = NULL;
+    long idx = strtol(idx_str, &endp, 10);
+    if (endp == idx_str || idx < 1 || idx > KI_CUT_MAX_CLUSTERS) {
+        write_log("配置 PID_CUT 簇号非法（%s），已忽略该行", idx_str);
+        return;
+    }
+    // 值整体为空/仅空白 = 「清空该簇」哨兵（与解析失败区分：这不是打错字，是显式清空）
+    {
+        const char *p = val_str;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '\0') {
+            ki_cut_cnt[idx - 1] = 0;
+            pidcut_new_seen[idx - 1] = 1;   // 新键优先：清空后不被旧键回填
+            write_log("配置 PID_CUT_%ld 值为空 → 清空该簇（全段不削）", idx);
+            return;
+        }
+    }
+    // 按逗号切分整行（空段保留，视为该字段留空）；段数上限 = 满点数 × 四元组宽度
+    const char *tok[KI_CUT_MAX_POINTS * 4];
+    size_t tlen[KI_CUT_MAX_POINTS * 4];
+    int ntok = 0;
+    const char *s = val_str;
+    while (ntok < KI_CUT_MAX_POINTS * 4) {
+        const char *b = s;
+        while (*s && *s != ',') s++;
+        const char *e = s;
+        while (b < e && (*b == ' ' || *b == '\t')) b++;      // 段内两端空白剔除
+        while (e > b && (e[-1] == ' ' || e[-1] == '\t')) e--;
+        tok[ntok] = b;
+        tlen[ntok] = (size_t)(e - b);
+        ntok++;
+        if (*s != ',') break;                                // 行尾结束；否则跨过逗号继续
+        s++;
+    }
+    if (ntok == KI_CUT_MAX_POINTS * 4 && *s) {
+        write_log("配置 PID_CUT_%ld 点数超过上限 %d，多余部分已忽略", idx, KI_CUT_MAX_POINTS);
+    }
+    if (ntok % 4 != 0) {
+        write_log("配置 PID_CUT_%ld 值个数 %d 非四元组整数倍，已忽略整行", idx, ntok);
+        return;
+    }
+    // 先解析到临时数组，全部有效后才提交，避免中途失败把该簇写成"新旧混合"
+    KiCutPoint tmp[KI_CUT_MAX_POINTS];
+    int np = 0;        // 有效点（冷值已填且合法）
+    int nblank = 0;    // 冷值留空的占位点
+    int nbad = 0;      // 冷值非空但非整数（打错字）
+    for (int i = 0; i + 3 < ntok; i += 4) {
+        if (tlen[i] == 0) {                                  // 冷值留空 = 占位点（该点整点不生效）
+            nblank++;
+            continue;
+        }
+        int cold;
+        if (!ki_cut_tok_int(tok[i], tlen[i], &cold)) {       // 冷值非空但非整数：打错字
+            write_log("配置 PID_CUT_%ld 第 %d 点冷值非整数，已忽略该点", idx, i / 4 + 1);
+            nbad++;
+            continue;
+        }
+        KiCutPoint pk;
+        pk.cold = clamp(cold, CFG_MIN_PID_CUT_F1, CFG_MAX_PID_CUT_F1);
+        pk.skip = 0;
+        static const unsigned char rate_bit[3] = { KI_CUT_SKIP_KDP, KI_CUT_SKIP_UP, KI_CUT_SKIP_DN };
+        static const int rate_min[3] = { CFG_MIN_PID_CUT_F2, CFG_MIN_PID_CUT_F3, CFG_MIN_PID_CUT_F4 };
+        static const int rate_max[3] = { CFG_MAX_PID_CUT_F2, CFG_MAX_PID_CUT_F3, CFG_MAX_PID_CUT_F4 };
+        int rate[3] = { KI_CUT_NONE, KI_CUT_NONE, KI_CUT_NONE };
+        int bad = 0;
+        for (int a = 0; a < 3; a++) {
+            if (tlen[i + 1 + a] == 0) { pk.skip |= rate_bit[a]; continue; }   // 留空：该轴跳过此点
+            if (!ki_cut_tok_int(tok[i + 1 + a], tlen[i + 1 + a], &rate[a])) { bad = 1; break; }
+            rate[a] = clamp(rate[a], rate_min[a], rate_max[a]);
+        }
+        if (bad) {
+            write_log("配置 PID_CUT_%ld 第 %d 点含非整数内容，已忽略整行", idx, i / 4 + 1);
+            return;
+        }
+        pk.kdp = rate[0];
+        pk.up  = rate[1];
+        pk.dn  = rate[2];
+        tmp[np++] = pk;
+    }
+    if (np == 0) {
+        if (nblank > 0 && nbad == 0) {
+            // 全为留空占位（如 `,,,`）→ 清空该簇（与「值整体为空」等价；打错字不在这一支）
+            ki_cut_cnt[idx - 1] = 0;
+            pidcut_new_seen[idx - 1] = 1;
+            write_log("配置 PID_CUT_%ld 全为留空占位 → 清空该簇（全段不削）", idx);
+            return;
+        }
+        write_log("配置 PID_CUT_%ld 未含有效点，已忽略整行", idx);   // 解析失败：保持该簇上次值
+        return;
+    }
+    for (int k = 0; k < np; k++) ki_cut_rows[idx - 1][k] = tmp[k];
+    ki_cut_cnt[idx - 1] = np;
+    pidcut_new_seen[idx - 1] = 1;   // 新键优先：标记该簇由新键 PID_CUT_ 配置
+}
+
+/**
+ * 旧键兼容（永久）：KI_CUT_<簇号> = 重复三元组「冷值,升倍率,降倍率,...」。
+ * 每点补 KDP 倍率 = 100（不削）后按四元组口径**暂存到 legacy_rows**（不直接写 ki_cut_rows）；
+ * 已删除的 KI_CUT_SMOOTH 整行忽略。
+ * 命中返回 1，否则 0。**独立函数**且用 strncmp+宏（非裸 strcmp 字面量），以免被 CI 的「C 端解析键单一来源」判成多键。
+ */
+static int parse_legacy_pidcut_cfg(const char *key, const char *val_str) {
+    // KI_CUT_SMOOTH 以 "KI_CUT_" 开头，必须在「前缀」判定**之前**拦下，否则会被当成簇号 "SMOOTH" 解析失败、误报簇号非法
+    if (strncmp(key, "KI_CUT_SMOOTH", 13) == 0) {   // 已删除的滤波键：忽略（迁移时一并清除）
+        legacy_pidcut_seen = 1;
+        return 1;
+    }
+    const size_t plen = sizeof(CFG_ROW_PREFIX_KI_CUT_LEGACY) - 1;
+    if (strncmp(key, CFG_ROW_PREFIX_KI_CUT_LEGACY, plen) != 0) return 0;
+    legacy_pidcut_seen = 1;
+    const char *idx_str = key + plen;
+    char *endp = NULL;
+    long idx = strtol(idx_str, &endp, 10);
+    if (endp == idx_str || idx < 1 || idx > KI_CUT_MAX_CLUSTERS) {
+        write_log("配置 KI_CUT_（旧）簇号非法（%s），已忽略该行", idx_str);
+        return 1;
+    }
+    int vals[KI_CUT_MAX_POINTS * 3];
+    int cnt = 0;
+    const char *s = val_str;
+    while (*s && cnt < KI_CUT_MAX_POINTS * 3) {
+        char *e = NULL;
+        long v = strtol(s, &e, 10);
+        if (e == s) break;
+        vals[cnt++] = (int)v;
+        s = e;
+        while (*s == ',' || *s == ' ' || *s == '\t') s++;
+    }
+    if (cnt == 0 || cnt % 3 != 0) {
+        write_log("配置 KI_CUT_%ld（旧）值个数 %d 非三元组整数倍，已忽略整行", idx, cnt);
+        return 1;
+    }
+    int np = cnt / 3;
+    for (int i = 0; i < np; i++) {
+        legacy_rows[idx - 1][i].cold = clamp(vals[3 * i],     CFG_MIN_PID_CUT_F1, CFG_MAX_PID_CUT_F1);
+        legacy_rows[idx - 1][i].kdp  = (int)KI_CUT_NONE;   // 旧表无 KDP 倍率 → 不削
+        legacy_rows[idx - 1][i].up   = clamp(vals[3 * i + 1], CFG_MIN_PID_CUT_F2, CFG_MAX_PID_CUT_F2);
+        legacy_rows[idx - 1][i].dn   = clamp(vals[3 * i + 2], CFG_MIN_PID_CUT_F3, CFG_MAX_PID_CUT_F3);
+    }
+    legacy_cnt[idx - 1] = np;
+    return 1;
+}
+
+/** 旧键生效（新键优先）：仅对「本轮未被新键 PID_CUT_ 占用」的簇，用旧键暂存值覆盖生效表。 */
+static void apply_legacy_pidcut(void) {
+    for (int i = 0; i < KI_CUT_MAX_CLUSTERS; i++) {
+        if (pidcut_new_seen[i] || legacy_cnt[i] <= 0) continue;
+        for (int k = 0; k < legacy_cnt[i]; k++) ki_cut_rows[i][k] = legacy_rows[i][k];
+        ki_cut_cnt[i] = legacy_cnt[i];
+    }
+}
+
+/**
+ * 提交配置改写：刷新并关闭临时文件，按原文件属主/权限对齐后 rename 覆盖。
+ * 属主/权限必须对齐（daemon 以 root 运行，临时文件默认 root 属主；不对齐则 rename 后 app 写不进配置）。
+ * 返回 1=已覆盖；0=失败（已删除临时文件，保留原文件）。
+ */
+static int commit_config_rewrite(const char *path, const char *tmp, FILE *g,
+                                 const struct stat *st, const char *what) {
+    fflush(g);
+    int m1 = fchmod(fileno(g), st->st_mode & 07777);
+    int m2 = fchown(fileno(g), st->st_uid, st->st_gid);
+    fclose(g);
+    if (m1 != 0 || m2 != 0) {
+        write_log("配置 %s：无法对齐属主/权限（chmod=%d chown=%d），已放弃写回：%s",
+                  what, m1, m2, path);
+        remove(tmp);
+        return 0;
+    }
+    if (rename(tmp, path) != 0) {
+        write_log("配置 %s 写回失败（rename），保留原文件：%s", what, path);
+        remove(tmp);
+        return 0;
+    }
+    return 1;
+}
+
+/** 读文本文件首行（去首尾空白）；成功返回 1。 */
+static int read_first_line(const char *path, char *out, size_t out_size) {
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    char buf[128];
+    int ok = 0;
+    if (fgets(buf, sizeof(buf), f)) {
+        char *v = trim_value(buf);
+        if (*v) {
+            strncpy(out, v, out_size - 1);
+            out[out_size - 1] = '\0';
+            ok = 1;
+        }
+    }
+    fclose(f);
+    return ok;
+}
+
+/** 记录本次开机的 boot_id 标记（临时停止的失效判据）；返回 1=已写。 */
+static int write_boot_marker(const char *boot_id) {
+    FILE *f = fopen(TEMP_STOP_BOOT_PATH, "w");
+    if (!f) return 0;
+    int ok = fprintf(f, "%s\n", boot_id) > 0;
+    fclose(f);
+    return ok;
+}
+
+/**
+ * 取配置写回的跨进程锁（fcntl 记录锁，锁整个独立锁文件 <path>.lock）。
+ * 与 app 侧 ConfigStore 的 FileChannel.lock() 是同一套 fcntl 锁——不要换成 flock()：
+ * Linux 上 flock 与 fcntl 记录锁互不可见，混用等于没锁。锁文件必须独立于配置文件：
+ * 提交走 rename 会换掉 profile.conf 的 inode，锁配置本身挡不住后来打开新 inode 的写者。
+ * 拿到后覆盖「读 → 写 tmp → rename」整个区间；失败不写（返回 -1，调用方跳过）。
+ * 用 F_SETLK 轮询而非 F_SETLKW：后者无超时，锁被对端长时间持有时会拖住 5s 控制节拍。
+ * **配置文件不存在时不创建锁文件**：全新设备上若留下 root:0600 的 .lock，app 之后所有配置
+ * 写入都会打不开（R01），故先 stat 配置、不存在直接返回「无配置」。
+ * @return 锁 fd（>=0）；-1=配置文件不存在 / 打不开锁文件 / 加锁出错 / 等锁超时
+ */
+#define CONFIG_LOCK_TIMEOUT_MS 2000
+#define CONFIG_LOCK_POLL_US    50000
+
+static int config_write_lock(const char *path) {
+    // 没有配置文件就没有可写回的对象：静默返回，调用方照常早退（全新设备/尚未部署属正常路径）
+    struct stat cst;
+    if (stat(path, &cst) != 0) return -1;
+
+    char lock_path[576];
+    int n = snprintf(lock_path, sizeof(lock_path), "%s.lock", path);
+    if (n < 0 || n >= (int)sizeof(lock_path)) return -1;
+    int fd = open(lock_path, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+    if (fd < 0) {
+        write_log("配置写回 打不开锁文件 %s（errno=%d），本次不写", lock_path, errno);
+        return -1;
+    }
+    // 锁文件由 root 首次创建时 app 打不开：属主/权限对齐配置文件（app uid 的 profile.conf）。
+    // 失败时也不删锁文件——它已是 app 可读写的属主/权限；删除别人可能正在持锁的 .lock
+    // 反而会形成两个 inode 的分裂锁。
+    fchown(fd, cst.st_uid, cst.st_gid);
+    fchmod(fd, 0600);
+    struct flock fl;
+    memset(&fl, 0, sizeof(fl));
+    fl.l_type   = F_WRLCK;
+    fl.l_whence = SEEK_SET;
+    fl.l_start  = 0;
+    fl.l_len    = 0;                 // 0 = 到文件末尾（整文件）
+    int waited_ms = 0;
+    for (;;) {
+        if (fcntl(fd, F_SETLK, &fl) == 0) return fd;
+        if (errno != EACCES && errno != EAGAIN) {
+            write_log("配置写回 加锁失败（%s errno=%d），本次不写", lock_path, errno);
+            close(fd);
+            return -1;
+        }
+        if (waited_ms >= CONFIG_LOCK_TIMEOUT_MS) {
+            write_log("配置写回 等锁超时（%dms，%s），本次不写", CONFIG_LOCK_TIMEOUT_MS, lock_path);
+            close(fd);
+            return -1;
+        }
+        usleep(CONFIG_LOCK_POLL_US);
+        waited_ms += CONFIG_LOCK_POLL_US / 1000;
+    }
+}
+
+/** 释放配置写回锁（显式 F_UNLCK 后 close；close 本身也会释放该进程在此文件上的锁）。 */
+static void config_write_unlock(int fd) {
+    if (fd < 0) return;
+    struct flock fl;
+    memset(&fl, 0, sizeof(fl));
+    fl.l_type   = F_UNLCK;
+    fl.l_whence = SEEK_SET;
+    fl.l_start  = 0;
+    fl.l_len    = 0;
+    fcntl(fd, F_SETLK, &fl);
+    close(fd);
+}
+
+/**
+ * 把配置文件里的 UI_TEMP_STOP 值写回 0（只改该行值，保留行首空白与行内注释）。
+ * 复用 commit_config_rewrite 的原子替换与属主/权限对齐。返回 1=已改写。
+ */
+static int writeback_temp_stop_disabled(const char *path) {
+    int lock_fd = config_write_lock(path);
+    if (lock_fd < 0) return 0;
+    FILE *f = fopen(path, "r");
+    if (!f) { config_write_unlock(lock_fd); return 0; }
+    struct stat st;
+    if (stat(path, &st) != 0) { fclose(f); config_write_unlock(lock_fd); return 0; }
+
+    char tmp[300];
+    snprintf(tmp, sizeof(tmp), "%s.tmpstop", path);
+    FILE *g = fopen(tmp, "w");
+    if (!g) { fclose(f); config_write_unlock(lock_fd); return 0; }
+
+    static const char KEY[] = "UI_TEMP_STOP";
+    const size_t KEY_LEN = sizeof(KEY) - 1;
+    int changed = 0;
+    char line[640];
+    while (fgets(line, sizeof(line), f)) {
+        const char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        const char *eq = strchr(p, '=');
+        if (*p != '#' && eq) {
+            size_t klen = (size_t)(eq - p);
+            while (klen > 0 && (p[klen - 1] == ' ' || p[klen - 1] == '\t')) klen--;
+            if (klen == KEY_LEN && strncmp(p, KEY, KEY_LEN) == 0) {
+                const char *hash = strchr(eq + 1, '#');
+                fwrite(line, 1, (size_t)(p - line), g);   // 保留行首缩进
+                fprintf(g, "%.*s=0", (int)KEY_LEN, KEY);
+                if (hash) fprintf(g, "  %s", hash);        // 保留行内注释（含行尾换行）
+                else fputc('\n', g);
+                changed = 1;
+                continue;
+            }
+        }
+        fputs(line, g);
+    }
+    fclose(f);
+    if (!changed) { fclose(g); remove(tmp); config_write_unlock(lock_fd); return 0; }
+    int ok = commit_config_rewrite(path, tmp, g, &st, "临时停止失效写回");
+    config_write_unlock(lock_fd);
+    return ok;
+}
+
+/**
+ * 维护「临时停止」的到下次重启自动失效：
+ *   开关为 1 时把首次观察到的 boot_id 记进标记文件，之后每轮比对；boot_id 变化 = 手机已重启，
+ *   自动置 0 并把配置值写回 0。手动重启 daemon 时 boot_id 不变，故不会误判。
+ */
+static void maintain_temp_stop(void) {
+    if (!temp_stop_enabled) {
+        // 关闭状态不保留标记：下次开启必须重新记录本次开机标识，
+        // 否则上一开机周期留下的旧标记会把新开启误判成「重启后失效」。
+        remove(TEMP_STOP_BOOT_PATH);
+        if (temp_stop_active_last) {
+            // 恢复控制：把限速起点重置为设备当前回传（非法时退回上次下发值，再退回最小合法值），
+            // 保证恢复后的第一包也从真实值按 RATE_LIMIT_* 步长走，不会补发停止前未走完的整段。
+            int base_cold = (cooler_cold_real >= COLD_MIN) ? cooler_cold_real
+                          : (sent_cold >= COLD_MIN ? sent_cold : pid_cold_min);
+            int base_rpm  = (cooler_rpm_real >= fan_rpm_min) ? cooler_rpm_real
+                          : (sent_rpm >= fan_rpm_min ? sent_rpm : fan_rpm_min);
+            actual_cold = base_cold;
+            actual_rpm  = base_rpm;
+            sent_cold   = base_cold;
+            sent_rpm    = base_rpm;
+            ramp_slots_left = 0;   // 丢弃停止前未走完的平滑下发
+            debug_log(debug_main, "临时停止 已关闭，恢复风扇/温控下发（限速起点 冷%d rpm%d）",
+                      base_cold, base_rpm);
+            temp_stop_active_last = 0;
+        }
+        if (temp_stop_writeback_pending && writeback_temp_stop_disabled(config_path)) {
+            temp_stop_writeback_pending = 0;
+            struct stat mst;
+            if (stat(config_path, &mst) == 0) config_mtime = mst.st_mtime;
+            write_log("临时停止 失效写回完成（UI_TEMP_STOP=0）");
+        }
+        publish_temp_stop_state();   // 未启用：发布 0（同时刷新 mtime）
+        return;
+    }
+
+    char boot_id[64];
+    int boot_ok = read_first_line(KERNEL_BOOT_ID_PATH, boot_id, sizeof(boot_id));
+    char marker[64];
+    int have_marker = read_first_line(TEMP_STOP_BOOT_PATH, marker, sizeof(marker));
+
+    if (!have_marker) {
+        // 首次观察到开启（或升级后首次读到）：记下本次开机标识，持续到下次重启
+        if (boot_ok) write_boot_marker(boot_id);
+    } else if (boot_ok && strcmp(marker, boot_id) != 0) {
+        // 开机标识变了 = 手机已重启：自动关闭并写回配置 0
+        temp_stop_enabled = 0;
+        ramp_slots_left = 0;
+        write_boot_marker(boot_id);
+        if (writeback_temp_stop_disabled(config_path)) {
+            struct stat mst;
+            if (stat(config_path, &mst) == 0) config_mtime = mst.st_mtime;
+        } else {
+            temp_stop_writeback_pending = 1;
+        }
+        if (temp_stop_active_last) {
+            debug_log(debug_main, "临时停止 已关闭，恢复风扇/温控下发");
+            temp_stop_active_last = 0;
+        }
+        write_log("临时停止 已在重启后失效，配置写回 UI_TEMP_STOP=0");
+        publish_temp_stop_state();   // 本周期已关闭：发布 0
+        return;
+    }
+
+    temp_stop_active_last = 1;
+    ramp_slots_left = 0;   // 丢弃开启前未走完的平滑下发
+    debug_log(debug_main, "临时停止 生效，跳过风扇/温控下发（保持现场）");
+    publish_temp_stop_state();   // 生效：发布 1（未变化也每 5s 重写刷新 mtime）
+}
+
+/** 临时停止是否生效（纯读取，供下发闸门判断） */
+static int temp_stop_active(void) {
+    return temp_stop_enabled;
+}
+
+/**
+ * 一次性迁移写回（方案 B）：把配置文件里的旧键就地改名——
+ *   KI_CUT_<簇号>=<三元组> → PID_CUT_<簇号>=<四元组>（每点补 KDP 倍率 100=不削）；
+ *   KI_CUT_SMOOTH=… → 整行删除（该键已废弃）；其余行原样保留。
+ * 原子性：写同目录 <path>.mig → 按原文件属主/权限 chmod+chown → rename 覆盖。daemon 以 root 运行，
+ *   不 chown 会令临时文件落成 root 属主，app 读不到。返回 1=已改写，0=无需改写或失败（失败保留原文件，
+ *   读兼容路径已生效，行为不丢）。幂等：迁移后文件无旧键，重跑不再触发。
+ */
+static int migrate_pid_cut_config(const char *path) {
+    int lock_fd = config_write_lock(path);   // 跨进程写锁：覆盖读→写 tmp→rename
+    if (lock_fd < 0) return 0;
+    FILE *f = fopen(path, "r");
+    if (!f) { config_write_unlock(lock_fd); return 0; }
+    struct stat st;
+    if (stat(path, &st) != 0) { fclose(f); config_write_unlock(lock_fd); return 0; }
+
+    char tmp[300];
+    snprintf(tmp, sizeof(tmp), "%s.mig", path);
+    FILE *g = fopen(tmp, "w");
+    if (!g) { fclose(f); config_write_unlock(lock_fd); return 0; }
+
+    // 预扫：先记录文件里已存在的 PID_CUT_<n> 簇号；迁移时对「已有新键的同簇旧行」丢弃，避免写出重复行
+    int new_seen[KI_CUT_MAX_CLUSTERS] = {0};
+    {
+        char l2[640];
+        const size_t NPFX = sizeof(CFG_ROW_PREFIX_PID_CUT) - 1;
+        while (fgets(l2, sizeof(l2), f)) {
+            const char *q = l2;
+            while (*q == ' ' || *q == '\t') q++;
+            if (*q == '#' || strncmp(q, CFG_ROW_PREFIX_PID_CUT, NPFX) != 0) continue;
+            char *e2 = NULL;
+            long n2 = strtol(q + NPFX, &e2, 10);
+            if (e2 != q + NPFX && n2 >= 1 && n2 <= KI_CUT_MAX_CLUSTERS) new_seen[n2 - 1] = 1;
+        }
+        rewind(f);
+    }
+
+    const size_t LOLDN = sizeof(CFG_ROW_PREFIX_KI_CUT_LEGACY) - 1;
+    int changed = 0;
+    char line[640];
+    while (fgets(line, sizeof(line), f)) {
+        const char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        const char *eq = strchr(p, '=');
+        if (*p != '#' && eq) {
+            size_t klen = (size_t)(eq - p);
+            while (klen > 0 && (p[klen - 1] == ' ' || p[klen - 1] == '\t')) klen--;
+            if (klen == 13 && strncmp(p, "KI_CUT_SMOOTH", 13) == 0) {
+                changed = 1;                 // 已废弃键：整行删除
+                continue;
+            }
+            if (klen > LOLDN && strncmp(p, CFG_ROW_PREFIX_KI_CUT_LEGACY, LOLDN) == 0) {
+                changed = 1;
+                char *ie = NULL;
+                long lidx = strtol(p + LOLDN, &ie, 10);
+                if (ie != p + LOLDN && lidx >= 1 && lidx <= KI_CUT_MAX_CLUSTERS && new_seen[lidx - 1]) {
+                    continue;                // 该簇已有新键行：丢弃旧行（不产出重复）
+                }
+                int vals[KI_CUT_MAX_POINTS * 3];
+                int cnt = 0;
+                const char *s = eq + 1;
+                while (*s && cnt < KI_CUT_MAX_POINTS * 3) {
+                    char *e = NULL;
+                    long v = strtol(s, &e, 10);
+                    if (e == s) break;
+                    vals[cnt++] = (int)v;
+                    s = e;
+                    while (*s == ',' || *s == ' ' || *s == '\t') s++;
+                }
+                if (cnt > 0 && cnt % 3 == 0) {
+                    char out[600];
+                    int off = snprintf(out, sizeof(out), "%s%.*s=",
+                                       CFG_ROW_PREFIX_PID_CUT, (int)(klen - LOLDN), p + LOLDN);
+                    int ok = (off > 0 && off < (int)sizeof(out));
+                    for (int i = 0; ok && i < cnt / 3; i++) {
+                        int n = snprintf(out + off, (size_t)((int)sizeof(out) - off),
+                                         "%s%d,%d,%d,%d", i ? "," : "",
+                                         vals[3 * i], KI_CUT_NONE, vals[3 * i + 1], vals[3 * i + 2]);
+                        if (n < 0 || off + n >= (int)sizeof(out)) { ok = 0; break; }
+                        off += n;
+                    }
+                    if (ok) {
+                        fputs(out, g);
+                        fputc('\n', g);
+                        continue;
+                    }
+                }
+                continue;                    // 无法解析的旧行：丢弃（原本即被忽略）
+            }
+        }
+        fputs(line, g);                      // 其余行原样保留
+    }
+    fclose(f);
+
+    if (!changed) { fclose(g); remove(tmp); config_write_unlock(lock_fd); return 0; }
+    if (!commit_config_rewrite(path, tmp, g, &st, "旧键迁移")) {
+        config_write_unlock(lock_fd);
+        return 0;
+    }
+    write_log("配置 旧键 KI_CUT_* 已迁移为 PID_CUT_*（并清除已废弃的 KI_CUT_SMOOTH）");
+    config_write_unlock(lock_fd);
+    return 1;
+}
+
+/**
+ * 旧 CPU_ZONE_RESCAN（秒）→ 控制周期的一次性写回：
+ *   替换第一值为迁移后的周期数，保留第二值；文件末尾追加单位标记。
+ * 原子性/属主处理与旧键迁移一致；失败保留原文件，内存中的迁移值仍生效。
+ */
+static int migrate_rescan_unit_config(const char *path, int cycles) {
+    int lock_fd = config_write_lock(path);   // 跨进程写锁：覆盖读→写 tmp→rename
+    if (lock_fd < 0) return 0;
+    FILE *f = fopen(path, "r");
+    if (!f) { config_write_unlock(lock_fd); return 0; }
+    struct stat st;
+    if (stat(path, &st) != 0) { fclose(f); config_write_unlock(lock_fd); return 0; }
+
+    char tmp[300];
+    snprintf(tmp, sizeof(tmp), "%s.mig", path);
+    FILE *g = fopen(tmp, "w");
+    if (!g) { fclose(f); config_write_unlock(lock_fd); return 0; }
+
+    int changed = 0;
+    int has_marker = 0;
+    int migrated_from_sec = 0;
+    char line[640];
+    while (fgets(line, sizeof(line), f)) {
+        if (strstr(line, "cfg-unit: CPU_ZONE_RESCAN=cycles") != NULL) has_marker = 1;
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p != '#' && strncmp(p, "CPU_ZONE_RESCAN", 15) == 0) {
+            const char *q = p + 15;
+            while (*q == ' ' || *q == '\t') q++;
+            if (*q == '=') {
+                int old_sec = 0, keep = 0;
+                int n = sscanf(q + 1, "%d %d", &old_sec, &keep);
+                if (n >= 2) {
+                    keep = clamp(keep, 1, 64);
+                    snprintf(line, sizeof(line), "CPU_ZONE_RESCAN=%d %d\n", cycles, keep);
+                    migrated_from_sec = old_sec;
+                } else if (n == 1) {
+                    snprintf(line, sizeof(line), "CPU_ZONE_RESCAN=%d\n", cycles);
+                    migrated_from_sec = old_sec;
+                } else {
+                    fputs(line, g);
+                    continue;
+                }
+                changed = 1;
+                fputs(line, g);
+                continue;
+            }
+        }
+        fputs(line, g);
+    }
+    fclose(f);
+
+    if (!changed) { fclose(g); remove(tmp); config_write_unlock(lock_fd); return 0; }
+    if (!has_marker) fputs("\n# cfg-unit: CPU_ZONE_RESCAN=cycles\n", g);
+    if (!commit_config_rewrite(path, tmp, g, &st, "CPU_ZONE_RESCAN 单位迁移")) {
+        config_write_unlock(lock_fd);
+        return 0;
+    }
+    write_log("配置 CPU_ZONE_RESCAN 旧值 %d 秒 → 已写回为 %d 个控制周期并追加单位标记",
+              migrated_from_sec, cycles);
+    config_write_unlock(lock_fd);
+    return 1;
+}
+
+/**
+ * 旧两键 APP_LAUNCH_COOLDOWN（秒）/ APP_WATCHDOG（周期数）→ APP_LAUNCH_TIMING 的一次性写回：
+ *   合并为一行「拉起冷却 停滞重启」，并删除旧行；文件已有完整新键（两值）时只删旧行。
+ *   新键是单值行时保留其第 1 槽、用合并后的有效值补齐第 2 槽（否则旧 APP_WATCHDOG 被删且值丢失）。
+ * 原子性/属主对齐与旧键迁移一致；失败保留原文件（读兼容已生效，行为不丢）。幂等：迁移后无旧键。
+ */
+static int migrate_launch_timing_config(const char *path, int cooldown, int watchdog) {
+    int lock_fd = config_write_lock(path);   // 跨进程写锁：覆盖读→写 tmp→rename
+    if (lock_fd < 0) return 0;
+    FILE *f = fopen(path, "r");
+    if (!f) { config_write_unlock(lock_fd); return 0; }
+    struct stat st;
+    if (stat(path, &st) != 0) { fclose(f); config_write_unlock(lock_fd); return 0; }
+
+    char tmp[300];
+    snprintf(tmp, sizeof(tmp), "%s.mig", path);
+    FILE *g = fopen(tmp, "w");
+    if (!g) { fclose(f); config_write_unlock(lock_fd); return 0; }
+
+    // 预扫：新键已存在时按其值数量决定「只删旧行」还是「补齐第 2 槽」
+    int has_new = 0;
+    int new_has_watchdog = 0;   // 新键行已带第 2 槽（两值）
+    {
+        char l2[640];
+        while (fgets(l2, sizeof(l2), f)) {
+            const char *q = l2;
+            while (*q == ' ' || *q == '\t') q++;
+            if (*q == '#' || strncmp(q, "APP_LAUNCH_TIMING", 17) != 0) continue;
+            const char *e2 = q + 17;
+            while (*e2 == ' ' || *e2 == '\t') e2++;
+            if (*e2 == '=') {
+                has_new = 1;
+                int c1 = 0, c2 = 0;
+                if (sscanf(e2 + 1, "%d %d", &c1, &c2) >= 2) new_has_watchdog = 1;
+            }
+        }
+        rewind(f);
+    }
+
+    int changed = 0;
+    int emitted = (has_new && new_has_watchdog);   // 已有完整新键 = 不再写出
+    char line[640];
+    while (fgets(line, sizeof(line), f)) {
+        const char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        const char *eq = (*p == '#') ? NULL : strchr(p, '=');
+        if (eq) {
+            size_t klen = (size_t)(eq - p);
+            while (klen > 0 && (p[klen - 1] == ' ' || p[klen - 1] == '\t')) klen--;
+            if ((klen == 19 && strncmp(p, "APP_LAUNCH_COOLDOWN", 19) == 0) ||
+                (klen == 12 && strncmp(p, "APP_WATCHDOG", 12) == 0)) {
+                changed = 1;
+                if (!emitted) {
+                    fprintf(g, "APP_LAUNCH_TIMING=%d %d\n", cooldown, watchdog);
+                    emitted = 1;
+                }
+                continue;   // 旧行删除（含行内注释）
+            }
+            if (!new_has_watchdog && klen == 17 && strncmp(p, "APP_LAUNCH_TIMING", 17) == 0) {
+                // 单值新键：用合并后的有效值补齐第 2 槽；若合并行已在别处写出则丢弃本行
+                changed = 1;
+                if (!emitted) {
+                    fprintf(g, "APP_LAUNCH_TIMING=%d %d\n", cooldown, watchdog);
+                    emitted = 1;
+                }
+                continue;
+            }
+        }
+        fputs(line, g);     // 其余行原样保留
+    }
+    fclose(f);
+
+    if (!changed) { fclose(g); remove(tmp); config_write_unlock(lock_fd); return 0; }
+    if (!commit_config_rewrite(path, tmp, g, &st, "APP_LAUNCH_TIMING 旧键迁移")) {
+        config_write_unlock(lock_fd);
+        return 0;
+    }
+    write_log("配置 旧键 APP_LAUNCH_COOLDOWN/APP_WATCHDOG 已迁移为 APP_LAUNCH_TIMING=%d %d",
+              cooldown, watchdog);
+    config_write_unlock(lock_fd);
+    return 1;
+}
+
+/** 复位为代码默认表：清空全部簇，再把生成头给出的默认行（CFG_DEFAULT_PID_CUT_n）按同一解析路径装入 */
+static void reset_ki_cut_defaults(void) {
+    memset(ki_cut_cnt, 0, sizeof(ki_cut_cnt));
+    ki_cut_parse_row("1", CFG_DEFAULT_PID_CUT_1);
+}
+
+/** 重算：按取样冷值求各簇最小倍率（KDP/升/降各一），并打诊断日志 */
+static void ki_cut_refresh(int cold) {
+    KiCutCluster cs[KI_CUT_MAX_CLUSTERS];
+    int n = 0;
+    for (int i = 0; i < KI_CUT_MAX_CLUSTERS; i++)
+        if (ki_cut_cnt[i] > 0) { cs[n].pts = ki_cut_rows[i]; cs[n].n = ki_cut_cnt[i]; n++; }
+    ki_cut_eval(cs, n, cold, &ki_cut_mult_kdp, &ki_cut_mult_up, &ki_cut_mult_dn);
+    pid_log("PID削减 冷值=%d KDP=%.1f 升=%.1f 降=%.1f 簇=%d",
+            cold, ki_cut_mult_kdp, ki_cut_mult_up, ki_cut_mult_dn, n);
+}
+
+// ======================== PID 控制函数 ========================
+
+/**
+ * 速度非线性映射（v → v'）：|v| ≥ L 恒等，|v| < L 按平滑阶跃取 q 次幂降权（保号、|输出|≤|v|、
+ * 在 ±L 连续）；性质与三条护栏见 逻辑说明.md「单累积器公式」。
+ */
+static float pid_spd_nl_map(float v) {
+    if (v == 0.0f) return 0.0f;                  // 护栏①：0 无符号，直接 0
+    if (pid_spd_nl_exp_p100 == 0) return v;      // 护栏②：q=0 → 完全线性，位精确恒等
+    float l = pid_spd_nl_thr_p100 / 100.0f;
+    if (l <= 0.0f) return v;                     // 护栏③：阈值非法 → 恒等，不除零
+    float a = (v < 0.0f) ? -v : v;               // |v|
+    if (a >= l) return v;                        // |v| ≥ L：严格恒等
+    float t = a / l;
+    float s = t * t * (3.0f - 2.0f * t);         // 平滑阶跃 ∈ (0,1)
+    return (v < 0.0f ? -a : a) * powf(s, pid_spd_nl_exp_p100 / 100.0f);   // sign(v)·|v|·s^q
+}
+
+/**
+ * PID 计算（单累积器 OUTPUT = clamp(acc + kdp, 0, 1)）。公式与各步（error/速度/KDP/动态目标/KI 削减/
+ * 跳过①）见 逻辑说明.md「单累积器公式」。
+ * @param batt_cdeg 电池温度（0.01°C，纯电池，不含补偿；取滤波值，3680 = 36.80°C）
+ * @param dt       距上次重算以来的 5 秒周期数（钳位 0.6~6，1 = 5s）
+ * @param cpu_comp CPU 补偿（°C，已 EMA 平滑）
+ * @param batt_window_changed 本周期温度窗口是否变化（0=温度未变，kdp 沿用）
+ * @return 归一化输出 0.0~1.0
+ */
+static float pid_compute(int batt_cdeg, float dt, float cpu_comp, int batt_window_changed, int recall_on, float recall_v) {
+    // 输入误差（纯电池）；基线仍是 0.1°C 口径，此处按 0.01°C 换算
+    float error = (batt_cdeg - BATT_BASELINE * 10) / 100.0f;
+
+    // 速度项（°C/周期）：首次重算（无常值历史）时 v=0；温度未变时用回溯速度（recall_on）
+    float v = 0.0f;
+    if (recall_on)
+        v = recall_v;
+    else if (pid_last_change_time != 0)
+        v = (error - pid_last_error) / dt;
+    pid_last_error = error;
+
+    // 速度非线性映射：差分 v 与回溯注入 v 的唯一映射点（各恰好施加一次）
+    v = pid_spd_nl_map(v);
+
+    // ch（受控量，用于积分）与 ch_kdp（用于 KDP，速度按 0.33 衰减）
+    float sc = pid_speed_coef / 10.0f;
+    float ch    = error + v * sc + cpu_comp;
+    float chkdp = error + v * sc * 0.33f + cpu_comp;
+
+    // 动态目标（EMA）：raw_target = clamp(error×目标系数, ±目标上限)
+    float raw_target = error * (pid_target_coef / 1000.0f);
+    float tmax = pid_target_max / 10.0f;   // 0.1°C → °C
+    if (raw_target >  tmax) raw_target =  tmax;
+    if (raw_target < -tmax) raw_target = -tmax;
+    // 动态目标 EMA（方向性滤波）：远离基线加快(away)，回归基线减慢(toward)
+    {
+        float ta = pid_target_alpha / 100.0f;
+        if (pid_target_dir_on) {
+            float ra = (raw_target < 0.0f) ? -raw_target : raw_target;
+            float tf = (pid_target_f  < 0.0f) ? -pid_target_f  : pid_target_f;
+            ta = (ra > tf) ? (pid_target_away_alpha / 100.0f) : (pid_target_toward_alpha / 100.0f);
+        }
+        pid_target_f += ta * (raw_target - pid_target_f);
+    }
+
+    // KI 分段倍率表重算：门控与下面的 KDP 一致（温度窗口变化），
+    // 取样 = 上次重算算出的目标冷值 pid_align_cold；本轮升/降倍率只作用于 KI 升/降速率（不作用于 KDP）。
+    if (batt_window_changed)
+        ki_cut_refresh(pid_align_cold);
+
+    // 积分累积（acc；不乘 dt）：被积项为正走升速率、为负走降速率，各自乘 KI 削减对应倍率
+    {
+        float integrand = ch - pid_target_f;
+        float ki_rate = (integrand >= 0.0f) ? pid_ki_up_coef * (ki_cut_mult_up / 100.0f)
+                                            : pid_ki_down_coef * (ki_cut_mult_dn / 100.0f);
+        pid_ki += (ki_rate / 1000.0f) * integrand;
+    }
+
+    // KDP（融合 P+D）：温度变了才更新；温度未变沿用上次值（跳过①）；乘 PID 分段倍率表的 KDP 倍率（100 = 不削）。
+    // 不设死区：输入滤波已把 0.1°C 台阶拆成多拍，kdp 逐拍跟随即可；加死区会把几拍累计的
+    // 变化攒成一次释放，反而把台阶合回去（见 逻辑说明.md「PID 输入滤波」）。
+    if (batt_window_changed)
+        pid_kdp = (pid_kdp_coef / 1000.0f) * chkdp * (ki_cut_mult_kdp / 100.0f);
+
+    // 预算钳制：acc ≥0 且 ≤ max(0, 1−kdp)（防 acc+kdp 超 1 被末端硬截断，即抗 windup）
+    float budget = 1.0f - pid_kdp;
+    if (budget < 0.0f) budget = 0.0f;
+    if (pid_ki > budget) pid_ki = budget;
+    if (pid_ki < 0.0f)   pid_ki = 0.0f;
+
+    pid_last_ch = ch;
+
+    // 钳位 0~1
+    float out = pid_ki + pid_kdp;
+    if (out < 0.0f) out = 0.0f;
+    if (out > 1.0f) out = 1.0f;
+
+    pid_log("e=%.2f v=%.2f ch=%.2f tgt=%.2f ki=%.2f kdp=%.2f out=%.2f win=%d",
+            error, v, ch, pid_target_f, pid_ki, pid_kdp, out, batt_window_changed);
+    return out;
+}
+
+/**
+ * 热端温度线性映射 + 输入 EMA + 双向滞回（无上下限，最终钳制在下发阶段）。
+ * 输入先经 MAP_INPUT_SMOOTH_ALPHA 平滑；滞回规则见 逻辑说明.md「制冷→RPM 映射引擎」。
+ */
+static int rpm_from_hot_end(int hot_10) {
+    static int prev_hot = -1;   // 上一轮平滑后的温度
+    static int prev_rpm = 0;
+    if (hot_10 <= 0) {
+        debug_log(debug_exec, "rpm 热端 ≤0（%d），保持上次 %d", hot_10, prev_rpm);
+        return prev_rpm;   // 热端 ≤0（异常/未就绪）时保持上次输出
+    }
+    int range = hot_map_max - hot_map_min;
+    if (range <= 0) return 0;
+
+    // EMA 平滑输入温度（首次直取）
+    int hot_s;
+    if (prev_hot < 0) {
+        hot_s = hot_10;
+    } else {
+        hot_s = EMA_DIR(hot_10, prev_hot, rpm_smooth_alpha);
+    }
+
+    // 平滑后温度不变 → 保持上次输出
+    if (hot_s == prev_hot)
+        return prev_rpm;
+
+    int eff_hot;
+    if (hot_s < prev_hot) {
+        // 降温滞回：有效温度 = 平滑值 + 1°C（0.1°C*10），使 RPM 滞后下降
+        eff_hot = hot_s + 10;
+        if (eff_hot > hot_map_max) eff_hot = hot_map_max;
+    } else {
+        // 升温或首次 → 直通
+        eff_hot = hot_s;
+    }
+
+    float t = (float)(eff_hot - hot_map_min) / range;
+    int rpm = fan_rpm_min + (int)(t * (active_fan_max - fan_rpm_min));
+
+    // 双向钳位（基于平滑值）
+    if (prev_hot >= 0) {
+        if (hot_s < prev_hot && rpm > prev_rpm) rpm = prev_rpm;  // 降温 ≥ 上次（滞回 +10 不超限）
+        if (hot_s > prev_hot && rpm < prev_rpm) rpm = prev_rpm;  // 升温 ≥ 上次时保持或不降
+    }
+
+    prev_hot = hot_s;
+    prev_rpm = rpm;
+    debug_log(debug_exec, "rpm 热端 hot=%d(平滑%d) → %d", hot_10, hot_s, rpm);
+    return rpm;
+}
+
+/**
+ * 冷强度指数映射（n^exp，无上下限；cold < cold_map_start 时线性外推下限以避免 powf 负数底数）。
+ * 输入先经 MAP_INPUT_SMOOTH_ALPHA 平滑，最终钳制在下发阶段。见 逻辑说明.md「制冷→RPM 映射引擎」。
+ */
+static int rpm_from_cold_exp(int cold) {
+    static int cold_in_smoothed = -1;   // 输入侧 EMA 平滑后的制冷强度
+    int range = active_pid_cold_max - cold_map_start;
+    if (range <= 0) return 0;
+
+    // 输入侧 EMA 平滑：平滑制冷强度本身，映射后再无输出滤波
+    if (cold_in_smoothed < 0) {
+        cold_in_smoothed = cold;
+    } else {
+        cold_in_smoothed = EMA_DIR(cold, cold_in_smoothed, rpm_smooth_alpha);
+    }
+    int cold_s = cold_in_smoothed;
+
+    float n = (float)(cold_s - cold_map_start) / range;
+    int rpm;
+    if (n < 0.0f)
+        rpm = fan_rpm_min + (int)(n * (active_fan_max - fan_rpm_min));
+    else {
+        float n_exp = powf(n, cold_map_exp / 100.0f);
+        rpm = fan_rpm_min + (int)(n_exp * (active_fan_max - fan_rpm_min));
+    }
+    debug_log(debug_exec, "rpm 冷端 exp cold=%d(平滑%d) → %d", cold, cold_s, rpm);
+    return rpm;
+}
+
+/**
+ * 转速 → 合并权重：把转速域 [fan_rpm_min, active_fan_max] 线性映射到权重域
+ * [fan_rpm_min, FAN_WEIGHT_MAX]，而不是把转速值直接钳到权重上下限。
+ * 输入先按转速域钳制（低于最低转速按最低、高于设备上限按设备上限）。
+ */
+static int weight_from_rpm(int rpm) {
+    if (active_fan_max <= fan_rpm_min) return fan_rpm_min;   // 配置异常：权重退化为等权
+    int w_max = (fan_rpm_min > FAN_WEIGHT_MAX) ? fan_rpm_min : FAN_WEIGHT_MAX;
+    int v = clamp(rpm, fan_rpm_min, active_fan_max);
+    return fan_rpm_min + (v - fan_rpm_min) * (w_max - fan_rpm_min) / (active_fan_max - fan_rpm_min);
+}
+
+/**
+ * 独立风扇目标计算：冷端指数映射（基于限速后实际制冷）+ 热端线性映射加权合并。
+ * 与 PID 输出解耦：每周期下发前由 rate_limited_execute 单独调用。
+ */
+static int compute_fan_target(void) {
+    int rpm_cold = rpm_from_cold_exp(actual_cold);
+    int rpm = rpm_cold;
+    if (cooler_hot_temp >= 0) {   // 热端 ≤0（0=异常 0°）也进入，由 rpm_from_hot_end 保持上次值
+        // 自加权合并：各以自身 RPM 映射出的权重参与（转速域线性映射到权重域，见 weight_from_rpm）。
+        // 热端低于映射起始温度时按负向外推继续参与，不在此丢弃；结果可低于最低转速，
+        // 由下游 rate_limit_fan 统一钳制落到最低转速（此处提前钳制会改变限速行为）。
+        int rpm_hot = rpm_from_hot_end(cooler_hot_temp);
+        int w_hot  = weight_from_rpm(rpm_hot);
+        int w_cold = weight_from_rpm(rpm_cold);
+        // 两权重经映射后恒 ≥fan_rpm_min（FAN_RPM_RANGE 解析下限 1000），故分母恒 >0，除法安全。
+        rpm = (w_hot * rpm_hot + w_cold * rpm_cold) / (w_hot + w_cold);
+    }
+    debug_log(debug_exec, "rpm 目标 冷端=%d 热端=%d → %d", rpm_cold, cooler_hot_temp, rpm);
+    return rpm;
+}
+
+/**
+ * 直接下发 AT 广播（PID 模式使用）
+ * 通过 should_skip_dispatch 用 last_* 缓存去重
+ * 返回 1=已发送，0=跳过（无变化）
+ */
+static int apply_gear_direct(int mode, int target,
+                               int send_rpm, int cold, int wl) {
+    // 临时停止：抑制一切下发（含平滑下发的登记），保持散热器现场
+    if (temp_stop_active()) {
+        debug_log(debug_exec, "临时停止 生效，抑制下发（冷%d RPM%d）", cold, send_rpm);
+        return 0;
+    }
+
+    // 纯下发：制冷限速与风扇目标已由 rate_limited_execute 完成，此处只去重/日志/广播
+
+    // ---- 热端过温边界钳制（去重前生效；不同步 actual_cold，风扇由 actual_cold 推算保持高转速散热）----
+    int cold_pre_clamp = cold;
+    if (hot_derate > 0) {
+        int cold_cap = active_cold_eff_max;
+        if (cold > cold_cap) cold = cold_cap;
+    }
+    // 削减触发的下压判据（写死、可解释、不依赖越界巧合）：过温削减生效 且 本轮 cold 确被钳制压低
+    int hot_forced_down = (hot_derate > 0 && cold < cold_pre_clamp);
+
+    // ---- 去重检测 + 制冷变化死区（以散热器实际回传为准）----
+    if (should_skip_dispatch(mode, target, send_rpm, cold, wl, hot_forced_down)) {
+        debug_log(debug_exec, "apply_gear_direct 跳过下发（目标冷%d RPM%d == 回传冷%d RPM%d）",
+                  cold, send_rpm, cooler_cold_real, cooler_rpm_real);
+        return 0;
+    }
+
+    // 过热钳制冷动作日志（仅在实际下发时输出，与去重判定一致）
+    if (cold < cold_pre_clamp)
+        write_log("过热钳制冷 %d→%d（削减量 %d）", cold_pre_clamp, cold, hot_derate);
+
+    // 偏差 = (原始电池温度 + 补偿) - 目标温度
+    int batt_10 = (cached_batt_raw >= 0) ? cached_batt_raw : BATT_BASELINE;
+    int dev_10 = batt_10 + pid_last_comp_10 - BATT_BASELINE;
+    int hot_deg = (cooler_hot_temp > 0) ? cooler_hot_temp / 10 : 0;
+    if (dispatch_target_cold != logged_target_cold ||
+        dispatch_target_rpm  != logged_target_rpm) {
+        write_log("%d%+.1f° %s 冷%d 热%d° RPM%d",
+                  BATT_BASELINE / 10, dev_10 / 10.0f,
+                  device_tag_of(active_device),
+                  cold, hot_deg, send_rpm);
+        logged_target_cold = dispatch_target_cold;
+        logged_target_rpm  = dispatch_target_rpm;
+    } else {
+        debug_log(debug_exec, "下发（目标未变）冷%d 热%d° RPM%d（目标 冷%d RPM%d）",
+                  cold, hot_deg, send_rpm, dispatch_target_cold, dispatch_target_rpm);
+    }
+
+    // 平滑下发：判定通过后只登记本轮目标，由 1s 主循环按 RAMP_SLOTS 份送出。
+    // 不拆分的三种情况：开关关闭、起点未知（首次 / 长断连后）、本轮无变化；
+    // 热端过温下压是最高优先级保护，也不拆分，保持原来一步到位。
+    int ramp_able = ramp_dispatch && !hot_forced_down && sent_rpm >= 0 && sent_cold >= 0
+                    && (send_rpm != sent_rpm || cold != sent_cold);
+    if (ramp_able) {
+        ramp_mode        = mode;
+        ramp_target_temp = target;
+        ramp_wl          = wl;
+        ramp_target_rpm  = send_rpm;
+        ramp_remain_rpm  = send_rpm - sent_rpm;
+        ramp_remain_cold = cold - sent_cold;
+        // 每份步长取「本周期限速上限 / 份数」，不是「目标差 / 份数」
+        ramp_step_rpm    = RATE_LIMIT_FAN / RAMP_SLOTS;
+        ramp_step_cold   = cold_rate_bound / RAMP_SLOTS;
+        if (ramp_step_rpm  < 1) ramp_step_rpm  = 1;
+        if (ramp_step_cold < 1) ramp_step_cold = 1;
+        ramp_slots_left  = RAMP_SLOTS;
+    } else {
+        send_am_broadcast(mode, target, send_rpm, cold, wl);
+        sent_rpm        = send_rpm;
+        sent_cold       = cold;
+        ramp_slots_left = 0;
+    }
+
+    last_bcast_valid   = 1;
+    last_mode          = mode;
+    last_target_temp   = target;
+    last_rpm           = send_rpm;
+    last_cold          = cold;
+    last_wind_level    = wl;
+    return 1;
+}
+
+/**
+ * 平滑下发：送出一份。由 1s 主循环每拍调用，判定层不参与。
+ * 每次走 min(每份步长, 剩余量)；到达目标即结束本轮，剩余份数作废。
+ */
+static void ramp_tick(void) {
+    // 临时停止：丢弃未走完的平滑下发，绝不在停止期间继续写散热器
+    if (temp_stop_active()) { ramp_slots_left = 0; return; }
+    if (ramp_slots_left <= 0) return;
+
+    int step_r = ramp_step_rpm;
+    if (abs(ramp_remain_rpm) < step_r) step_r = abs(ramp_remain_rpm);
+    if (ramp_remain_rpm < 0) step_r = -step_r;
+
+    int step_c = ramp_step_cold;
+    if (abs(ramp_remain_cold) < step_c) step_c = abs(ramp_remain_cold);
+    if (ramp_remain_cold < 0) step_c = -step_c;
+
+    sent_rpm         += step_r;
+    sent_cold        += step_c;
+    ramp_remain_rpm  -= step_r;
+    ramp_remain_cold -= step_c;
+    ramp_slots_left--;
+
+    int done = (ramp_remain_rpm == 0 && ramp_remain_cold == 0);
+    int out_rpm = sent_rpm;
+    if (done) {
+        out_rpm  = ramp_target_rpm;   // 最后一份直接落目标，消除取整累积误差
+        sent_rpm = ramp_target_rpm;
+    } else {
+        int u = (fan_rpm_round_unit > 0) ? fan_rpm_round_unit : 1;
+        out_rpm = ((sent_rpm + u / 2) / u) * u;
+    }
+
+    send_am_broadcast(ramp_mode, ramp_target_temp, out_rpm, sent_cold, ramp_wl);
+    debug_log(debug_exec, "平滑下发 第%d/%d份 冷%d RPM%d（剩余 冷%d RPM%d）",
+              RAMP_SLOTS - ramp_slots_left, RAMP_SLOTS,
+              sent_cold, out_rpm, ramp_remain_cold, ramp_remain_rpm);
+    if (done) ramp_slots_left = 0;
+}
+
+/**
+ * 重置 PID 核心状态（积分、误差、滤波、补偿）
+ * 不同场景的调用者在此基础上附加各自的额外重置逻辑
+ */
+static void pid_reset_core(void) {
+    pid_ki = 0.0f;
+    pid_kdp = 0.0f;
+    pid_target_f = 0.0f;
+    pid_last_error = 0.0f;
+    pid_last_ch = 0.0f;
+    pid_last_change_time = 0;
+    pid_cpu_comp_smooth = 0.0f;
+    pid_last_comp_10 = 0;
+    pid_cpu_comp_ready = 0;
+    pid_cpu_comp_active = 0;
+    pid_batt_filtered = -1;          // 电池输入滤波重置（改动2；重连/启动后直取初值）
+    pid_batt_last_update_cycle = -1;
+    pid_input_cdeg = -1;             // 曲线上的 PID 输入同步失效，重连后等下一次控制周期
+    pid_recompute_pending = 0;
+    recall_anchor = 0;
+    recall_prev_batt = 0;
+    recall_cycles = 0;
+    // 削减倍率复位为「不削减」（下次重算再按新冷值求；簇配置本身是配置项，不动）
+    ki_cut_mult_kdp = (float)KI_CUT_NONE;
+    ki_cut_mult_up = (float)KI_CUT_NONE;
+    ki_cut_mult_dn = (float)KI_CUT_NONE;
+}
+
+/**
+ * 按制冷强度参考值对齐 PID 初始输出。
+ * @param cold_ref 制冷强度参考值（LSP 回传实际值，低于 pid_cold_min 时已由调用方兜底）
+ * @param cold_max 参考值对应的制冷上限（active_pid_cold_max）
+ * @return 对齐比例（0~1），用于映射制冷强度
+ */
+static float pid_ratio_from_cold(int cold_ref, int cold_max) {
+    // 除数保护：cold_max == pid_cold_min 时按 1 处理
+    int span = cold_max - pid_cold_min;
+    if (span < 1) span = 1;
+    float ratio = (float)(cold_ref - pid_cold_min) / span;
+    if (ratio < 0.0f) ratio = 0.0f;
+    if (ratio > 1.0f) ratio = 1.0f;
+    pid_align_cold = cold_ref;
+    pid_align_rpm  = fan_rpm_min + (int)(ratio * (active_fan_max - fan_rpm_min));
+    return ratio;
+}
+
+// ======================== 宿主 APK 卸载自清理 ========================
+// 需求 / 代价（重装须重新一键部署，设计意图）/ 落点分工（C 端为主 + 脚本兜底）见 app/逻辑说明.md §2.4。
+// 判据与清理清单两侧必须保持一致，改一处同步另一处。
+
+#define HOST_PKG             PROTO_HOST_PKG
+#define HOST_DATA_DIR        PROTO_HOST_DATA_DIR
+// 需与 PRIVATE_DIR 的包名一致（applicationId 决定数据目录名，改包名时两处连同 build.gradle.kts 一起改）
+#define HOST_PROBE_INTERVAL  60   // 二级 pm 探测最小间隔（秒）：fork+pm 约 100~300ms，不许每轮跑
+#define HOST_CONFIRM_HITS    2    // 连续一级命中次数阈值，避免瞬态误判误杀
+
+static int    host_miss_hits = 0;    // 一级（父目录不存在）连续命中次数
+static time_t host_probe_at  = 0;    // 上次二级（pm path）探测时间戳
+static int    host_probe_gone = 0;   // 上次二级探测结论：1=包已不注册（节流窗口内复用）
+static int    host_probe_unknown = 0;// 上次二级探测结论：1=无法判定（pm 跑不起来）；与上面互斥
+
+/**
+ * 判断宿主 APK 是否已卸载：1=确认已卸载（可清理），0=仍在 / 无法确认。
+ * 两级判据（父目录 stat + pm 实时探测，只有 rc=1 算不存在）+ 连续 2 次命中才判真；细节见 app/逻辑说明.md §2.4。
+ */
+static int host_app_uninstalled(void) {
+    struct stat st;
+    if (stat(HOST_DATA_DIR, &st) == 0) {
+        host_miss_hits = 0;   // 父目录在 → 未卸载，计数清零（下次命中重新从 1 数起）
+        return 0;
+    }
+
+    // 一级命中：父目录不存在。二级 pm 确认（节流窗口内复用上次结论）
+    time_t now = mono_now();   // 探测节流用单调时钟
+    if (now - host_probe_at >= HOST_PROBE_INTERVAL) {
+        host_probe_at = now;
+        // 走实时探测而非缓存版：卸载自清理需要在同一次开机内看到安装状态变化，缓存对它只有风险没有收益
+        // （本处自带 HOST_PROBE_INTERVAL 节流，不在热路径上）。
+        int probe = app_installed_probe(HOST_PKG);
+        host_probe_gone    = (probe == 0);   // 仅"pm 明确报包不存在"才算已不注册
+        host_probe_unknown = (probe < 0);    // 无法判定：既不计数也不算"仍注册"
+        if (host_probe_unknown)              // 未知一律跳过清理，并留一条可追溯日志（节流在探测本身）
+            write_log("宿主卸载探测无法判定（%s），本轮跳过清理",
+                      probe == CMD_RESULT_TIMEOUT ? "pm 超时" : "pm 未就绪/失败");
+    }
+    if (host_probe_unknown) {
+        host_miss_hits = 0;   // 判不了就不当证据（开机早期 pm 未就绪即此路）
+        return 0;
+    }
+    if (!host_probe_gone) {
+        // 目录不在但包仍注册（重装过程中、多用户数据目录尚未创建等）→ 不判真
+        host_miss_hits = 0;
+        return 0;
+    }
+
+    if (++host_miss_hits < HOST_CONFIRM_HITS) return 0;
+    return 1;
+}
+
+/**
+ * 检测到宿主已卸载 → 清理落盘产物并置 running=0（走 exit: 收尾）；自身路径用 read_self_exe() 实测。
+ * 清理范围与已知局限（status 双文件删不干净、私有目录不显式删、/data/adb 视域而定）见 app/逻辑说明.md §2.5。
+ */
+static void cleanup_artifacts_on_uninstall(void) {
+    // 先留痕再删（日志文件本身随后可能被一起删掉，但这正是"清理"的预期结果）
+    write_log("检测到宿主 APK 已卸载，已清理产物并退出");
+
+    // 自身二进制：实测路径优先（read_self_exe 走 /proc/self/exe），约定路径兜底
+    char self[512];
+    if (read_self_exe(self, sizeof(self))) unlink(self);
+    unlink(PROTO_PATH_BIN);
+
+    #define CLEANUP_ENTRY(p) p,
+    static const char *artifacts[] = {
+        // 清单由 protocol.def.json 的 cleanup.daemon 生成（C 端执行面）
+        PROTO_CLEANUP_DAEMON(CLEANUP_ENTRY)
+    };
+#undef CLEANUP_ENTRY
+    for (size_t i = 0; i < sizeof(artifacts) / sizeof(artifacts[0]); i++) unlink(artifacts[i]);
+
+    running = 0;   // 交给 main 的 exit: 收尾（关闭日志句柄后返回 0）
+}
+
+// ======================== 主循环 ========================
+
+/** 信号处理器：设置 running=0 退出主循环 */
+static void handle_signal(int sig) {
+    (void)sig;
+    running = 0;
+}
+
+/** 闹钟处理器：置超时标志，靠 sa_flags=0 中断 waitpid（配合 wait_child_timeout） */
+
+/* last_disconnect_time（断联起点）的定义已上移到文件前部「自动拉起」小节的静态区
+   （launch_last_app 的断联初期探测节流要在其定义之前读它）；此处不再重复定义。 */
+
+/**
+ * 对齐实际制冷/转速到散热器真实回传（启动/长断连重置后"待对齐"时调用）。
+ * 仅当 report_ok（连续 REPORT_OK_N 帧真实回传）才对齐；超时（ALIGN_WAIT_TIMEOUT 秒）
+ * 用保守值起步，防止回传长期缺失（旧机型）导致永久停摆。
+ * @return 1=本次对齐完成（可强制下发），0=仍待对齐
+ */
+static int try_align_actual(void) {
+    if (!pending_align) return 0;
+    if (report_ok) {
+        actual_cold = (cooler_cold_real >= COLD_MIN) ? cooler_cold_real : pid_cold_min;
+        actual_rpm = (cooler_rpm_real >= fan_rpm_min) ? cooler_rpm_real : fan_rpm_min;
+        sent_cold = actual_cold;   // 平滑下发起点：以回传值为准，首发从此渐变
+        sent_rpm  = actual_rpm;
+        write_log("回传就绪对齐 冷=%d rpm=%d", actual_cold, actual_rpm);
+        pending_align = 0;
+        return 1;
+    }
+    if (pending_align_since > 0 && mono_now() - pending_align_since >= ALIGN_WAIT_TIMEOUT) {
+        actual_cold = pid_cold_min;
+        actual_rpm = fan_rpm_min;
+        sent_cold = actual_cold;
+        sent_rpm  = actual_rpm;
+        write_log("回传超时（>%ds）未就绪，用保守值起步 冷=%d rpm=%d",
+                  ALIGN_WAIT_TIMEOUT, actual_cold, actual_rpm);
+        pending_align = 0;
+        return 1;
+    }
+    return 0;
+}
+
+/**
+ * 重连对齐：长断连等真实回传就绪后对齐 actual_cold/rpm，短断连保留 PID 状态、
+ * 沿用内存实际值；不立即下发（由 rate_limited_execute 限速）。见 逻辑说明.md「主循环逻辑→短断联保留状态」。
+ */
+static void reconnect_align(void) {
+    batt_changed_since_ctrl = 0;
+    batt_window_changed = 0;
+
+    // 断联→重连汇总行（常驻）：断联时长 + 重连后散热器回传实际值
+    int discon_sec = 0;
+    if (last_disconnect_time > 0) {
+        discon_sec = (int)(mono_now() - last_disconnect_time);
+        write_log("重连 断联%d秒 回传冷%d RPM%d",
+                  discon_sec, cooler_cold_real, cooler_rpm_real);
+        last_disconnect_time = 0;
+    }
+
+    // 断联 < reconnect_keep_cycles 个控制周期(×5s)：短断联保留 PID 状态（积分/误差），
+    // 沿用内存实际值（断联期间 actual_cold 未被改，仍是最下发值）；长断联则完整重置并进入待对齐。
+    if (discon_sec > 0) {
+        if (reconnect_keep_cycles > 0 && discon_sec < reconnect_keep_cycles * 5) {
+            write_log("重连 断联%d秒<%d周期，保留 PID 状态", discon_sec, reconnect_keep_cycles);
+        } else {
+            // 重置 PID 状态；不立即用回传覆盖 actual_cold，等真实回传就绪后由 try_align_actual 对齐。
+            pid_reset_core();
+            actual_cold = -1;      // 未就绪：不设兜底基线，避免被 COLD_MIN=1 吞掉真实起步值
+            actual_rpm = -1;
+            sent_cold = -1;        // 长断连后设备可能被别处改过：起点未知，首发不拆分
+            sent_rpm  = -1;
+            ramp_slots_left = 0;   // 丢弃断连前未走完的本轮
+            logged_target_cold = -1;   // 日志去重基线失效，恢复后首条走普通日志
+            logged_target_rpm  = -1;
+            pending_align = 1;
+            pending_align_since = mono_now();
+            write_log("重连 PID 状态已重置，进入待对齐（等待真实回传）");
+            first_run = 1;
+        }
+    }
+}
+
+/**
+ * 速率限制执行：返回 1=实际下发了制冷变化，0=跳过（无变化/去重）。
+ * 输出端滤波 → 制冷限速 → 独立风扇计算（不跟 PID 输出）→ 风扇限速 → 纯下发
+ */
+static int rate_limited_execute(void) {
+    // 实际值未就绪（启动/长断连后待对齐期间 actual_cold=-1）：不强制下发，避免用无效/兜底值起步。
+    if (actual_cold < COLD_MIN || actual_rpm < fan_rpm_min) {
+        debug_log(debug_exec, "实际值未就绪（冷%d rpm%d），跳过下发", actual_cold, actual_rpm);
+        return 0;
+    }
+    rate_limit_cold(pid_align_cold);
+    int send_rpm = rate_limit_fan(compute_fan_target());
+    return apply_gear_direct(1, 5, send_rpm, actual_cold, 0);
+}
+
+/**
+ * PID 模式控制周期（每 5s）：CPU 补偿 → 两条跳过判定 → PID 计算 → 映射制冷。
+ * 输入用原始电池温度（无滤波），重算由温度窗口变化或补偿变化门控。
+ */
+static void pid_cycle(void) {
+    time_t now = mono_now();          // dt/锚点用单调时钟（墙钟回拨会让 dt 基线错乱）
+    time_t now_wall = time(NULL);     // 日志 epoch 仍用墙钟
+    pid_ctrl_cycles++;               // 单调周期计数
+    int batt_raw = cached_batt_raw;   // 1s 采集缓存
+    if (batt_raw < 0) return;
+
+    // --- 无变化回溯锚点：温度窗口变化→锚点=变化前值+重置周期；未变→周期计数++ ---
+    if (batt_window_changed) {
+        recall_anchor  = recall_prev_batt;
+        recall_cycles  = 1;
+    } else {
+        recall_cycles++;
+    }
+    recall_prev_batt = batt_raw;
+
+    // --- CPU 温度读入与滤波（用于补偿） ---
+    int cpu_now = cached_cpu_now;   // 1s 采集缓存
+    update_cpu_filtered(cpu_now);
+
+    // --- CPU 补偿值计算（始终生效，原始电池温度口径；cpu_comp_now 内部 EMA 平滑） ---
+    int total_comp_10 = cpu_comp_now(batt_raw);
+    float cpu_comp = total_comp_10 / 10.0f;   // 日志用（0.1°C → °C）
+
+    // --- 电池温度输入滤波（改动2：加回；仅温度更新时滤波并输出，动态 α + 变化量限幅） ---
+    // 首启直取；此后仅温度窗口变化（值/mtime 变）时滤波；动态 α=0.2+0.05×间隔周期数（5s控制周期）。
+    // 滤波值按 0.01°C 保存：0.1°C 的量化台阶只有落在更细的刻度上才拆得开。
+    // 变化量限幅：新值权重不超过 |原值−滤波值|/0.3（0.1°C→33%、0.2°C→67%、≥0.3°C→100%），
+    // 小变化不一步吃满，大变化照常直通。
+    int batt_cdeg = batt_raw * 10;          // 原始值 0.1°C → 0.01°C
+    if (pid_batt_filtered < 0) {
+        pid_batt_filtered = batt_cdeg;
+        pid_batt_last_update_cycle = pid_ctrl_cycles;
+    } else if (batt_window_changed) {
+        int interval = clamp(pid_ctrl_cycles - pid_batt_last_update_cycle, 0, 16);   // 钳 0~16 → α 0.2~1.0（1.0=不滤波）
+        float alpha = 0.2f + 0.05f * interval;
+        float cap = abs(batt_cdeg - pid_batt_filtered) / 30.0f;   // 每 0.1°C（30 个 0.01°C）最多 1/3
+        if (alpha > cap) alpha = cap;
+        pid_batt_filtered = (int)(alpha * batt_cdeg + (1.0f - alpha) * pid_batt_filtered + 0.5f);
+        pid_batt_last_update_cycle = pid_ctrl_cycles;
+    }
+
+    // 曲线用：本周期实际送入 PID 的输入（滤波后，0.01°C），每周期刷新
+    pid_input_cdeg = pid_batt_filtered;
+
+    // 滤波态判据：滤波值与原始值相差 ≥0.05°C → 仍在滤波（可触发追赶逻辑）
+    int filter_lag = abs(pid_batt_filtered - batt_cdeg) >= 5;
+    // 停机（温度未变）且滤波未收敛：继续按同一限幅向原值推进一拍，不硬跳——硬跳会把整段残差
+    // 一次交给 PID，等于把刚拆开的台阶又合回去。推进到不足 0.05°C 时直接对齐收尾；
+    // 每次推进都强制重算（改动2优先，绕过冻结）。
+    int filter_forced = 0;
+    if (!batt_window_changed && filter_lag) {
+        int diff = batt_cdeg - pid_batt_filtered;
+        float cap = abs(diff) / 30.0f;
+        if (cap > 1.0f) cap = 1.0f;
+        int step = (int)(cap * (diff > 0 ? diff : -diff) + 0.5f);
+        pid_batt_filtered += (diff > 0) ? step : -step;
+        if (abs(batt_cdeg - pid_batt_filtered) < 5) pid_batt_filtered = batt_cdeg;
+        filter_forced = 1;
+    }
+
+    // --- PID 重算判定：温度窗口变化 或 补偿变化 或 改动2 snap 强制 ---
+    int should_recompute = batt_window_changed ||
+                           total_comp_10 != pid_last_comp_10 ||
+                           filter_forced;
+
+    if (!should_recompute) {
+        debug_log(debug_pid, "PID 跳过重算（温度/补偿/滤波 未变）");
+        return;
+    }
+
+    // --- 跳过②：温度未变（仅补偿变化触发）且上次 |ch| ≤ ch阈值 → 整轮冻结 ---
+    // （改动2优先：本周期已 snap 强制重算则跳过冻结，"改动2跑完再冻结"；snap 后 pid_batt_filtered==batt_cdeg 回正常冻结）
+    if (!batt_window_changed && !filter_forced) {
+        float last_ch_abs = (pid_last_ch >= 0.0f) ? pid_last_ch : -pid_last_ch;
+        if (last_ch_abs <= (pid_ch_threshold / 10.0f)) {
+            debug_log(debug_pid, "PID 整轮冻结（|last_ch|=%.2f ≤阈值%.1f）",
+                      pid_last_ch, pid_ch_threshold / 10.0f);
+            pid_last_comp_10 = total_comp_10;   // 补偿书签推进，防死锁
+            return;
+        }
+    }
+
+    // 走到这里 = 本轮真跑 PID（没被跳过①/②挡下）：给曲线行打重算标记。
+    pid_recompute_pending = 1;
+
+    // dt：距上次重算以来的 5 秒周期数（1 = 5s），钳位 0.6~6（3s~30s）。标定单位为每 5s 周期
+    float dt = (float)(now - pid_last_change_time) / 5.0f;
+    if (dt > 6.0f) dt = 6.0f;
+    if (dt < 0.6f) dt = 0.6f;
+
+    // 无变化回溯速度：仅温度未变、开关开启、锚点有效时注入，否则走常规 v
+    int recall_on = 0;
+    float recall_v = 0.0f;
+    if (pid_spd_recall_on && !batt_window_changed &&
+        recall_cycles >= 1 && recall_anchor > 0 && batt_raw > 0 && pid_last_change_time != 0) {
+        recall_on = 1;
+        recall_v = ((float)(batt_raw - recall_anchor) / (float)recall_cycles / 10.0f)
+                   * (pid_spd_recall_weight / 1000.0f);
+    }
+
+    // --- PID 计算（电池 error 用滤波值 pid_batt_filtered(0.01°C) + cpu_comp；snap 后==batt_cdeg 故恢复原始值；温度未变时 kdp 沿用）---
+    float pid_out = pid_compute(pid_batt_filtered, dt, cpu_comp, batt_window_changed, recall_on, recall_v);
+
+    // 直接映射到物理值（无输出平滑）：PID 输出 → 制冷强度（风扇目标由 compute_fan_target 独立计算）
+    int cmax = active_cold_eff_max;
+    int range = cmax - pid_cold_min;
+    if (range <= 0) range = 1;
+    pid_align_cold = clamp(pid_cold_min + (int)(pid_out * range), pid_cold_min, cmax);
+
+    pid_log("epoch=%ld Tbatt=%d+comp%+.1f(cpu)=Tinp%d Ttgt=%d Thot=%d dt=%.1f周期",
+            now_wall, batt_raw, cpu_comp, batt_raw + total_comp_10, BATT_BASELINE, cooler_hot_temp, dt);
+
+    pid_last_comp_10 = total_comp_10;
+    pid_last_change_time = now;
+}
+
+/**
+ * 配置加载/热重载 + 临时停止状态维护（每 5s 一次，由主循环在设备/存活判定之前调用）。
+ * 必须排在两处 `continue`（无设备 / app 失活）之前：断联期间 main_loop() 不跑，
+ * 若把它们放在 main_loop 内，断联时改配置不生效、临时停止标记也不刷新（审查 S2-1）。
+ */
+static void maintain_config_and_temp_stop(void) {
+    struct stat st;
+    if (!config_loaded) {
+        // 自愈分支：开机早期探测失败时按周期补加载（实现与理由见 config_retry_if_needed）。
+        // 与下面的热重载同一套后处理：设备限制与 CPU 亲和都按新配置重算。
+        if (config_retry_if_needed()) {
+            update_active_limits();
+            apply_cpu_affinity();
+        }
+    } else if (config_path[0] != '\0' && stat(config_path, &st) == 0 && st.st_mtime != config_mtime) {
+        load_config(config_path);
+        // load_config 内可能已做旧键迁移写回（改了 mtime）：重取，避免用迁移前的 st 覆盖、多触发一次热重载
+        struct stat mst2;
+        if (stat(config_path, &mst2) == 0) st.st_mtime = mst2.st_mtime;
+        config_mtime = st.st_mtime;
+        write_log("配置 热重载");
+        // 配置重载可能重置了 fan_rpm_max/pid_cold_max，立即用设备限制覆盖
+        update_active_limits();
+        // 亲和同样按重载后的值重算（CPU_AFFINITY 可能被改，也可能随层关闭被复位为默认）
+        apply_cpu_affinity();
+    }
+    maintain_temp_stop();
+}
+
+/**
+ * 单次控制循环（纯计算，不下发）
+ * 热端过温/有效范围 → PID 周期（配置热重载与临时停止维护已移到 maintain_config_and_temp_stop）
+ * 调用者在外部立即执行速率限制下发，本函数只做决策
+ * @return 1=临时停止生效，本轮未做任何控制；0=已走完控制决策
+ */
+static int main_loop(void) {
+    // 温度窗口变化：自上次 5s 控制以来，1s 采集层是否检测到值变化（防漏判：变过又回原位仍算变化）。
+    batt_window_changed = batt_changed_since_ctrl;
+    batt_changed_since_ctrl = 0;                 // 开启新窗口
+
+    debug_log(debug_main, "main_loop 开始 温度窗口=%s",
+              batt_window_changed ? "变化" : "未变");
+
+    // 临时停止闸门：状态已由本拍 maintain_config_and_temp_stop() 刷新；生效时跳过本轮全部写控制。
+    if (temp_stop_active()) return 1;
+
+    // 0.4. CPU_ZONE 区间变化 → 本周期立即重建候选名单（全量扫描约 1s，仍在 5s 控制块内）
+    if (cpu_zone_list_dirty) rescan_cpu_zones();
+
+    // 0.5. 热端过温 → 制冷削减（先于 PID 决策，本周期即生效）
+    update_hot_derate();
+    // 0.6. 当前模式有效制冷范围（统一计算，供下发/去重/映射使用，消除模式分支散落）
+    update_active_cold_range();
+
+    // --- 控制周期分发（本实现仅 PID） ---
+    pid_cycle();
+    return 0;
+}
+
+// ======================== 程序入口 ========================
+
+// ======================== WebUI 曲线数据 ========================
+// 每 1s 追加 1 行（行格式见 WEBUI_ROW_FMT / WEBUI_DATA_COLS，语义见 app/逻辑说明.md §7.1）；
+// 每 WEBUI_COMPACT_EVERY 行压缩一次（删最旧行，文件 720~780 行）。
+#define WEBUI_COMPACT_EVERY 60   // 每追加 60 行（≈60s）压缩一次，文件最多膨胀到 720+60=780 行
+static int webui_lines_since_compact = 0;   // 自上次压缩以来追加的行数
+static FILE *webui_fp = NULL;              // WebUI 曲线文件的常驻追加句柄（"a"=O_APPEND）
+static int webui_io_error_logged = 0;      // 曲线写失败日志去重（恢复后复位）
+
+// 一块采样在本拍的快照：采集在循环开头（控制块要用新鲜缓存），写行在控制块之后
+// （这样「本拍是否重算 PID」已经确定，标记与重算落在同一行）。
+static long webui_epoch_now = 0;
+static int webui_batt_now = -1;
+static int webui_cpu_now = -1;
+static int webui_conn_ok = 0;
+
+/**
+ * 每 1 秒采集一次（电池/CPU/散热器回传），更新缓存并留一份本拍快照。
+ * 采集必须排在 5s 控制块之前：控制块直接用这里的缓存，且断联时也要照常更新缓存。
+ * 断联判定（BLE 未连 或 app 进程失活）一并记进 {@link #webui_conn_ok}，写行时再据此留时间空洞。
+ */
+static void sample_webui_inputs(void) {
+    status_seq++;   // 本拍采集序号：read_status_ble_both 只复用同序号的 status 元数据缓存（R40）
+    webui_epoch_now = (long)time(NULL);
+    webui_batt_now = read_battery_temp();
+    webui_cpu_now  = read_cpu_temp_max();
+    read_cooler_params();   // 更新 cooler_* 全局（热/冷端、实际转速、设定档/运行档制冷）+ app_ble_connected
+    // 更新 1s 采集缓存（保留上次成功值抗抖）
+    if (webui_batt_now >= 0) cached_batt_raw = webui_batt_now;
+    if (batt_temp_updated) batt_changed_since_ctrl = 1;  // 1s 层累积：自上次控制以来值变过
+    if (webui_cpu_now  >= 0) cached_cpu_now  = webui_cpu_now;
+    webui_conn_ok = app_ble_connected && is_app_alive();
+}
+
+/**
+ * 把本拍快照写入 WebUI 曲线数据文件（滚动保留 720 行），排在 5s 控制块之后调用。
+ * 断联（采样时 BLE 未连 或 app 进程失活）时不写、留真实时间空洞；界面按 `UI_GAP_SEC`
+ * （第一值判断联、第二值封顶空白）断开曲线并等比留白，见 app/逻辑说明.md §7.2。
+ * 重算标记只属于「写过的那一行」：断联不写时也在入口清掉，避免重连后把旧标记补记到新行上。
+ */
+static void append_webui_row(void) {
+    int recomp = pid_recompute_pending;
+    pid_recompute_pending = 0;
+    if (!webui_conn_ok) return;
+
+    // 常驻句柄每拍复核一次路径 inode：文件被删除/替换后旧 fd 会继续写旧 inode，
+    // 界面读路径上的新文件，曲线静默停更（审查 S2-3）。
+    if (webui_fp) {
+        struct stat fst, pst;
+        if (fstat(fileno(webui_fp), &fst) != 0 || stat(WEBUI_DATA_PATH, &pst) != 0
+                || fst.st_dev != pst.st_dev || fst.st_ino != pst.st_ino) {
+            fclose(webui_fp);
+            webui_fp = NULL;
+        }
+    }
+    // 追加 1 行到常驻句柄；O_APPEND 使压缩段用 "w" 截断后写入仍落在新 EOF。
+    // 写入与 fflush 的结果都要检查：失败（如磁盘满）关句柄、下一拍重开，并记一次日志。
+    if (!webui_fp) webui_fp = fopen(WEBUI_DATA_PATH, "a");
+    int io_ok = (webui_fp != NULL);
+    if (io_ok) {
+        io_ok = (fprintf(webui_fp, WEBUI_ROW_FMT,
+                        webui_epoch_now, webui_batt_now, webui_cpu_now,
+                        cooler_hot_temp, cooler_cold_temp,
+                        cooler_rpm_real, cooler_cold_real, actual_cold,
+                        recomp ? pid_input_cdeg : -1, recomp,
+                        cooler_cold_run, cooler_rpm_run) >= 0);
+        if (io_ok) {
+            io_ok = fflush(webui_fp) == 0;   // 立即落盘：界面按秒读取
+        }
+        if (!io_ok) {
+            int err = errno;
+            if (!webui_io_error_logged) {
+                webui_io_error_logged = 1;
+                write_log("曲线写入失败（errno=%d），已关句柄下一拍重开", err);
+            }
+            fclose(webui_fp);
+            webui_fp = NULL;
+        } else {
+            webui_io_error_logged = 0;
+        }
+    } else if (!webui_io_error_logged) {
+        webui_io_error_logged = 1;
+        write_log("曲线文件打开失败（errno=%d），下一拍重试", errno);
+    }
+    webui_lines_since_compact++;
+
+    // 每 WEBUI_COMPACT_EVERY 行压缩：读文件 → 删最旧行 → 写回，文件收敛回 ~720 行
+    if (webui_lines_since_compact >= WEBUI_COMPACT_EVERY) {
+        webui_lines_since_compact = 0;
+        // 单行容量：12 列 int（含 6 位 PID 输入）+ 10 位 epoch + 逗号/换行，128 足够；
+        // 行被截断会破坏列结构，容量与 WEBUI_DATA_COLS 同步核对。
+        char buf[WEBUI_DATA_MAX_LINES][128];
+        int total = 0;
+        FILE *rf = fopen(WEBUI_DATA_PATH, "r");
+        if (rf) {
+            // 环形覆盖读：缓冲只留最近 WEBUI_DATA_MAX_LINES 行（文件可能已膨胀到 780 行）
+            while (fgets(buf[total % WEBUI_DATA_MAX_LINES], sizeof(buf[0]), rf)) total++;
+            fclose(rf);
+        }
+        if (total > 0) {
+            int keep = (total < WEBUI_DATA_MAX_LINES) ? total : WEBUI_DATA_MAX_LINES;
+            int start = (total < WEBUI_DATA_MAX_LINES) ? 0 : (total % WEBUI_DATA_MAX_LINES);
+            FILE *cf = fopen(WEBUI_DATA_PATH, "w");
+            if (cf) {
+                for (int i = 0; i < keep; i++)
+                    fputs(buf[(start + i) % WEBUI_DATA_MAX_LINES], cf);
+                fclose(cf);
+            }
+        }
+    }
+}
+
+/**
+ * 把「当前生效制冷上限」（active_pid_cold_max）写给 app，定 KI 曲线横轴。
+ * 值未变不写；断联也照写（横轴上限与连接状态无关）。
+ * 只写**已存在**的文件（open 不带 O_CREAT、原地截断、不 rename）：该文件由 app 部署时预建，
+ * 属主与 SELinux 标签才正确；daemon 若自行新建会建成 root 属主，app 大概率读不到。
+ * 文件缺失时每拍重试一次（廉价 ENOENT），待 app 建好即恢复写入；期间 app 侧按取不到降级。
+ */
+static int coldmax_hint_written = -1;   // 上次写出的上限值；-1 = 尚未写出（含文件尚未被 app 预建）
+
+static void write_coldmax_hint(void) {
+    if (active_pid_cold_max == coldmax_hint_written) return;
+    int fd = open(COLDMAX_HINT_PATH, O_WRONLY | O_TRUNC | O_CLOEXEC);
+    if (fd < 0) return;   // 文件缺失（app 尚未预建）或不可写：不新建，下拍重试
+    char buf[32];
+    int n = snprintf(buf, sizeof(buf), PROTO_COLDMAX_FIELD "%d\n", active_pid_cold_max);
+    if (n > 0 && write(fd, buf, (size_t)n) == n)
+        coldmax_hint_written = active_pid_cold_max;
+    close(fd);
+}
+
+// ======================== 断连自动开蓝牙（BT_AUTO_ENABLE_SEC）========================
+/**
+ * 读取钩子写入的开蓝牙请求（BT_REQ_PATH，一行 REQ=<epoch秒>），token 变大才执行一次命令链。
+ * 限频（两次之间至少间隔 N 秒）在钩子侧完成；0=关闭在本侧也再挡一道（消费请求但不执行）。
+ * 首拍只记下当前 token、不执行，避免守护进程重启后对文件里的旧请求补执行；畸形 token 不采信。
+ * 命令回退链（root 上下文，成功即停）：svc → cmd。
+ */
+static void poll_bt_request(void) {
+    // 5s 节流：钩子写入是低频事件，1s 一拍整开文件≈8.6 万次/天没有收益（R38）。
+    // 响应上限由 1s 变为 5s；token/限频/首拍基准等判定完全不变。
+    static time_t bt_poll_at = 0;
+    time_t now_mono = mono_now();
+    if (bt_poll_at != 0 && now_mono - bt_poll_at < 5) return;
+    bt_poll_at = now_mono;
+
+    FILE *f = fopen(BT_REQ_PATH, "r");
+    if (!f) return;                       // 文件缺失（尚未预建）或不可读：下拍再试
+    long long tok = -1;
+    char line[64];
+    if (fgets(line, sizeof(line), f)) {
+        const char *p = strstr(line, PROTO_BT_REQ_FIELD);
+        if (p) tok = atoll(p + 4);
+    }
+    fclose(f);
+
+    // token 合法性：须为正、且贴合当前墙钟（±366 天）。空/畸形/超大值一律无效——
+    // 极大值写进 bt_req_handled 后会大于此后一切真实 epoch，把真请求永久顶掉。
+    long long now = (long long)time(NULL);
+    int tok_valid = (tok > 0 && tok >= now - 366LL * 86400 && tok <= now + 366LL * 86400);
+
+    if (!bt_req_primed) {
+        bt_req_primed = 1;
+        bt_req_handled = tok_valid ? tok : -1;  // 首拍只记基准不执行；畸形值不采信，置 -1 让后续真请求可执行
+        return;
+    }
+    if (!tok_valid) return;                     // 畸形：忽略本条，不消费、不更新 handled
+    if (tok <= bt_req_handled) return;          // 非新请求
+
+    // 0=关闭或拉起应用总开关关闭：消费掉这条新请求但不执行命令，避免开关再打开时被补执行。
+    // 受 APP_LAUNCH_ENABLED 控制（用户 2026-10-24 定）。
+    if (!APP_LAUNCH_ENABLED || bt_auto_enable_sec <= 0) { bt_req_handled = tok; return; }
+
+    static const char *const cmds[] = {
+        "/system/bin/svc bluetooth enable > /dev/null 2>&1",
+        "/system/bin/cmd bluetooth_manager enable > /dev/null 2>&1",
+    };
+    int hit = 0;
+    for (int i = 0; i < (int)(sizeof(cmds) / sizeof(cmds[0])); i++) {
+        int st = run_shell_timeout(cmds[i]);
+        if (st != -1 && WIFEXITED(st) && WEXITSTATUS(st) == 0) { hit = i + 1; break; }
+    }
+    bt_req_handled = tok;
+    if (hit) write_log("自动开蓝牙 已执行（命令%d）req=%lld", hit, tok);
+    else     write_log("自动开蓝牙 命令链全部失败（svc/cmd）req=%lld", tok);
+}
+
+// ======================== 看门狗反向保活（WD_KEEPALIVE）========================
+// 需求 / 破环设计（先查后拉 + 连续两次未见 + 拉起冷却）/ 判据为何逐参数整等 / 两个踩过的坑 / 降级
+// 见 逻辑说明.md「看门狗反向保活」。开关 WD_KEEPALIVE 默认开（2026-09-29 用户指定）。
+#define WD_KEEPALIVE_INTERVAL   60    // 检查间隔（秒）
+#define WD_MISS_CONFIRM         2     // 连续未见次数阈值（≥ 此值才拉起）
+#define WD_SPAWN_MIN_INTERVAL   300   // 拉起冷却（秒）：冷却窗内即使判定缺失也只记日志、不动作
+#define WD_SPAWN_BACKOFF_FAILS  3     // 连续拉起失败次数阈值：达到后退避到 WD_SPAWN_BACKOFF
+#define WD_SPAWN_BACKOFF        600   // 连续失败退避（秒）
+#define WD_LOG_MIN_INTERVAL     600   // 「脚本不存在」类日志的最小间隔（秒），防每分钟刷日志
+#define WD_REAP_TRIES           30    // 回收"拉起时那层中间进程"的轮询次数（× WD_REAP_STEP_US ≈ 3 秒上限）
+#define WD_REAP_STEP_US         100000 // 回收轮询的间隔（微秒）：用轮询而非阻塞 waitpid，杜绝无限等待
+#define WD_NAME                 PROTO_SCRIPT_NAME   // 与 Deployer.SCRIPT_NAME 及脚本内的 SCRIPT_NAME 一致
+#define WD_SPAWN_STAMP_PATH     PROTO_PATH_WD_SPAWN   // 冷却时间戳（私有目录，随卸载自清）
+
+// service.d 脚本两个候选路径（KSU 版本分界，见 Deployer）。路径字面量与
+// cleanup_artifacts_on_uninstall() 的 artifacts[] 中两条必须一致（那两份是卸载清理的固定清单，
+// 不共用变量；改一处须同步另一处）。
+static const char *const SVC_SCRIPT_PATHS[] = {
+    PROTO_PATH_SCRIPT_MODERN,
+    PROTO_PATH_SCRIPT_KSU,
+};
+#define SVC_SCRIPT_PATHS_N ((int)(sizeof(SVC_SCRIPT_PATHS) / sizeof(SVC_SCRIPT_PATHS[0])))
+
+static time_t wd_check_at    = 0;   // 上次检查时刻（0 = 尚未检查过，首轮必查）
+static int    wd_miss_hits    = 0;  // 连续未见次数
+static int    wd_fail_hits    = 0;  // 连续拉起失败次数（成功后清零）
+static time_t wd_spawn_at     = 0;  // 本进程内上次拉起时刻
+static time_t wd_last_log_at  = 0;  // 「脚本不存在」日志最近一次输出时刻（节流）
+static int    wd_spawn_pending = 0; // 1=上一轮已交出控制权、这一轮要看它是否真起来（double-fork 后的唯一观测点）
+
+/**
+ * cmdline 里是否有**某个参数恰好等于**脚本路径（两条候选之一）或脚本名。
+ * 为何必须逐参数整等（两个各错一半的坑）、与 app 侧 `wd_pids()` 的口径差异见 逻辑说明.md「看门狗反向保活」。
+ */
+static int cmdline_has_script_arg(const char *buf, ssize_t n) {
+    for (ssize_t pos = 0; pos < n; ) {
+        const char *arg = buf + pos;
+        size_t len = strlen(arg);          // 安全：调用方已在 buf[n] 处补 '\0'
+        for (int i = 0; i < SVC_SCRIPT_PATHS_N; i++) {
+            if (len == strlen(SVC_SCRIPT_PATHS[i]) &&
+                strncmp(arg, SVC_SCRIPT_PATHS[i], len) == 0) return 1;
+        }
+        if (len == strlen(WD_NAME) && strncmp(arg, WD_NAME, len) == 0) return 1;
+        pos += (ssize_t)len + 1;           // 跳过该参数与它的 NUL 分隔符
+    }
+    return 0;
+}
+
+/**
+ * 扫 /proc 判看门狗是否存活（不经 shell、不 fork pgrep，范式同 app_process_scan）。
+ * 命中返回 1；/proc 打不开返回 -1（调用方按「未见」处理，但受冷却约束）。
+ * 匹配口径：cmdline 的某个参数整等于两条候选路径之一或脚本名（见 cmdline_has_script_arg）。
+ */
+static int watchdog_alive(void) {
+    DIR *d = opendir("/proc");
+    if (!d) return -1;
+    struct dirent *de;
+    char buf[4096];
+    int alive = 0;
+    while (!alive && (de = readdir(d)) != NULL) {
+        if (de->d_name[0] < '0' || de->d_name[0] > '9') continue;
+        char path[64];
+        snprintf(path, sizeof(path), "/proc/%s/cmdline", de->d_name);
+        int fd = open(path, O_RDONLY);
+        if (fd < 0) continue;
+        ssize_t n = read(fd, buf, sizeof(buf) - 1);
+        close(fd);
+        if (n <= 0) continue;
+        buf[n] = '\0';
+        alive = cmdline_has_script_arg(buf, n);
+    }
+    closedir(d);
+    return alive;
+}
+
+/** 选一个可读的脚本路径（优先 modern，与 Deployer 的默认一致）；都不在返回 NULL */
+static const char *pick_script_path(void) {
+    for (int i = 0; i < SVC_SCRIPT_PATHS_N; i++) {
+        if (access(SVC_SCRIPT_PATHS[i], R_OK) == 0) return SVC_SCRIPT_PATHS[i];
+    }
+    return NULL;
+}
+
+/** 读冷却时间戳（私有目录小文件，内容=上次拉起时刻的 epoch 秒）。读不到返回 0。 */
+static time_t wd_spawn_stamp_read(void) {
+    FILE *f = fopen(WD_SPAWN_STAMP_PATH, "r");
+    if (!f) return 0;
+    long v = 0;
+    if (fscanf(f, "%ld", &v) != 1) v = 0;
+    fclose(f);
+    return (time_t)v;
+}
+
+/** 记冷却时间戳（跨守护进程重启有效）。写失败不重试。 */
+static void wd_spawn_stamp_write(time_t now) {
+    FILE *f = fopen(WD_SPAWN_STAMP_PATH, "w");
+    if (!f) return;
+    fprintf(f, "%ld\n", (long)now);
+    fclose(f);
+}
+
+/**
+ * 拉起看门狗脚本：**double-fork**（父 → 中间层 setsid 后立刻退出 → 孙层 execv(sh, <脚本>)）。
+ * 为何必须 double-fork、exec 结果为何只能下一轮观测见 逻辑说明.md「看门狗反向保活」。
+ * 返回 1=已交出控制权（中间层已回收），0=未交出去（已记日志）。
+ */
+static int spawn_watchdog(const char *path) {
+    pid_t pid = fork();
+    if (pid < 0) {
+        write_log("看门狗 拉起失败：fork 失败");
+        return 0;
+    }
+    if (pid == 0) {
+        setsid();                    // 中间层脱离本进程会话并成为**新会话首进程**；孙层是它 fork 出来的，
+                                     // **不是**会话首进程，故永远拿不到控制终端（这正是 double-fork 的目的）
+        pid_t gpid = fork();         // 孙层 = 看门狗本体
+        if (gpid != 0) _exit(0);     // 中间层（含孙层派生失败）：立刻退出，好让父进程的回收立即返回
+        int fd = open("/dev/null", O_RDWR);
+        if (fd >= 0) {
+            dup2(fd, STDIN_FILENO);
+            dup2(fd, STDOUT_FILENO);
+            dup2(fd, STDERR_FILENO);
+            if (fd > STDERR_FILENO) close(fd);
+        }
+        char *argv[3];
+        argv[0] = (char *)"sh";
+        argv[1] = (char *)path;
+        argv[2] = NULL;
+        execv(SH_BIN, argv);
+        _exit(127);                  // exec 失败：退出码由下一轮判活复查间接体现（见函数注释）
+    }
+    // 父进程：只回收中间层；用 WNOHANG 轮询而非阻塞 waitpid —— 本函数的唯一职责是"交出去"，
+    // 不允许任何形式的无限等待（旧实现正是死在那里）。上界 WD_REAP_TRIES × WD_REAP_STEP_US。
+    int reaped = 0;
+    for (int i = 0; i < WD_REAP_TRIES; i++) {
+        pid_t r = waitpid(pid, NULL, WNOHANG);
+        if (r == pid || r < 0) { reaped = 1; break; }   // r<0：已被回收（ECHILD）等，同样按已回收
+        usleep(WD_REAP_STEP_US);
+    }
+    if (!reaped) {
+        write_log("看门狗 拉起超时（%dms），已放弃本次", WD_REAP_TRIES * (WD_REAP_STEP_US / 1000));
+        kill(pid, SIGKILL);
+        waitpid(pid, NULL, WNOHANG);   // 不强等：残留由内核在它退出后回收
+    }
+    return reaped;
+}
+
+/**
+ * 反向保活的一次检查（60s 门控，调用方每轮调即可）。
+ * 顺序：开关 → 判活（存在即不重复拉起）→ 连续未见阈值 → 脚本存在性 → 拉起冷却/失败退避 → 拉起。
+ */
+static void maybe_keepalive_watchdog(void) {
+    // 受 APP_LAUNCH_ENABLED 控制（用户 2026-10-24 定）：拉起应用总开关关闭时不执行反向保活。
+    if (!APP_LAUNCH_ENABLED || !wd_keepalive_enabled) return;
+    time_t now  = mono_now();   // 本进程内节流/冷却用单调时钟
+    time_t wall = time(NULL);   // 持久化冷却戳仍用墙钟 epoch（跨重启可比）
+    if (wd_check_at != 0 && now - wd_check_at < WD_KEEPALIVE_INTERVAL) return;
+    wd_check_at = now;
+
+    // 1) 先查后拉：存在 → 不重复拉起（顺带清零计数）。返回值须区分「未见(0)」与「/proc 读不到(-1)」，
+    //    两者在 1.5) 的日志措辞里必须分开，否则排障时会把「判据降级」归因成「看门狗没起来」。
+    int alive = watchdog_alive();
+    if (alive > 0) {
+        if (wd_spawn_pending) {   // 上一轮交出去的实例已就位（double-fork 后唯一的成功确认）
+            wd_spawn_pending = 0;
+            debug_log(debug_main, "看门狗 复查 上次拉起的实例已在");
+        }
+        wd_miss_hits = 0;
+        wd_fail_hits = 0;
+        return;
+    }
+    // 1.5) 上一轮报告「已拉起」、这一轮仍未见 → 脚本在、看门狗没起来（exec 失败 / 域限制 / 脚本自己秒退）。
+    //      这是 double-fork 之后能观测 exec 结果的唯一位置（父进程不再回收孙层，见 spawn_watchdog）。
+    if (wd_spawn_pending) {
+        wd_spawn_pending = 0;
+        if (alive < 0) {
+            write_log("看门狗 上次拉起后仍未见实例（本次 /proc 不可读，判据降级，非看门狗未起）");
+        } else {
+            write_log("看门狗 上次拉起后仍未见实例（脚本存在但看门狗未起来）");
+        }
+    }
+    // 2) 连续 WD_MISS_CONFIRM 次未见才拉（单次采样可能是瞬态）
+    if (++wd_miss_hits < WD_MISS_CONFIRM) {
+        debug_log(debug_main, "看门狗 未见（第 %d 次，未达阈值 %d）", wd_miss_hits, WD_MISS_CONFIRM);
+        return;
+    }
+    // 3) 脚本不在 → 只记日志（节流）：守护进程无法重建脚本内容，等 app 重新部署
+    const char *path = pick_script_path();
+    if (!path) {
+        if (now - wd_last_log_at >= WD_LOG_MIN_INTERVAL) {
+            wd_last_log_at = now;
+            write_log("看门狗 连续 %d 次未见且脚本不存在（需在 app 内重新部署）", wd_miss_hits);
+        }
+        return;
+    }
+    // 4) 冷却 + 连续失败退避：两个时基各算各的（持久化戳=墙钟、进程内=单调），不能混减。
+    time_t stamp = wd_spawn_stamp_read();
+    if (stamp > wall) stamp = 0;   // 墙钟回拨后旧戳不可信：按无戳处理，避免冷却被无限拉长
+    if (stamp != 0 && wall - stamp < WD_SPAWN_MIN_INTERVAL) return;
+    if (wd_spawn_at != 0 && now - wd_spawn_at < WD_SPAWN_MIN_INTERVAL) return;
+    if (wd_fail_hits >= WD_SPAWN_BACKOFF_FAILS
+            && wd_spawn_at != 0 && now - wd_spawn_at < WD_SPAWN_BACKOFF) return;
+
+    wd_spawn_at = now;
+    if (spawn_watchdog(path)) {
+        wd_spawn_stamp_write(wall);
+        wd_spawn_pending = 1;   // 下一轮复查它是否真起来（exec 结果只能这样观测）
+        wd_miss_hits = 0;   // 已拉起：计数清零，下一轮以判活结果为准
+        wd_fail_hits = 0;
+        write_log("看门狗 连续 %d 次未见 → 已拉起 %s", WD_MISS_CONFIRM, path);
+    } else {
+        wd_fail_hits++;
+        write_log("看门狗 拉起失败（连续 %d 次）", wd_fail_hits);
+    }
+}
+
+// ======================== 单实例锁 ========================
+// 两条拉起路径都直接执行启动命令，由本锁保证幂等：两把锁都持有才放行、任一把被占即退出码 2。
+// 「清除数据」会让那一次锁失效（锁到不同 inode）；理由与残留后果见 逻辑说明.md「部署与 Root 调用」。
+#define LOCK_FILE_PATH        PROTO_PATH_LOCK_PRIVATE
+// 兜底锁：/data/local/tmp 属 DE 存储，首次解锁前也可写（私有目录不可用时单实例保护不消失，落点沿用三份清理清单已有项）。
+#define LOCK_FALLBACK_PATH    PROTO_PATH_LOCK_FALLBACK
+#define EXIT_ALREADY_RUNNING  2     // 退出码 2：已有实例在跑（其它启动失败路径均返回 0）
+static int lock_fd = -1;            // 私有目录锁（不可用时保持 -1）
+static int lock_fd_fallback = -1;   // 兜底锁
+
+/** 非阻塞 flock 一把锁。返回 1=取到（fd 写入 out_fd）、0=已被别人持有、-1=文件建不了（无法判定） */
+static int try_flock_path(const char *path, int *out_fd) {
+    int fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0666);
+    if (fd < 0) return -1;
+    if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        close(fd);
+        return 0;
+    }
+    *out_fd = fd;
+    return 1;
+}
+
+/** 取单实例锁（flock 非阻塞）。返回 1=取到可继续启动，0=已有实例在运行
+ *
+ *  两把锁都尝试持有：兜底锁（/data/local/tmp，恒可写）负责"任何时刻都能挡住第二个实例"，
+ *  私有目录锁保留原落点与既有语义。任一把被占即退出；任一把建不了只是该路降级（仅 stderr），
+ *  不阻塞启动——与旧行为一致（旧行为在私有目录不可用时整段跳过检查）。 */
+static int acquire_single_instance_lock(void) {
+    int r = try_flock_path(LOCK_FALLBACK_PATH, &lock_fd_fallback);
+    if (r == 0) {
+        fprintf(stderr, "tempctrl: 已有实例在运行（锁 %s），本次退出\n", LOCK_FALLBACK_PATH);
+        return 0;
+    }
+    if (r < 0) {
+        fprintf(stderr, "tempctrl: 锁文件 %s 不可用（该路单实例检查跳过）\n", LOCK_FALLBACK_PATH);
+    }
+    // 私有目录这一路先确保目录存在（本函数排在 set_default_log_path() 之前，不先建会 open 到 ENOENT）；
+    // 建不出来只让这一路降级，互斥由兜底锁保证。
+    if (ensure_private_dir()) {
+        r = try_flock_path(LOCK_FILE_PATH, &lock_fd);
+        if (r == 0) {
+            fprintf(stderr, "tempctrl: 已有实例在运行（锁 %s），本次退出\n", LOCK_FILE_PATH);
+            return 0;   // 兜底锁随本进程退出自动释放
+        }
+        if (r < 0) {
+            fprintf(stderr, "tempctrl: 锁文件 %s 不可用（该路单实例检查跳过）\n", LOCK_FILE_PATH);
+        }
+    } else {
+        fprintf(stderr, "tempctrl: 私有目录 %s 不可用（该路单实例检查降级，兜底锁仍生效）\n", PRIVATE_DIR);
+    }
+    return 1;   // 锁随进程存活持有，退出即自动释放
+}
+
+int main(int argc, char *argv[]) {
+    signal(SIGTERM, handle_signal);
+    signal(SIGINT,  handle_signal);
+
+    // --- 单实例锁：已有实例在跑则退出（退出码 EXIT_ALREADY_RUNNING，与普通启动失败区分）---
+    if (!acquire_single_instance_lock()) {
+        fprintf(stderr, "tempctrl: 已有实例在运行，本次退出\n");
+        return EXIT_ALREADY_RUNNING;
+    }
+
+    // --- 日志路径、配置加载 ---
+    // 探测失败不再"一锤定音"：config_path 保留为空、config_loaded 保持 0，
+    // 由 main_loop 按 CONFIG_RETRY_INTERVAL 周期重试（开机早期私有目录尚未挂上时只能如此，
+    // 见 config_loaded 声明处的说明）。--config 指定的路径同样保留，重试时沿用同一条来源。
+    set_default_log_path();
+    // PID 分段倍率表：先装入代码默认表（配置缺失或三层全关时也按默认生效），随后 load_config 的 PID_CUT_n 会覆盖
+    reset_ki_cut_defaults();
+    if (argc >= 3 && strcmp(argv[1], "--config") == 0) {
+        strncpy(config_path, argv[2], sizeof(config_path) - 1);
+        config_path[sizeof(config_path) - 1] = '\0';
+        config_explicit = 1;
+    } else {
+        detect_config_path();   // 成功时写入 config_path；失败时留空（保持可重试）
+    }
+    if (config_path[0] != '\0') {
+        config_loaded = load_config(config_path);
+        if (config_loaded) {
+            struct stat st;
+            if (stat(config_path, &st) == 0) config_mtime = st.st_mtime;
+        }
+    }
+    if (!config_loaded) {
+        if (!config_explicit) write_log("配置 未找到 %s/%s，使用代码默认值",
+                                        PRIVATE_DIR, PROTO_NAME_CONFIG);
+        config_retry_at = mono_now();   // 首次重试等满一个周期，不在启动瞬间连打
+    }
+    debug_log(debug_main, "main 启动 ALPHA=%d ZONE=%d~%d", CPU_FILTER_ALPHA, CPU_ZONE_MIN, CPU_ZONE_MAX);
+
+    // --- 双状态文件初始化 ---
+    // 状态文件路径已由全局初始化设好（status_file_path_b6/_b7 硬编码）
+    create_status_files();
+
+    write_log("脚本启动成功");
+    if (lock_fd_fallback >= 0) write_log("单实例锁 已获取 %s", LOCK_FALLBACK_PATH);
+    else                       write_log("单实例锁 兜底锁不可用（%s），本次仅私有目录锁生效", LOCK_FALLBACK_PATH);
+    if (lock_fd < 0) write_log("单实例锁 私有目录锁不可用（%s），本次仅兜底锁生效", LOCK_FILE_PATH);
+
+    // CPU 亲和：配置与日志都已就绪，此时应用一次。该键未读到（层未启用/无 profile.conf）时
+    // 也按代码默认生效——亲和必须无条件生效，不能被开关意外关掉。
+    apply_cpu_affinity();
+
+    // --- 等待任一设备模块就绪 + BLE 连接（BLE 字段语义见 read_single_status） ---
+    active_device = DEVICE_NONE;
+    while (running) {
+        // 宿主 APK 卸载自清理：必须放在本循环内，否则无 BLE、停在等待设备循环时永远不检测
+        if (host_app_uninstalled()) {
+            cleanup_artifacts_on_uninstall();
+            break;   // running 已置 0，由下方 if (!running) goto exit 收尾
+        }
+        // 看门狗反向保活：与卸载自清理同理必须放在本循环内（无 BLE、一直停在等待设备时也不漏检）
+        maybe_keepalive_watchdog();
+        // 安装缓存预热：默认配置下拉起链不跑、缓存永不填充，/proc 过滤会失效；此处有界预热
+        //（随等待循环迭代重试，达上限即止，绝不周期性 fork pm）。进主循环前完成。
+        install_cache_warmup();
+        // 配置延迟加载：同样必须放在本循环内 —— 开机后"还没连上设备"那段可能很久，
+        // 而配置没加载时一切配置派生的行为（界面开关转写、WD_KEEPALIVE 等）都按默认值走。
+        // 此处**不调** update_active_limits()：本循环里 active_device 还是 DEVICE_NONE，
+        // 那是"按当前设备刷新上限"的活，选到设备时 select_active_device 之后自会刷一次。
+        // CPU 亲和与设备无关（apply_cpu_affinity 只读配置与自身），故这里补一次即可。
+        if (config_retry_if_needed()) apply_cpu_affinity();
+        // 已加载配置的等待期热重载：临时停止可能要在等待期间被关闭，不重载会让下面的
+        // 拉起守卫一直按旧值执行（用户关了也永远不拉起，直到重启 daemon）。口径同主循环：
+        // mtime 变化即 load_config，再按新配置重算 CPU 亲和。
+        struct stat st_cfg;
+        if (config_loaded && config_path[0] != '\0'
+                && stat(config_path, &st_cfg) == 0 && st_cfg.st_mtime != config_mtime) {
+            load_config(config_path);
+            struct stat st_cfg2;
+            if (stat(config_path, &st_cfg2) == 0) config_mtime = st_cfg2.st_mtime;
+            apply_cpu_affinity();
+        }
+        // CPU 亲和低频重申：等待设备这段可能很久（开机早期甚至一直等不到设备），
+        // 同样挂在既有的 5s 节拍上、由函数内部自限流（真读 /proc/self/cgroup 至多每 300s 一次）。
+        cpu_affinity_reassert();
+        // 断连自动开蓝牙：与卸载自清理同理必须放在本循环内——蓝牙未开时正好停在本循环（连不上设备），
+        // 若不在此处轮询，钩子写的开蓝牙请求将永远得不到执行。
+        poll_bt_request();
+        read_status_ble_both();
+        DeviceType dev = select_active_device();
+        if (dev != DEVICE_NONE) {
+            active_device = dev;
+            update_active_limits();
+            write_log("初始设备 %s", device_tag_of(active_device));
+            read_cooler_params();
+            break;
+        }
+        // 临时停止：先应用「重启后自动失效」。否则开机后残留的停止态会让下面的拉起守卫
+        // 永久挡住启动（无 app → 无设备 → 永远进不了主循环，失效逻辑也就永远跑不到）。
+        maintain_temp_stop();
+        // 等待设备期间无 app 存活则自动拉起上次使用的 app；复用 ARBITRATE_INTERVAL 节流
+        // （与主循环同口径：进程扫描由每 5s 一次降到每 15s 一次，拉起/清理响应上限随之为 15s）
+        // 临时停止生效时仲裁照跑，拉起动作由 arbitrate_apps 内部守卫跳过。
+        if (mono_now() - last_arbitrate >= ARBITRATE_INTERVAL) {
+            arbitrate_apps();
+            last_arbitrate = mono_now();
+        }
+        sleep(5);
+    }
+    if (!running) goto exit;
+
+    // --- PID 初始化（放在 BLE 就绪后）---
+    pid_reset_core();
+
+    // --- 进入工作模式 ---
+    app_was_alive = 1;
+    first_run = 1;
+
+    // 以散热器实际回传值为准初始化实际制冷/转速。仅当真实回传已就绪才对齐并强制首次下发；
+    // 未就绪（app 刚重启、lastWaspWingInfo 为空 → COLD_REAL 缺失/占位 1）则进入"待对齐"，
+    // 由主循环等真实回传到达后起步，避免被 COLD_MIN 兜底成 1 或用低基线强制下发导致跳变。
+    if (report_ok) {
+        float pid_ratio = 0.0f;
+        int cold_ref = (cooler_cold_real >= pid_cold_min) ? cooler_cold_real : pid_cold_min;
+        pid_ratio = pid_ratio_from_cold(cold_ref, active_pid_cold_max);
+        if (cooler_cold_real >= COLD_MIN) actual_cold = cooler_cold_real;
+        else actual_cold = pid_cold_min;
+        if (cooler_rpm_real >= fan_rpm_min) actual_rpm = cooler_rpm_real;
+        else actual_rpm = fan_rpm_min;
+        write_log("LSP 回传承载就绪 制冷=%d ratio=%.2f rpm=%d", actual_cold, pid_ratio, pid_align_rpm);
+
+        // 强制首次下发（起点=当前回传值，同样走平滑下发）
+        sent_cold = actual_cold;
+        sent_rpm  = actual_rpm;
+        if (temp_stop_active()) {
+            write_log("临时停止 生效，跳过启动首下（保持散热器现状）");
+        } else {
+            last_bcast_valid = 0;
+            rate_limit_cold(pid_align_cold);
+            int send_rpm = rate_limit_fan(compute_fan_target());
+            apply_gear_direct(1, 5, send_rpm, actual_cold, 0);
+        }
+    } else {
+        actual_cold = -1;      // 未就绪：不设兜底基线，待 try_align_actual 对齐后起步
+        actual_rpm = -1;
+        sent_cold = -1;
+        sent_rpm  = -1;
+        logged_target_cold = -1;   // 尚未下发过，首条必走普通日志
+        logged_target_rpm  = -1;
+        pid_align_cold = 1;    // 待对齐期间保持最小，等 PID 重算/对齐后推进
+        pending_align = 1;
+        pending_align_since = mono_now();
+        write_log("LSP 回传未就绪，进入待对齐（等待真实回传）");
+    }
+
+    // ---- 主循环：1 秒节拍（采集 + 控制分离） ----
+    // 每 1s：采集电池/CPU/散热器回传（开头）→ 5s 控制块（到期时）→ 写 WebUI 曲线行（滚动 720 行，断联不写）
+    // 每 5s（时间判定）：执行控制（仲裁/存活/主循环/限速下发）
+    time_t last_ctrl = 0;
+    while (running) {
+        reap_am_children();   // 每拍回收，断联 continue 的拍也不漏
+        sample_webui_inputs();   // 每 1s 采集（控制块用新鲜缓存；写行在 5s 控制块之后）
+        write_coldmax_hint(); // 每 1s 核对生效制冷上限，变了才写给 app（定 KI 曲线横轴）
+        poll_bt_request();    // 每 1s 查开蓝牙请求，有新请求才执行一次命令链
+
+        if (last_ctrl == 0 || mono_now() - last_ctrl >= 5) {
+            last_ctrl = mono_now();
+
+            // -0.5. 配置热重载 + 临时停止维护：必须排在所有 `continue`（无设备 / app 失活）之前，
+            //        否则断联期间这两件事完全不跑（审查 S2-1）。
+            maintain_config_and_temp_stop();
+
+            // -1. 宿主 APK 卸载自清理（走 5s 节拍：一级 stat 每轮可跑，二级 pm 自带 60s 节流）
+            if (host_app_uninstalled()) {
+                cleanup_artifacts_on_uninstall();
+                break;   // running 已置 0，跳出主循环走 exit: 收尾
+            }
+
+            // -1.5 看门狗反向保活：必须排在本块内所有 `continue`（断联/无设备）之前——两处 continue
+            //      之后的代码在无 BLE 时不执行，放后面就会出现"最需要它的时候它不跑"。内部 60s 门控。
+            maybe_keepalive_watchdog();
+
+            // -1.55 CPU 亲和低频重申：ROM 若把进程重新分类回 top-app/main（等），一次性迁组会
+            //       静默失效（日志里也看不出），故低频复查一次、变了就重做。同样必须排在本块内
+            //       所有 `continue` 之前——断联/无设备时本块会 continue，主循环不跑，但那正是
+            //       驻留最久的状态，漏在这里就会出现"改回了也没人管"。函数内部自限流：
+            //       真读 /proc/self/cgroup 至多每 300s 一次，其余调用只做一次时间比较；
+            //       除了"被改回"，上次没达目标时也在这里定期重试。
+            cpu_affinity_reassert();
+
+            // 0. CPU thermal_zone 周期重扫（移入 5s 控制块：全量扫描 ~100 个 zone 阻塞近 1s，
+            //    不在 1s 采集热路径 sample_webui_inputs 内触发）
+            maybe_rescan_cpu_zones();
+
+            // 1. 读取双状态文件 + 仲裁
+            read_status_ble_both();
+            if (mono_now() - last_arbitrate >= ARBITRATE_INTERVAL) {
+                arbitrate_apps();  // 双 app 存活仲裁（ARBITRATE_INTERVAL 节流 + 合并扫描，降低 /proc 遍历开销）
+                last_arbitrate = mono_now();
+            }
+            DeviceType new_device = select_active_device();
+
+            // 2. 设备切换检测：当前设备断联时尝试切换到另一台
+            if (new_device != active_device) {
+                if (new_device == DEVICE_NONE) {
+                    // 所有设备都断联
+                    if (active_device != DEVICE_NONE) {
+                        write_log("%s 已断开，无其他设备可切换\n",
+                                  device_tag_of(active_device));
+                        if (last_disconnect_time == 0)
+                            last_disconnect_time = mono_now();   // 断联起点（重连汇总行用）
+                    }
+                    active_device = DEVICE_NONE;
+                    app_was_alive = 0;
+                    continue;   // 每 5s 重试，期间持续写数据
+                } else {
+                    // 切换到另一台在线设备
+                    write_log("切换 %s → %s",
+                              device_tag_of(active_device),
+                              device_tag_of(new_device));
+                    active_device = new_device;
+                    update_active_limits();
+                    read_cooler_params();
+                    reconnect_align();
+                }
+            } else if (active_device == DEVICE_NONE) {
+                continue;   // 无可用设备，5s 后重试
+            }
+
+            // 3. 散热器回传参数（cooler_*）由 1s 采集路径维护，此处直接用缓存
+            debug_log(debug_conn, "main 当前设备=%s ble=%d",
+                      device_tag_of(active_device), app_ble_connected);
+
+            // 4. 存活检测（debug_conn 日志只在 5s 控制层输出，is_app_alive 另被 1s 采集层调用）
+            int app_proc_ok = is_app_alive();
+            struct stat st_conn;
+            long mtime_gap = -1;
+            if (stat((active_device == DEVICE_B7X) ? status_file_path_b7 : status_file_path_b6,
+                     &st_conn) == 0)
+                mtime_gap = (long)(time(NULL) - st_conn.st_mtime);
+            debug_log(debug_conn, "app_alive device=%s %d mtime_gap=%lds timeout=%ds",
+                      device_tag_of(active_device), app_proc_ok, mtime_gap, STATUS_TIMEOUT);
+            if (!app_proc_ok || !app_ble_connected) {
+                // 每断联只打一次：last_disconnect_time==0 表示本次断联尚未记录，恢复由 reconnect_align 清零
+                if (last_disconnect_time == 0) {
+                    last_disconnect_time = mono_now();   // 断联起点（重连汇总行用）
+                    write_log("%s 连接丢失", device_tag_of(active_device));
+                }
+                launch_last_app(0);   // 断联时也尝试拉起散热器 app（无 app 存活时真正拉起；存活时 debug 提示）
+                                      // 传 0：本处无「已确认全灭」的已知结论，由内部自行单包扫描
+                app_was_alive = 0;  // 复活后走 reconnect_align 重新对齐实际值
+                continue;
+            }
+
+            if (!app_was_alive) {
+                app_was_alive = 1;
+                reconnect_align();
+            }
+
+            int control_skipped = main_loop();
+
+            // 临时停止生效：本轮不执行任何下发/对齐/看死链动作，散热器保持现场
+            if (!control_skipped) {
+                // ★ 待对齐：启动/长断连重置后先等真实回传就绪再对齐实际值（对齐后允许强制首下）
+                if (pending_align && try_align_actual())
+                    last_bcast_valid = 0;
+
+                // ★ 速率限制执行
+                cycle_batt_temp = cached_batt_raw;   // 1s 采集缓存
+                int dispatched = rate_limited_execute();   // 1=实际下发了制冷变化，0=跳过
+
+                // ★ 锁死自动重启检测（watchdog）：仅在本次实际下发制冷变化后判定——
+                // 实际停滞（=上周期实际）且未达目标（≠上周期下发）连续 N 次 → kill app 重新拉起
+                if (dispatched) watchdog_check();
+                // ★ 死链检测：BLE 已连但回传全 0（与本次是否下发无关）
+                deadlink_check();
+            }
+        }
+
+        // 曲线数据：放在 5s 控制块之后——本拍是否重算 PID 已确定，标记与重算落在同一行；
+        // 时间戳沿用采集那一刻的 epoch，不因控制耗时（如 thermal_zone 全量扫描）而偏移。
+        append_webui_row();
+
+        // 平滑下发：每 1s 送出一份。放在 5s 块之后，本拍判定通过的目标同一拍就送出第一份。
+        ramp_tick();
+
+        sleep(1);
+    }
+
+exit:
+    close_cpu_zone_fds();       // 释放保留 zone 的常驻 fd（进程退出本会回收，显式关闭便于自查无泄漏）
+    close_valid_zone_fds();     // 释放有效候选 zone 的常驻 fd（R41）
+    if (webui_fp) fclose(webui_fp);   // 释放曲线文件常驻句柄
+    if (log_fp) fclose(log_fp);
+    return 0;
+}

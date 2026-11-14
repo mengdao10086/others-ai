@@ -1,0 +1,268 @@
+{
+ "functions": [
+  {
+   "name": "alarm_handler",
+   "start": 11,
+   "end": 14,
+   "lines": 4,
+   "static_refs": [
+    "alarm_fired"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    (void)sig;\n    alarm_fired = 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "mono_ms",
+   "start": 16,
+   "end": 20,
+   "lines": 5,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "clock_gettime"
+   ],
+   "body": "\n    struct timespec ts;\n    clock_gettime(CLOCK_MONOTONIC, &ts);\n    return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;\n",
+   "pure0": false
+  },
+  {
+   "name": "mono_now",
+   "start": 22,
+   "end": 26,
+   "lines": 5,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "clock_gettime"
+   ],
+   "body": "\n    struct timespec ts;\n    clock_gettime(CLOCK_MONOTONIC, &ts);\n    return ts.tv_sec;\n",
+   "pure0": false
+  },
+  {
+   "name": "wait_readable",
+   "start": 28,
+   "end": 38,
+   "lines": 11,
+   "static_refs": [],
+   "calls": [
+    "mono_ms"
+   ],
+   "io": [
+    "select"
+   ],
+   "body": "\n    long long left = deadline_ms - mono_ms();\n    if (left <= 0) return 0;\n    struct timeval tv;\n    tv.tv_sec  = (time_t)(left / 1000);\n    tv.tv_usec = (suseconds_t)((left % 1000) * 1000);\n    fd_set rf;\n    FD_ZERO(&rf);\n    FD_SET(fd, &rf);\n    return select(fd + 1, &rf, NULL, NULL, &tv);\n",
+   "pure0": false
+  },
+  {
+   "name": "wait_child_timeout",
+   "start": 40,
+   "end": 79,
+   "lines": 40,
+   "static_refs": [
+    "alarm_fired"
+   ],
+   "calls": [
+    "alarm_handler"
+   ],
+   "io": [
+    "alarm(",
+    "kill(",
+    "sleep(",
+    "usleep",
+    "waitpid"
+   ],
+   "body": "\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_handler = alarm_handler;\n    sigemptyset(&sa.sa_mask);\n    sa.sa_flags = 0;                      /                                 \n    sigaction(SIGALRM, &sa, NULL);\n\n    alarm_fired = 0;\n    alarm(timeout_sec > 0 ? (unsigned)timeout_sec : 1);\n    int r;\n    do {    /                                      \n        r = alarm_fired ? -1 : waitpid(pid, out_status, 0);\n    } while (r == -1 && errno == EINTR && !alarm_fired);    /                 \n\n    int timed_out = (r == -1 && alarm_fired);    /                     \n    if (timed_out) {\n        kill(pid, SIGTERM);\n        write_log(                             , timeout_sec, (int)pid);\n        alarm_fired = 0;\n        alarm(CMD_KILL_GRACE_SEC);\n        do {\n            r = alarm_fired ? -1 : waitpid(pid, out_status, 0);\n        } while (r == -1 && errno == EINTR && !alarm_fired);\n        alarm(0);                         /                          \n        signal(SIGALRM, SIG_DFL);\n        if (alarm_fired) {\n            kill(pid, SIGKILL);\n            write_log(                                        ,\n                      CMD_KILL_GRACE_SEC, (int)pid);\n             /                              \n            for (int i = 0; i < 10 && waitpid(pid, NULL, WNOHANG) == 0; i++)\n                usleep(100000);\n        }\n        return 0;                         /                   \n    }\n    alarm(0);                             /                    \n    signal(SIGALRM, SIG_DFL);\n    return 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "reap_am_children",
+   "start": 81,
+   "end": 100,
+   "lines": 20,
+   "static_refs": [
+    "am_pending_n"
+   ],
+   "calls": [
+    "mono_now"
+   ],
+   "io": [
+    "kill(",
+    "waitpid"
+   ],
+   "body": "\n    time_t now = mono_now();    /             \n    for (int i = 0; i < am_pending_n; ) {\n        int status = 0;\n        pid_t r = waitpid(am_pending_pid[i], &status, WNOHANG);\n        if (r == 0) {\n            if (now - am_pending_at[i] < 3) { i++; continue; }\n            kill(am_pending_pid[i], SIGKILL);\n            waitpid(am_pending_pid[i], NULL, 0);\n            write_log(                 );\n        } else if (r > 0) {\n            if (WIFEXITED(status) && WEXITSTATUS(status) != 0)\n                write_log(                               , WEXITSTATUS(status));\n            else if (WIFSIGNALED(status))\n                write_log(                         , WTERMSIG(status));\n        }\n        am_pending_pid[i] = am_pending_pid[--am_pending_n];\n        am_pending_at[i]  = am_pending_at[am_pending_n];\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "send_am_broadcast",
+   "start": 102,
+   "end": 156,
+   "lines": 55,
+   "static_refs": [
+    "am_pending_n"
+   ],
+   "calls": [
+    "mono_now",
+    "reap_am_children"
+   ],
+   "io": [
+    "close(",
+    "dup2",
+    "execv",
+    "fork",
+    "kill(",
+    "open(",
+    "printf",
+    "snprintf",
+    "waitpid"
+   ],
+   "body": "\n     /                                                 \n    const int vals[BROADCAST_EXTRAS_N] = { mode, target, windOC, coldOC, windLevel, 0, 0 };\n    char v_s[BROADCAST_EXTRAS_N][BROADCAST_VAL_MAX];\n    for (int i = 0; i < BROADCAST_EXTRAS_N; i++)\n        snprintf(v_s[i], sizeof(v_s[i]),     , vals[i]);\n\n    pid_t pid = fork();\n    if (pid < 0) {\n        write_log(              );\n        return;\n    }\n    if (pid == 0) {\n        int fd = open(           , O_WRONLY);\n        if (fd >= 0) {\n            dup2(fd, STDOUT_FILENO);\n            dup2(fd, STDERR_FILENO);\n            close(fd);\n        }\n         /                     \n        const char *action = (active_device == DEVICE_B7X)\n            ? BROADCAST_ACTION_B7X\n            : BROADCAST_ACTION_B6X;\n         /                                                                      \n        char *argv[6 + 3 * BROADCAST_EXTRAS_N + 1];\n        int ai = 0;\n        argv[ai++] = (char *)    ;\n        argv[ai++] = (char *)           ;\n        argv[ai++] = (char *)        ;\n        argv[ai++] = (char *)   ;\n        argv[ai++] = (char *)    ;\n        argv[ai++] = (char *)action;\n        for (int i = 0; i < BROADCAST_EXTRAS_N; i++) {\n            argv[ai++] = (char *)      ;\n            argv[ai++] = (char *)BROADCAST_EXTRAS[i];\n            argv[ai++] = v_s[i];\n        }\n        argv[ai] = NULL;\n        execv(AM_BIN, argv);\n        _exit(127);\n    }\n     /                                                 \n    reap_am_children();\n    if (am_pending_n >= AM_PENDING_MAX) {    /                 \n        kill(am_pending_pid[0], SIGKILL);\n        waitpid(am_pending_pid[0], NULL, 0);\n        am_pending_pid[0] = am_pending_pid[--am_pending_n];\n        am_pending_at[0]  = am_pending_at[am_pending_n];\n    }\n    am_pending_pid[am_pending_n] = pid;\n    am_pending_at[am_pending_n]  = mono_now();\n    am_pending_n++;\n    debug_log(debug_exec,                                                                      ,\n              mode, target, windOC, coldOC, windLevel);\n",
+   "pure0": false
+  },
+  {
+   "name": "is_screen_awake",
+   "start": 158,
+   "end": 221,
+   "lines": 64,
+   "static_refs": [],
+   "calls": [
+    "mono_ms",
+    "wait_child_timeout",
+    "wait_readable"
+   ],
+   "io": [
+    "close(",
+    "dup2",
+    "execv",
+    "fork",
+    "open(",
+    "read("
+   ],
+   "body": "\n    int fds[2];\n    if (pipe(fds) != 0) return -1;\n\n    pid_t pid = fork();\n    if (pid < 0) {\n        close(fds[0]);\n        close(fds[1]);\n        return -1;\n    }\n    if (pid == 0) {\n        close(fds[0]);\n        dup2(fds[1], STDOUT_FILENO);    /                  \n        close(fds[1]);\n        int devnull = open(           , O_WRONLY);    /                   \n        if (devnull >= 0) {\n            dup2(devnull, STDERR_FILENO);\n            close(devnull);\n        }\n        char *argv[] = { (char *)         , (char *)       , NULL };\n        execv(DUMPSYS_BIN, argv);    /                            \n        _exit(127);\n    }\n\n    close(fds[1]);\n    char val[32] = {0};\n    char line[512];\n    size_t lineLen = 0;\n    int matched = 0;\n    char buf[4096];\n    long long deadline = mono_ms() + (long long)CMD_TIMEOUT_SEC * 1000;\n    while (!matched) {\n        int sr = wait_readable(fds[0], deadline);    /                  \n        if (sr < 0) { if (errno == EINTR) continue; break; }\n        if (sr == 0) break;                          /                       \n        ssize_t n = read(fds[0], buf, sizeof(buf));\n        if (n < 0 && errno == EINTR) continue;\n        if (n <= 0) break;    /                          \n        for (ssize_t i = 0; i < n; i++) {\n            if (buf[i] !=     ) {\n                if (lineLen < sizeof(line) - 1) line[lineLen++] = buf[i];\n                continue;\n            }\n            line[lineLen] =     ;\n            matched = wakefulness_value(line, val, sizeof(val));\n            if (matched) break;\n            lineLen = 0;    /                 \n        }\n    }\n    if (!matched && lineLen > 0) {    /             \n        line[lineLen] =     ;\n        matched = wakefulness_value(line, val, sizeof(val));\n    }\n    close(fds[0]);    /                                  \n     /                                             \n    if (!wait_child_timeout(pid, NULL, CMD_KILL_GRACE_SEC))\n        write_log(                                             , CMD_TIMEOUT_SEC);\n\n    if (!matched) return -1;                     /                     \n    if (strcmp(val,        ) == 0) return 1;\n    if (strcmp(val,         ) == 0) return 2;\n    if (strlen(val) == 0) return -1;             /          \n    return 0;                                    /                 \n",
+   "pure0": false
+  },
+  {
+   "name": "is_foreground_pkg",
+   "start": 223,
+   "end": 285,
+   "lines": 63,
+   "static_refs": [],
+   "calls": [
+    "mono_ms",
+    "wait_child_timeout",
+    "wait_readable"
+   ],
+   "io": [
+    "close(",
+    "dup2",
+    "execv",
+    "fork",
+    "open(",
+    "printf",
+    "read(",
+    "snprintf"
+   ],
+   "body": "\n     /                                                                  \n     /                                                        \n    char cmd[1024];\n    snprintf(cmd, sizeof(cmd),\n             DUMPSYS_BIN                                                    \n             DUMPSYS_BIN                                                                                       );\n\n     /                                                          \n    int fds[2];\n    if (pipe(fds) != 0) return 0;\n    pid_t pid = fork();\n    if (pid < 0) {\n        close(fds[0]);\n        close(fds[1]);\n        return 0;\n    }\n    if (pid == 0) {\n        close(fds[0]);\n        dup2(fds[1], STDOUT_FILENO);\n        close(fds[1]);\n        int devnull = open(           , O_WRONLY);\n        if (devnull >= 0) {\n            dup2(devnull, STDERR_FILENO);\n            close(devnull);\n        }\n        char *argv[] = { (char *)    , (char *)    , cmd, NULL };\n        execv(SH_BIN, argv);\n        _exit(127);\n    }\n    close(fds[1]);\n\n    char line[1024];\n    size_t lineLen = 0;\n    int fg = 0;\n    char buf[4096];\n    long long deadline = mono_ms() + (long long)CMD_TIMEOUT_SEC * 1000;\n    while (!fg) {\n        int sr = wait_readable(fds[0], deadline);\n        if (sr < 0) { if (errno == EINTR) continue; break; }\n        if (sr == 0) break;                          /                    \n        ssize_t n = read(fds[0], buf, sizeof(buf));\n        if (n < 0 && errno == EINTR) continue;\n        if (n <= 0) break;\n        for (ssize_t i = 0; i < n && !fg; i++) {\n            if (buf[i] !=     ) {\n                if (lineLen < sizeof(line) - 1) line[lineLen++] = buf[i];\n                continue;\n            }\n            line[lineLen] =     ;\n            if (strstr(line, pkg)) fg = 1;\n            lineLen = 0;\n        }\n    }\n    if (!fg && lineLen > 0) {    /             \n        line[lineLen] =     ;\n        if (strstr(line, pkg)) fg = 1;\n    }\n    close(fds[0]);    /                            \n    if (!wait_child_timeout(pid, NULL, CMD_KILL_GRACE_SEC))\n        write_log(                                           , CMD_TIMEOUT_SEC);\n    return fg;\n",
+   "pure0": false
+  },
+  {
+   "name": "run_shell_timeout",
+   "start": 287,
+   "end": 311,
+   "lines": 25,
+   "static_refs": [],
+   "calls": [
+    "wait_child_timeout"
+   ],
+   "io": [
+    "close(",
+    "dup2",
+    "execv",
+    "fork",
+    "open("
+   ],
+   "body": "\n    pid_t pid = fork();\n    if (pid < 0) {\n        write_log(                );\n        return -1;\n    }\n    if (pid == 0) {\n        int devnull = open(           , O_RDWR);\n        if (devnull >= 0) {\n            dup2(devnull, STDIN_FILENO);\n            dup2(devnull, STDOUT_FILENO);\n            dup2(devnull, STDERR_FILENO);\n            close(devnull);\n        }\n        char *argv[] = { (char *)    , (char *)    , (char *)cmd, NULL };\n        execv(SH_BIN, argv);\n        _exit(127);\n    }\n    int status = 0;\n    if (!wait_child_timeout(pid, &status, CMD_TIMEOUT_SEC)) {\n        write_log(                                         , CMD_TIMEOUT_SEC, cmd);\n        return CMD_RESULT_TIMEOUT;\n    }\n    return status;\n",
+   "pure0": false
+  },
+  {
+   "name": "run_cmd_silent",
+   "start": 313,
+   "end": 317,
+   "lines": 5,
+   "static_refs": [],
+   "calls": [
+    "run_shell_timeout"
+   ],
+   "io": [
+    "printf",
+    "snprintf"
+   ],
+   "body": "\n    char cmd[256];\n    snprintf(cmd, sizeof(cmd), fmt, arg);\n    return run_shell_timeout(cmd);\n",
+   "pure0": false
+  },
+  {
+   "name": "app_installed_probe",
+   "start": 319,
+   "end": 330,
+   "lines": 12,
+   "static_refs": [],
+   "calls": [
+    "run_cmd_silent"
+   ],
+   "io": [],
+   "body": "\n    int st = run_cmd_silent(PM_BIN                            , pkg);\n    if (st == 0) return 1;\n    if (st == CMD_RESULT_TIMEOUT) return CMD_RESULT_TIMEOUT;    /                   \n     /                                                                \n    if (st == -1 || !WIFEXITED(st)) return -1;\n     /                                                      \n     /                                              \n     /                                    \n    if (WEXITSTATUS(st) == 1) return 0;\n    return -1;\n",
+   "pure0": true
+  },
+  {
+   "name": "am_start_app",
+   "start": 332,
+   "end": 348,
+   "lines": 17,
+   "static_refs": [],
+   "calls": [
+    "run_shell_timeout"
+   ],
+   "io": [
+    "printf",
+    "snprintf"
+   ],
+   "body": "\n     /                                                                       \n    const char *act = NULL;\n    if (strcmp(pkg, APP_PKG_B6X_OLD) == 0 || strcmp(pkg, APP_PKG_B6X_NEW) == 0)\n        act =                                  ;\n    else if (strcmp(pkg, APP_PKG_B7X) == 0)\n        act =                                            ;\n    char cmd[320];\n    if (act)\n        snprintf(cmd, sizeof(cmd),\n                 AM_BIN                                                          , pkg, act);\n    else\n        snprintf(cmd, sizeof(cmd),\n                 AM_BIN                                                                            \n                                                                , pkg);\n    return run_shell_timeout(cmd);\n",
+   "pure0": false
+  },
+  {
+   "name": "force_kill_and_relaunch",
+   "start": 350,
+   "end": 364,
+   "lines": 15,
+   "static_refs": [],
+   "calls": [
+    "am_start_app",
+    "run_cmd_silent"
+   ],
+   "io": [
+    "sleep(",
+    "usleep"
+   ],
+   "body": "\n    const char *pkg = resolve_launch_pkg(NULL);\n    write_log(                      , pkg);\n    run_cmd_silent(AM_BIN                                  , pkg);\n     /             \n    for (int i = 0; i < 20; i++) {\n        int alive = 0;\n        app_process_scan(&pkg, &alive, 1);\n        if (!alive) break;\n        usleep(100000);\n    }\n     /                                   \n    int rc = am_start_app(pkg);\n    write_log(                      , pkg, rc);\n",
+   "pure0": false
+  },
+  {
+   "name": "evict_app_if_eligible",
+   "start": 366,
+   "end": 371,
+   "lines": 6,
+   "static_refs": [],
+   "calls": [
+    "is_foreground_pkg",
+    "run_cmd_silent"
+   ],
+   "io": [],
+   "body": "\n    if (alive && keep != pkg && !is_foreground_pkg(pkg)) {\n        write_log(                       , pkg, keep);\n        run_cmd_silent(AM_BIN                                  , pkg);\n    }\n",
+   "pure0": true
+  }
+ ],
+ "statics": [
+  "alarm_fired",
+  "am_pending_n"
+ ]
+}

@@ -1,0 +1,61 @@
+tempctrl 模块化实验 — 原始测量数据
+日期：2026-11-14
+基线快照：tempctrl.c 306,917 B / 5,897 换行 / md5 59b700d1219844563cf1ffd7f23e89b3
+          （复制于 19:33；原目录文件 19:55 被外部改为 g_cfg 版本，本实验未使用该新版本）
+工具链：NDK r27c clang 18.0.3，target aarch64-linux-android21
+标志：-Oz -ffunction-sections -fdata-sections -Wl,--gc-sections -Wl,--strip-all
+      -Wl,--icf=safe -fno-unwind-tables -fno-asynchronous-unwind-tables -lm
+计时：Windows/Git Bash，热缓存，5 轮交错（bench4.txt）
+
+                  B0 单文件      C 工具头      B 四模块      B2 五模块
+编译退出码        0              0             0             0
+警告数            0              0             0             0
+文件大小(字节)    72,064         72,064        73,032        76,152
+.text             43,008         43,008        43,828        44,676
+.rodata           13,684         13,684        13,672        13,672
+符号总数(nm)      578            578           586           601
+函数类符号        203            203           211           226
+全局 T 符号       2              2             52            70
+全量编译中位(ms)  1,074          1,099         1,320         1,328
+源码行数(含头)    6,323          6,366         6,491         6,586
+新增头文件        0              1             1             1
+新增 .c           0              0             3             4
+extern 声明       0              0             4             75
+static→外部函数   0              0             50            68
+
+B0 与 C 的 stripped 产物 md5 相同：2fa371da341b4cca8ed3b640823244e9
+
+3 次独立计时（非交错，噪声较大，供参考）：
+B0: 1.205 / 0.989 / 1.209 s → 中位 1.209
+C : 1.079 / 1.033 / 1.062 s → 中位 1.062
+B : 1.207 / 1.171 / 1.217 s → 中位 1.207
+B2: 1.337 / 1.309 / 1.217 s → 中位 1.309
+
+首轮编译错误：
+B : 2 处（ZoneReading typedef 重复、debug_log 未声明）；修复后 0。
+B2: 22 处（clang 在 22 处停止）：active_device 未声明 5、cpu_zone_fd 未声明 8、
+    cpu_zone_cache 未声明 1、由此导致的 subscripted value 5、read_battery_temp
+    原型返回类型冲突 1、int/void 赋值 1、ferror-limit 汇总 1；修复后 0。
+
+等价校验：
+B / B2：158 个函数全部存在、无重复，去空白后函数体与基线逐字相同。
+C：stripped 二进制 md5 与 B0 完全相同。
+未做真机运行（无 aarch64 执行环境）。
+
+逐函数体积变化（B vs B0，节选）：
+apply_cpu_affinity    -844 B（调用方，失去内联）
+launch_last_app       -464 B
+evict_app_if_eligible -416 B
+config_parse_line     -112 B
+wait_child_timeout     +36 B
+wakefulness_value      +28 B
+新增外部符号示例：clusters_accept 524 B、is_screen_awake 540 B、
+                  is_foreground_pkg 500 B、clusters_probe_policy 284 B。
+.text 净增 +820 B。
+
+下一层拆分的静态依赖（下界，未编译验证）：
+config  30 函数 / 101 个不同静态对象
+sensor  17 函数 / 68 个（B2 以 72 个 extern 编译通过，含 2 个数组）
+control 25 函数 / 108 个
+app     18 函数 / 39 个
+四者并集：225 个

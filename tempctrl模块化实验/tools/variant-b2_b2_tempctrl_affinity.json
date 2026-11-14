@@ -1,0 +1,186 @@
+{
+ "functions": [
+  {
+   "name": "cpu_list_read",
+   "start": 9,
+   "end": 17,
+   "lines": 9,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "close(",
+    "fclose",
+    "fopen",
+    "fread",
+    "open(",
+    "read("
+   ],
+   "body": "\n    FILE *f = fopen(path,    );\n    if (!f) return 0;\n    char buf[256] =   ;\n    size_t n = fread(buf, 1, sizeof(buf) - 1, f);\n    buf[n] =     ;\n    fclose(f);\n    return cpu_list_parse(buf, set);\n",
+   "pure0": false
+  },
+  {
+   "name": "read_dir_cpus",
+   "start": 19,
+   "end": 23,
+   "lines": 5,
+   "static_refs": [],
+   "calls": [
+    "cpu_list_read"
+   ],
+   "io": [
+    "printf",
+    "read(",
+    "snprintf"
+   ],
+   "body": "\n    char path[320];\n    snprintf(path, sizeof(path),          , dir);\n    return cpu_list_read(path, set);\n",
+   "pure0": false
+  },
+  {
+   "name": "read_self_cpuset_group",
+   "start": 25,
+   "end": 45,
+   "lines": 21,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "close(",
+    "fclose",
+    "fgets",
+    "fopen",
+    "open("
+   ],
+   "body": "\n    FILE *f = fopen(                   ,    );\n    if (!f) return 0;\n    char line[256];\n    int found = 0;\n    while (fgets(line, sizeof(line), f)) {\n         /                                                          \n        char *ctrl = strchr(line,    );\n        if (!ctrl) continue;\n        char *sep = strchr(ctrl + 1,    );\n        if (!sep) continue;\n        *sep =     ;\n        if (strcmp(ctrl + 1,         ) != 0) continue;\n        strncpy(out, trim_value(sep + 1), size - 1);\n        out[size - 1] =     ;\n        found = 1;\n        break;\n    }\n    fclose(f);\n    return found;\n",
+   "pure0": false
+  },
+  {
+   "name": "cpuset_join",
+   "start": 47,
+   "end": 57,
+   "lines": 11,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "close(",
+    "open(",
+    "printf",
+    "snprintf",
+    "write("
+   ],
+   "body": "\n    char path[320];\n    snprintf(path, sizeof(path),                  , dir);\n    int fd = open(path, O_WRONLY);\n    if (fd < 0) return 0;\n    char pid[32];\n    int n = snprintf(pid, sizeof(pid),     , (int)getpid());\n    ssize_t wr = write(fd, pid, (size_t)n);\n    close(fd);\n    return wr == n;\n",
+   "pure0": false
+  },
+  {
+   "name": "clusters_probe_policy",
+   "start": 59,
+   "end": 78,
+   "lines": 20,
+   "static_refs": [],
+   "calls": [
+    "cpu_list_read"
+   ],
+   "io": [
+    "opendir",
+    "printf",
+    "read(",
+    "readdir",
+    "snprintf"
+   ],
+   "body": "\n    DIR *d = opendir(                                 );\n    if (!d) return 0;\n    struct dirent *ent;\n    int n = 0;\n    while (n < CPU_CLUSTER_MAX && (ent = readdir(d)) != NULL) {\n        if (strncmp(ent->d_name,         , 6) != 0) continue;\n        char path[320];\n        snprintf(path, sizeof(path),                                                  ,\n                 ent->d_name);\n        if (!cpu_list_read(path, &clusters[n])) {\n            snprintf(path, sizeof(path),                                                   ,\n                     ent->d_name);\n            if (!cpu_list_read(path, &clusters[n])) continue;    /            \n        }\n        n++;\n    }\n    closedir(d);\n    return clusters_accept(clusters, n, present) ? n : 0;\n",
+   "pure0": false
+  },
+  {
+   "name": "clusters_probe",
+   "start": 80,
+   "end": 88,
+   "lines": 9,
+   "static_refs": [],
+   "calls": [
+    "clusters_probe_policy",
+    "cpu_list_read"
+   ],
+   "io": [
+    "read("
+   ],
+   "body": "\n    cpu_set_t present;\n    if (!cpu_list_read(                                 , &present)) return 0;\n    int n = clusters_probe_policy(clusters, &present);\n    if (n > 0) { *src = CLUSTER_SRC_POLICY; return n; }\n    clusters[0] = present;\n    *src = CLUSTER_SRC_SINGLE;\n    return 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "read_status_field",
+   "start": 90,
+   "end": 105,
+   "lines": 16,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "close(",
+    "fclose",
+    "fgets",
+    "fopen",
+    "open("
+   ],
+   "body": "\n    FILE *f = fopen(                   ,    );\n    if (!f) return 0;\n    char line[256];\n    size_t flen = strlen(field);\n    int found = 0;\n    while (fgets(line, sizeof(line), f)) {\n        if (strncmp(line, field, flen) != 0) continue;\n        strncpy(out, trim_value(line + flen), size - 1);\n        out[size - 1] =     ;\n        found = 1;\n        break;\n    }\n    fclose(f);\n    return found;\n",
+   "pure0": false
+  },
+  {
+   "name": "cpu_aff_note",
+   "start": 107,
+   "end": 120,
+   "lines": 14,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "printf",
+    "snprintf"
+   ],
+   "body": "\n    size_t used = strlen(reason);\n    if (used + 1 >= size) return;                        /                  \n    if (used > 0) {\n        int w = snprintf(reason + used, size - used,      );\n        if (w < 0 || (size_t)w >= size - used) { reason[size - 1] =     ; return; }\n        used += (size_t)w;\n    }\n    va_list ap;\n    va_start(ap, fmt);\n    vsnprintf(reason + used, size - used, fmt, ap);\n    va_end(ap);\n    reason[size - 1] =     ;\n",
+   "pure0": false
+  },
+  {
+   "name": "apply_cpu_affinity",
+   "start": 122,
+   "end": 274,
+   "lines": 153,
+   "static_refs": [
+    "cpu_aff_last_group",
+    "cpu_aff_reason"
+   ],
+   "calls": [
+    "clusters_probe",
+    "cpu_aff_note",
+    "cpu_list_read",
+    "cpuset_join",
+    "read_dir_cpus",
+    "read_self_cpuset_group",
+    "read_status_field"
+   ],
+   "io": [
+    "printf",
+    "read(",
+    "snprintf"
+   ],
+   "body": "\n    char reason[512] =   ;    /                               \n     /                                                        \n    cpu_set_t clusters[CPU_CLUSTER_MAX];\n    const char *cluster_src = CLUSTER_SRC_SINGLE;\n    int nclusters = clusters_probe(clusters, &cluster_src);\n    if (nclusters <= 0) {\n         /                                      \n        CPU_ZERO(&clusters[0]);\n        for (int c = 0; c < CPU_SETSIZE; c++) CPU_SET(c, &clusters[0]);\n        nclusters = 1;\n    }\n     /                                 \n     /                                                  \n    static char cpu_aff_clusters[256];\n    {\n        char line[256];\n        int off = snprintf(line, sizeof(line),                  , nclusters, cluster_src);\n        for (int i = 0; i < nclusters; i++) {\n            if (off < 0 || (size_t)off >= sizeof(line)) break;\n            char one[64];\n            cpu_set_format(&clusters[i], one, sizeof(one));\n            int w = snprintf(line + off, sizeof(line) - (size_t)off,          , i, one);\n            if (w < 0) break;\n            off += w;\n        }\n        if (strcmp(cpu_aff_clusters, line) != 0) {\n            write_log(           , line);\n            strncpy(cpu_aff_clusters, line, sizeof(cpu_aff_clusters) - 1);\n            cpu_aff_clusters[sizeof(cpu_aff_clusters) - 1] =     ;\n        }\n    }\n\n     /                                            \n    cpu_set_t want;\n    if (!affinity_expand(affinity_spec, clusters, nclusters, &want)) {\n        cpu_aff_note(reason, sizeof(reason),                      ,\n                     affinity_spec, CFG_DEFAULT_CPU_AFFINITY);\n        reset_cpu_affinity_defaults();\n        if (!affinity_expand(affinity_spec, clusters, nclusters, &want)) {\n            cpu_aff_note(reason, sizeof(reason),                          ,\n                         CFG_DEFAULT_CPU_AFFINITY);\n            want = clusters[0];\n        }\n    }\n\n     /                                        \n    cpu_set_t present;\n    if (!cpu_list_read(                                 , &present)) {\n        char w_str[128];\n        cpu_set_format(&want, w_str, sizeof(w_str));\n        cpu_aff_note(reason, sizeof(reason),                            , w_str);\n    } else {\n        cpu_set_intersect(&want, &present);\n        if (cpu_set_empty(&want)) {\n            char p_str[128];\n            cpu_set_format(&present, p_str, sizeof(p_str));\n            cpu_aff_note(reason, sizeof(reason),                             ,\n                         p_str, CFG_DEFAULT_CPU_AFFINITY);\n            reset_cpu_affinity_defaults();\n            if (!affinity_expand(affinity_spec, clusters, nclusters, &want))\n                want = clusters[0];\n            cpu_set_intersect(&want, &present);\n            if (cpu_set_empty(&want)) {\n                cpu_aff_note(reason, sizeof(reason),                                 );\n                want = clusters[0];\n            }\n        }\n    }\n\n    char want_str[128];\n    cpu_set_format(&want, want_str, sizeof(want_str));\n\n     /                                                          \n     /                                       \n    char group[256] =    ;\n    char cur_dir[320];\n    if (read_self_cpuset_group(group, sizeof(group)))\n        snprintf(cur_dir, sizeof(cur_dir),       , CPUSET_DIR, group);\n    else\n        snprintf(cur_dir, sizeof(cur_dir),     , CPUSET_DIR);\n    char mig[400] =   ;    /              \n    cpu_set_t cur_set;\n    if (!read_dir_cpus(cur_dir, &cur_set) || !cpu_set_covers(&cur_set, &want)) {\n        if (cpuset_join(CPUSET_DIR))\n            snprintf(mig, sizeof(mig),             , cur_dir, CPUSET_DIR);\n        else\n             /                                   \n             /                                                \n            cpu_aff_note(reason, sizeof(reason),\n                                                                    ,\n                         cur_dir, want_str, CPUSET_DIR);\n    }\n\n     /                                    \n    if (sched_setaffinity(0, sizeof(cpu_set_t), &want) != 0)\n        cpu_aff_note(reason, sizeof(reason),                     , errno, strerror(errno));\n\n     /                                             \n    char allowed[64] =       ;\n    char now_group[256] =   ;\n    int has_group = read_self_cpuset_group(now_group, sizeof(now_group));\n    read_status_field(                    , allowed, sizeof(allowed));\n\n     /                                                   \n    static char cpu_aff_result[512];\n    char line[512];\n    int off = 0;\n    if (mig[0]) off += snprintf(line + off, sizeof(line) - (size_t)off,      , mig);\n    if (has_group)\n        snprintf(line + off, sizeof(line) - (size_t)off,\n                                                             , allowed, now_group, want_str);\n    else\n        snprintf(line + off, sizeof(line) - (size_t)off,\n                                                   , allowed, want_str);\n    if (strcmp(cpu_aff_result, line) != 0) {\n        write_log(           , line);\n        strncpy(cpu_aff_result, line, sizeof(cpu_aff_result) - 1);\n        cpu_aff_result[sizeof(cpu_aff_result) - 1] =     ;\n    }\n\n     /                                                           \n     /                                                 \n    if (has_group) {\n        strncpy(cpu_aff_last_group, now_group, sizeof(cpu_aff_last_group) - 1);\n        cpu_aff_last_group[sizeof(cpu_aff_last_group) - 1] =     ;\n    } else {\n        cpu_aff_last_group[0] =     ;\n    }\n\n     /                                                   \n     /                                                      \n     /                                      \n    cpu_set_t got;\n    if (!(cpu_list_parse(allowed, &got) && cpu_set_covers(&got, &want)))\n        cpu_aff_note(reason, sizeof(reason),                 , allowed, want_str);\n\n     /                                                      \n     /                                      \n     /                                                          \n     /                                                \n    if (reason[0]) {\n        if (strcmp(reason, cpu_aff_reason) != 0) {\n            write_log(                                     ,\n                      reason, has_group ? now_group :    , CPU_AFF_REASSERT_SEC);\n            strncpy(cpu_aff_reason, reason, sizeof(cpu_aff_reason) - 1);\n            cpu_aff_reason[sizeof(cpu_aff_reason) - 1] =     ;\n        }\n    } else if (cpu_aff_reason[0]) {\n        write_log(                         , allowed, want_str);\n        cpu_aff_reason[0] =     ;\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "cpu_affinity_reassert",
+   "start": 276,
+   "end": 295,
+   "lines": 20,
+   "static_refs": [
+    "cpu_aff_last_group",
+    "cpu_aff_reason"
+   ],
+   "calls": [
+    "apply_cpu_affinity",
+    "read_self_cpuset_group"
+   ],
+   "io": [],
+   "body": "\n    static time_t last = 0;\n    time_t now = mono_now();    /          \n    if (last == 0) { last = now; return 0; }         /                         \n    if (now - last < CPU_AFF_REASSERT_SEC) return 0;\n    last = now;\n\n    int need = 0;\n    if (cpu_aff_last_group[0] !=     ) {             /                   \n        char group[256] =   ;\n        if (read_self_cpuset_group(group, sizeof(group)) && strcmp(group, cpu_aff_last_group) != 0) {\n            write_log(                           , cpu_aff_last_group, group);\n            need = 1;\n        }\n    }\n    if (cpu_aff_reason[0]) need = 1;                 /                                         \n    if (!need) return 0;\n    apply_cpu_affinity();\n    return 1;\n",
+   "pure0": false
+  }
+ ],
+ "statics": [
+  "cpu_aff_last_group",
+  "cpu_aff_reason"
+ ]
+}

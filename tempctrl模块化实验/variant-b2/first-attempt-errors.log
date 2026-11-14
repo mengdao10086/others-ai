@@ -1,0 +1,30 @@
+# 变体 B2 首轮编译错误（声明修正前，据构建输出转录）
+# 命令：aarch64-linux-android21-clang -Oz -ffunction-sections -fdata-sections \
+#       -Wl,--gc-sections -Wl,--strip-all -Wl,--icf=safe \
+#       -fno-unwind-tables -fno-asynchronous-unwind-tables \
+#       -o tempctrl-b2 tempctrl.c tempctrl_util.c tempctrl_affinity.c tempctrl_proc.c tempctrl_sensor.c -lm
+# 退出码：1；clang 在 22 处停止（-ferror-limit=20 触发的汇总行计入）
+
+tempctrl.c:3866:20: error: assigning to 'int' from incompatible type 'void'
+ 3866 |     webui_batt_now = read_battery_temp();
+      |                    ^ ~~~~~~~~~~~~~~~~~~~
+tempctrl_proc.c:122:31: error: use of undeclared identifier 'active_device'
+  122 |         const char *action = (active_device == DEVICE_B7X)
+tempctrl_sensor.c:89:18: error: use of undeclared identifier 'active_device'
+tempctrl_sensor.c:91:18: error: use of undeclared identifier 'active_device'
+tempctrl_sensor.c:107:25: error: use of undeclared identifier 'active_device'
+tempctrl_sensor.c:108:29: error: use of undeclared identifier 'active_device'
+tempctrl_sensor.c:226:5: error: conflicting types for 'read_battery_temp'
+  226 | int read_battery_temp(void) {
+./tempctrl_shared.h:212:6: note: previous declaration is here
+  212 | void read_battery_temp(void);
+tempctrl_sensor.c:258:54: error: use of undeclared identifier 'cpu_zone_fd'
+tempctrl_sensor.c:263:13: error: use of undeclared identifier 'cpu_zone_fd'; did you mean 'cpu_zone_keep'?
+（同类 cpu_zone_fd 共 8 处；subscripted value is not an array/pointer/vector 5 处；
+  cpu_zone_cache 未声明 1 处；-ferror-limit 汇总 1 处）
+
+# 修复（全部为声明簿记，无函数体改动）：
+# 1) 补 extern DeviceType active_device;
+# 2) 补 extern int cpu_zone_fd[64]; extern int cpu_zone_cache[64];
+# 3) read_battery_temp 原型改为 int
+# 修复后：退出码 0，stderr 0 行。

@@ -1,0 +1,20 @@
+# 变体 B 首轮编译错误（声明修正前，据构建输出转录）
+# 命令：aarch64-linux-android21-clang -Oz -ffunction-sections -fdata-sections \
+#       -Wl,--gc-sections -Wl,--strip-all -Wl,--icf=safe \
+#       -fno-unwind-tables -fno-asynchronous-unwind-tables \
+#       -o tempctrl-b tempctrl.c tempctrl_util.c tempctrl_affinity.c tempctrl_proc.c -lm
+# 退出码：1；错误数：2
+
+tempctrl.c:1949:37: error: typedef redefinition with different types ('struct ZoneReading' vs 'struct ZoneReading')
+ 1949 | typedef struct { int id; int raw; } ZoneReading;
+      |                                   ^
+./tempctrl_shared.h:87:37: note: previous definition is here
+   87 | typedef struct { int id; int raw; } ZoneReading;
+
+tempctrl_proc.c:154:5: error: call to undeclared function 'debug_log'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  154 |     debug_log(debug_exec, "am broadcast 已派发 mode=%d target=%d windOC=%d coldOC=%d windLevel=%d",
+
+# 修复：
+# 1) 删除 core 中重复的 ZoneReading typedef（该 typedef 移入 tempctrl_shared.h）
+# 2) 将 debug_log 宏与 extern int debug_mode 移入 tempctrl_shared.h
+# 修复后：退出码 0，stderr 0 行。

@@ -1,0 +1,2191 @@
+{
+ "functions": [
+  {
+   "name": "ensure_private_dir",
+   "start": 83,
+   "end": 98,
+   "lines": 16,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "chown",
+    "printf",
+    "snprintf",
+    "stat("
+   ],
+   "body": "\n    if (mkdir(PRIVATE_DIR, 0771) == 0) {\n        char parent[256];\n        snprintf(parent, sizeof(parent),     , PRIVATE_DIR);\n        char *slash = strrchr(parent,    );\n        if (slash) {\n            *slash =     ;\n            struct stat pst;\n            if (stat(parent, &pst) == 0)\n                chown(PRIVATE_DIR, pst.st_uid, pst.st_gid);    /                            \n        }\n        return 1;\n    }\n    struct stat st;\n    return stat(PRIVATE_DIR, &st) == 0 && S_ISDIR(st.st_mode);\n",
+   "pure0": false
+  },
+  {
+   "name": "sysfs_key_lookup",
+   "start": 567,
+   "end": 572,
+   "lines": 6,
+   "static_refs": [
+    "key"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    int n = (int)(sizeof(SYSFS_CFG_KEYS) / sizeof(SYSFS_CFG_KEYS[0]));\n    for (int i = 0; i < n; i++)\n        if (strcmp(key, SYSFS_CFG_KEYS[i].key) == 0) return &SYSFS_CFG_KEYS[i];\n    return NULL;\n",
+   "pure0": false
+  },
+  {
+   "name": "is_sysfs_key",
+   "start": 575,
+   "end": 577,
+   "lines": 3,
+   "static_refs": [
+    "key"
+   ],
+   "calls": [
+    "sysfs_key_lookup"
+   ],
+   "io": [],
+   "body": "\n    return sysfs_key_lookup(key) != NULL;\n",
+   "pure0": false
+  },
+  {
+   "name": "parse_int_cfg",
+   "start": 592,
+   "end": 601,
+   "lines": 10,
+   "static_refs": [
+    "key"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    int n = (int)(sizeof(INT_CFG_KEYS) / sizeof(INT_CFG_KEYS[0]));\n    for (int i = 0; i < n; i++) {\n        if (strcmp(key, INT_CFG_KEYS[i].key) == 0) {\n            *INT_CFG_KEYS[i].var = clamp(val, INT_CFG_KEYS[i].min, INT_CFG_KEYS[i].max);\n            return 1;\n        }\n    }\n    return 0;\n",
+   "pure0": false
+  },
+  {
+   "name": "parse_debug_cfg",
+   "start": 604,
+   "end": 612,
+   "lines": 9,
+   "static_refs": [
+    "debug_config",
+    "debug_conn",
+    "debug_launch",
+    "debug_main",
+    "debug_pid",
+    "key"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    if      (strcmp(key,               ) == 0)  debug_sensor = (val != 0);\n    else if (strcmp(key,             ) == 0)    debug_exec   = (val != 0);\n    else if (strcmp(key,             ) == 0)    debug_conn   = (val != 0);\n    else if (strcmp(key,               ) == 0)  debug_config = (val != 0);\n    else if (strcmp(key,             ) == 0)    debug_main   = (val != 0);\n    else if (strcmp(key,            ) == 0)     debug_pid    = (val != 0);\n    else if (strcmp(key,               ) == 0)  debug_launch = (val != 0);\n",
+   "pure0": false
+  },
+  {
+   "name": "parse_sysfs_cfg",
+   "start": 624,
+   "end": 672,
+   "lines": 49,
+   "static_refs": [
+    "affinity_cfg_seen",
+    "key"
+   ],
+   "calls": [
+    "sysfs_key_lookup"
+   ],
+   "io": [],
+   "body": "\n    const struct SysfsCfgKey *e = sysfs_key_lookup(key);\n    if (!e) return;\n    switch (e->kind) {\n    case SK_INT:\n        *e->ivar = clamp(val, e->imin, e->imax);\n        break;\n    case SK_PATH:\n        config_read_path(e->svar, e->ssize, (char *)val_str);\n        break;\n    case SK_ZONE: {\n        int a = CPU_ZONE_MIN, b = CPU_ZONE_MAX;\n        if (sscanf(val_str,        , &a, &b) >= 2) {\n            int old_min = CPU_ZONE_MIN, old_max = CPU_ZONE_MAX;\n            CPU_ZONE_MIN = clamp(a, 0, 99);\n            CPU_ZONE_MAX = clamp(b, 0, 99);\n            if (CPU_ZONE_MIN != old_min || CPU_ZONE_MAX != old_max) cpu_zone_list_dirty = 1;\n        }\n        break;\n    }\n    case SK_RESCAN: {\n         /                               \n        int a = cpu_zone_rescan_cycles, b = cpu_zone_keep;\n        int n = sscanf(val_str,        , &a, &b);\n        if (n >= 1) {\n            int cycles = a;\n            if (!rescan->unit_is_cycles) {\n                 /                               \n                cycles = (a > 0) ? (a + 4) / 5 : 0;\n                if (cycles < 1) cycles = 1;\n                if (cycles > 720) cycles = 720;\n                rescan->legacy_seen = 1;\n                rescan->legacy_sec = a;\n                rescan->converted_cycles = cycles;\n            }\n            cpu_zone_rescan_cycles = clamp(cycles, 1, 720);\n        }\n        if (n >= 2) cpu_zone_keep = clamp(b, 1, 64);\n        break;\n    }\n    case SK_AFFINITY:\n         /                                                       \n         /                                           \n         /                                      \n        affinity_cfg_seen = 1;\n        config_read_path(affinity_spec, sizeof(affinity_spec), (char *)val_str);\n        break;\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "parse_pid_cfg",
+   "start": 675,
+   "end": 747,
+   "lines": 73,
+   "static_refs": [
+    "key",
+    "pid_cold_min",
+    "pid_cpu_comp_divisor",
+    "pid_cpu_comp_filter_alpha",
+    "pid_cpu_comp_offset",
+    "pid_ki_down_coef",
+    "pid_ki_up_coef",
+    "pid_spd_nl_exp_p100",
+    "pid_spd_nl_thr_p100",
+    "pid_spd_recall_on",
+    "pid_spd_recall_weight",
+    "pid_speed_coef",
+    "pid_target_alpha",
+    "pid_target_away_alpha",
+    "pid_target_coef",
+    "pid_target_dir_on",
+    "pid_target_max",
+    "pid_target_toward_alpha"
+   ],
+   "calls": [
+    "ki_cut_parse_row"
+   ],
+   "io": [],
+   "body": "\n     /                                        \n     /                                           \n    if (strcmp(key,              ) == 0) {\n        int a = pid_ki_up_coef, b = pid_ki_down_coef;\n        int n = sscanf(val_str,        , &a, &b);\n        if (n >= 1) pid_ki_up_coef   = clamp(a, 1, 1000);\n        if (n >= 2) pid_ki_down_coef = clamp(b, 1, 1000);\n        return 1;\n    }\n     /                                                  \n     /                                 \n    if (strcmp(key,            ) == 0) {\n        int sp = pid_speed_coef, thr = pid_spd_nl_thr_p100, ex = pid_spd_nl_exp_p100;\n        int n = sscanf(val_str,           , &sp, &thr, &ex);\n        if (n >= 1) pid_speed_coef      = clamp(sp,  0, 1000);\n        if (n >= 2) pid_spd_nl_thr_p100 = clamp(thr, 10, 100);\n        if (n >= 3) pid_spd_nl_exp_p100 = clamp(ex,   0, 400);\n        return 1;\n    }\n     /                                                  \n    if (strcmp(key,             ) == 0) {\n        int a = pid_target_coef, b = pid_target_alpha, c = pid_target_max;\n        int n = sscanf(val_str,           , &a, &b, &c);\n        if (n >= 1) pid_target_coef  = clamp(a, 1, 1000);\n        if (n >= 2) pid_target_alpha = clamp(b, 1, 100);\n        if (n >= 3) pid_target_max   = clamp(c, 1, 100);\n        return 1;\n    }\n     /                                                   \n     /                                                                 \n    if (strcmp(key,                 ) == 0) {\n        int on = pid_target_dir_on, a = pid_target_away_alpha, t = pid_target_toward_alpha;\n        int n = sscanf(val_str,           , &on, &a, &t);\n        if (n >= 1) pid_target_dir_on   = (on != 0);\n        if (n >= 2) pid_target_away_alpha   = clamp(a, 1, 100);\n        if (n >= 3) pid_target_toward_alpha = clamp(t, 1, 100);\n        return 1;\n    }\n    if (strcmp(key,                 ) == 0) {\n        int a = pid_cold_min, b = pid_cold_max, c = b7_pid_cold_max;\n        int n = sscanf(val_str,           , &a, &b, &c);\n        if (n >= 2) { pid_cold_min=clamp(a,0,COLD_MAX); pid_cold_max=clamp(b,0,COLD_MAX); }\n        if (n >= 3) { b7_pid_cold_max = clamp(c, 1, B7X_COLD_MAX); }\n        return 1;\n    }\n    if (strcmp(key,               ) == 0) {\n        int a = pid_cpu_comp_filter_alpha, b = pid_cpu_comp_divisor, c = pid_cpu_comp_offset;\n        int n = sscanf(val_str,           , &a, &b, &c);\n        if (n >= 1) pid_cpu_comp_filter_alpha = clamp(a, 1, 100);\n        if (n >= 2) pid_cpu_comp_divisor = clamp(b, 5, 200);\n        if (n >= 3) pid_cpu_comp_offset = clamp(c, 0, 500);\n        return 1;\n    }\n     /                                    \n     /                                      \n    if (strcmp(key,                   ) == 0) {\n        int on = pid_spd_recall_on, w = pid_spd_recall_weight;\n        int n = sscanf(val_str,        , &on, &w);\n        if (n >= 1) pid_spd_recall_on = (on != 0);\n        if (n >= 2) pid_spd_recall_weight = clamp(w, 100, 1000);\n        return 1;\n    }\n     /                                                               \n     /                                                                        \n     /                                             \n     /                                                                   \n    if (strncmp(key, CFG_ROW_PREFIX_PID_CUT, sizeof(CFG_ROW_PREFIX_PID_CUT) - 1) == 0) {\n        ki_cut_parse_row(key + sizeof(CFG_ROW_PREFIX_PID_CUT) - 1, val_str);\n        return 1;\n    }\n    return 0;\n",
+   "pure0": false
+  },
+  {
+   "name": "parse_common_cfg",
+   "start": 750,
+   "end": 798,
+   "lines": 49,
+   "static_refs": [
+    "COLD_DEADZONE",
+    "HOT_DERATE_COOLDOWN",
+    "HOT_DERATE_MULT",
+    "HOT_DERATE_THRESHOLD",
+    "RATE_LIMIT_COLD",
+    "RATE_LIMIT_COLD_MULT",
+    "RATE_LIMIT_FAN",
+    "RATE_LIMIT_FAN_DEBOUNCE",
+    "cold_map_exp",
+    "cold_map_start",
+    "fan_rpm_round_unit",
+    "hot_map_max",
+    "hot_map_min",
+    "key"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    if (strcmp(key,              ) == 0) {\n        int a = hot_map_min, b = hot_map_max;\n        if (sscanf(val_str,        , &a, &b) >= 2) { hot_map_min = clamp(a,200,500); hot_map_max = clamp(b,200,500); }\n        return 1;\n    }\n    if (strcmp(key,                ) == 0) {\n        int a = fan_rpm_min, b = fan_rpm_max, c = b7_fan_rpm_max;\n        int n = sscanf(val_str,           , &a, &b, &c);\n        if (n >= 2) { fan_rpm_min = clamp(a,1000,6000); fan_rpm_max = clamp(b,1000,6000); }\n        if (n >= 3) { b7_fan_rpm_max = clamp(c, 2000, B7X_FAN_RPM_MAX); }\n        return 1;\n    }\n    if (strcmp(key,             ) == 0) {\n        int t = HOT_DERATE_THRESHOLD, m = HOT_DERATE_MULT, c = HOT_DERATE_COOLDOWN;\n        int n = sscanf(val_str,           , &t, &m, &c);\n        if (n >= 1) HOT_DERATE_THRESHOLD = clamp(t, 350, 700);    /            \n        if (n >= 2) HOT_DERATE_MULT = clamp(m, 1, 20);\n        if (n >= 3) HOT_DERATE_COOLDOWN = clamp(c, 0, 20);\n        return 1;\n    }\n     /                                                           \n    if (strcmp(key,                 ) == 0) {\n        int step = RATE_LIMIT_FAN, thr = RATE_LIMIT_FAN_DEBOUNCE, ru = fan_rpm_round_unit;\n        int n = sscanf(val_str,           , &step, &thr, &ru);\n        if (n >= 1) RATE_LIMIT_FAN          = clamp(step, 50, 2000);\n        if (n >= 2) RATE_LIMIT_FAN_DEBOUNCE = clamp(thr, 0, 2000);\n        if (n >= 3) fan_rpm_round_unit      = clamp(ru, 1, 500);\n        return 1;\n    }\n    if (strcmp(key,                  ) == 0) {\n         /                                    \n        int base = RATE_LIMIT_COLD, mult = RATE_LIMIT_COLD_MULT, dz = COLD_DEADZONE;\n        int n = sscanf(val_str,           , &base, &mult, &dz);\n        if (n >= 1) RATE_LIMIT_COLD      = clamp(base, 1, COLD_MAX);\n        if (n >= 2) RATE_LIMIT_COLD_MULT = clamp(mult, 1, 100);\n        if (n >= 3) COLD_DEADZONE        = clamp(dz, 1, 50);\n        return 1;\n    }\n     /                             \n    if (strcmp(key,               ) == 0) {\n        int s = cold_map_start, e = cold_map_exp;\n        int n = sscanf(val_str,        , &s, &e);\n        if (n >= 1) cold_map_start = clamp(s, 0, COLD_MAX);\n        if (n >= 2) cold_map_exp   = clamp(e, 50, 500);\n        return 1;\n    }\n    return 0;\n",
+   "pure0": false
+  },
+  {
+   "name": "publish_uiprefs",
+   "start": 808,
+   "end": 844,
+   "lines": 37,
+   "static_refs": [
+    "APP_LAUNCH_ENABLED",
+    "back_hide_enabled",
+    "bt_auto_enable_sec",
+    "uiprefs_fail_logged",
+    "uiprefs_last_back_hide",
+    "uiprefs_last_bt_sec",
+    "uiprefs_last_gate_le"
+   ],
+   "calls": [
+    "write_log"
+   ],
+   "io": [
+    "close(",
+    "fclose",
+    "fopen",
+    "fprintf",
+    "open(",
+    "printf",
+    "snprintf"
+   ],
+   "body": "\n     /                                                             \n     /                            \n    int gate_le_eff = APP_LAUNCH_ENABLED ? 1 : 0;\n    int bt_sec_eff  = APP_LAUNCH_ENABLED ? bt_auto_enable_sec : 0;\n    if (back_hide_enabled == uiprefs_last_back_hide\n            && gate_le_eff == uiprefs_last_gate_le\n            && bt_sec_eff == uiprefs_last_bt_sec) {\n        return;\n    }\n    char tmp[64];\n    snprintf(tmp, sizeof(tmp),         , UIPREFS_PATH);\n    FILE *f = fopen(tmp,    );\n    if (!f) {\n        if (!uiprefs_fail_logged) {\n            write_log(                              , UIPREFS_PATH);\n            uiprefs_fail_logged = 1;\n        }\n        return;\n    }\n    fprintf(f,                 , back_hide_enabled ? 1 : 0);\n    fprintf(f,               , gate_le_eff);\n    fprintf(f,                 , bt_sec_eff);\n    fclose(f);\n    if (rename(tmp, UIPREFS_PATH) != 0) {\n        if (!uiprefs_fail_logged) {\n            write_log(                  , UIPREFS_PATH);\n            uiprefs_fail_logged = 1;\n        }\n        remove(tmp);\n        return;\n    }\n    uiprefs_last_back_hide = back_hide_enabled;\n    uiprefs_last_gate_le = gate_le_eff;\n    uiprefs_last_bt_sec = bt_sec_eff;\n    uiprefs_fail_logged = 0;\n",
+   "pure0": false
+  },
+  {
+   "name": "reset_perf_layer_defaults",
+   "start": 857,
+   "end": 867,
+   "lines": 11,
+   "static_refs": [
+    "ramp_slots_left"
+   ],
+   "calls": [
+    "reset_ki_cut_defaults"
+   ],
+   "io": [],
+   "body": "\n    CFG_PERF_DEFAULTS(CFG_RESET_ROW)\n    ramp_slots_left = 0;    /                      \n     /                                         \n     /                                  \n    hot_derate = 0;\n    hot_derate_cooldown = 0;\n    hot_recover_cooldown = 0;\n     /                                            \n    reset_ki_cut_defaults();\n",
+   "pure0": false
+  },
+  {
+   "name": "reset_sysfs_layer_defaults",
+   "start": 870,
+   "end": 886,
+   "lines": 17,
+   "static_refs": [
+    "BATT_CURRENT_PATH"
+   ],
+   "calls": [
+    "set_default_log_path"
+   ],
+   "io": [],
+   "body": "\n    CFG_SYSFS_DEFAULTS(CFG_RESET_ROW)\n     /                                         \n    cpu_zone_list_dirty = 1;\n     /                                                 \n    strncpy(BATT_TEMP_PATH, CFG_DEFAULT_BATT_TEMP_PATH, sizeof(BATT_TEMP_PATH) - 1);\n    BATT_TEMP_PATH[sizeof(BATT_TEMP_PATH) - 1] =     ;\n    strncpy(BATT_CURRENT_PATH, CFG_DEFAULT_BATT_CURRENT_PATH, sizeof(BATT_CURRENT_PATH) - 1);\n    BATT_CURRENT_PATH[sizeof(BATT_CURRENT_PATH) - 1] =     ;\n    strncpy(CPU_TEMP_PATH_FMT, CFG_DEFAULT_CPU_TEMP_PATH_FMT, sizeof(CPU_TEMP_PATH_FMT) - 1);\n    CPU_TEMP_PATH_FMT[sizeof(CPU_TEMP_PATH_FMT) - 1] =     ;\n     /                                                              \n    strncpy(affinity_spec, CFG_DEFAULT_CPU_AFFINITY, sizeof(affinity_spec) - 1);\n    affinity_spec[sizeof(affinity_spec) - 1] =     ;\n     /                                                     \n    set_default_log_path();\n",
+   "pure0": false
+  },
+  {
+   "name": "reset_cpu_affinity_defaults",
+   "start": 891,
+   "end": 894,
+   "lines": 4,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    strncpy(affinity_spec, CFG_DEFAULT_CPU_AFFINITY, sizeof(affinity_spec) - 1);\n    affinity_spec[sizeof(affinity_spec) - 1] =     ;\n",
+   "pure0": true
+  },
+  {
+   "name": "config_apply_legacy_launch_key",
+   "start": 910,
+   "end": 926,
+   "lines": 17,
+   "static_refs": [
+    "key",
+    "legacy_launch_cooldown",
+    "legacy_launch_seen",
+    "legacy_launch_watchdog"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    if (strncmp(key,               , 12) == 0 && key[12] ==     ) {\n        if (out) {\n            legacy_launch_watchdog = clamp(atoi(val_str), 0, 120);    /                \n            legacy_launch_seen = 1;\n        }\n        return 1;\n    }\n    if (strncmp(key,                      , 19) == 0 && key[19] ==     ) {\n        if (out) {\n            legacy_launch_cooldown = clamp(atoi(val_str), 0, 3600);   /                  \n            legacy_launch_seen = 1;\n        }\n        return 1;\n    }\n    return 0;\n",
+   "pure0": false
+  },
+  {
+   "name": "config_apply_prepass_key",
+   "start": 935,
+   "end": 999,
+   "lines": 65,
+   "static_refs": [
+    "APP_LAUNCH_ENABLED",
+    "app_launch_cooldown",
+    "app_launch_screen_dozing_on",
+    "app_launch_screen_gate_enabled",
+    "app_watchdog_cycles",
+    "back_hide_enabled",
+    "bt_auto_enable_sec",
+    "cooldown",
+    "key",
+    "launch_timing_seen_cooldown",
+    "launch_timing_seen_watchdog",
+    "legacy_screen_gate_logged",
+    "temp_stop_enabled",
+    "wd_keepalive_enabled"
+   ],
+   "calls": [
+    "config_apply_legacy_launch_key",
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n    if (config_apply_legacy_launch_key(out, key, val_str)) return 1;    /           \n    if (strcmp(key,               ) == 0) {\n        if (out) out->perf_enabled = atoi(val_str) != 0;\n    } else if (strcmp(key,                ) == 0) {\n        if (out) out->debug_enabled = atoi(val_str) != 0;\n    } else if (strcmp(key,                ) == 0) {\n        if (out) out->sysfs_enabled = atoi(val_str) != 0;    /                \n    } else if (strcmp(key,                     ) == 0) {\n        if (out) APP_LAUNCH_ENABLED = (atoi(val_str) != 0);    /                           \n    } else if (strcmp(key,                    ) == 0) {\n         /                                             \n        if (!out) return 1;\n        int cooldown = app_launch_cooldown;\n        int cycles = app_watchdog_cycles;\n        int n = sscanf(val_str,        , &cooldown, &cycles);\n        if (n >= 1) {\n            app_launch_cooldown = clamp(cooldown, 0, 3600);\n            launch_timing_seen_cooldown = 1;\n        }\n        if (n >= 2) {\n            app_watchdog_cycles = clamp(cycles, 0, 120);\n            launch_timing_seen_watchdog = 1;\n        }\n    } else if (strcmp(key,                         ) == 0) {\n         /                                                                 \n         /                                                    \n        if (!out) return 1;\n        int on = app_launch_screen_gate_enabled;\n        int legacy_fail_default = 1;\n        int dz = app_launch_screen_dozing_on;\n        int n = sscanf(val_str,           , &on, &legacy_fail_default, &dz);\n        if (n >= 3) {\n            app_launch_screen_gate_enabled = (on != 0);\n            app_launch_screen_dozing_on    = (dz != 0);\n            if (!legacy_screen_gate_logged) {\n                write_log(                                                                                            ,\n                          on, legacy_fail_default, dz);\n                legacy_screen_gate_logged = 1;\n            }\n        } else {\n            dz = app_launch_screen_dozing_on;\n            n = sscanf(val_str,        , &on, &dz);\n            if (n >= 1) app_launch_screen_gate_enabled = (on != 0);\n            if (n >= 2) app_launch_screen_dozing_on  = (dz != 0);\n        }\n    } else if (strcmp(key,               ) == 0) {\n         /                                        \n        if (out) temp_stop_enabled = clamp(atoi(val_str), 0, 1);\n    } else if (strcmp(key,               ) == 0) {\n         /                                     \n         /                                                                        \n        if (out) back_hide_enabled = (atoi(val_str) != 0);\n    } else if (strcmp(key,               ) == 0) {\n         /                                                                   \n         /                              \n        if (out) wd_keepalive_enabled = (atoi(val_str) != 0);\n    } else if (strcmp(key,                     ) == 0) {\n         /                                                       \n        if (out) bt_auto_enable_sec = clamp(atoi(val_str), 0, 3600);\n    } else {\n        return 0;\n    }\n    return 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "load_config",
+   "start": 1001,
+   "end": 1162,
+   "lines": 162,
+   "static_refs": [
+    "APP_LAUNCH_ENABLED",
+    "affinity_cfg_seen",
+    "app_launch_cooldown",
+    "app_watchdog_cycles",
+    "config_mtime",
+    "debug_config",
+    "key",
+    "last_perf_enabled",
+    "last_sysfs_enabled",
+    "launch_migrate_give_up",
+    "launch_timing_seen_cooldown",
+    "launch_timing_seen_watchdog",
+    "legacy_launch_cooldown",
+    "legacy_launch_seen",
+    "legacy_launch_watchdog",
+    "legacy_pidcut_seen",
+    "legacy_rescan_logged",
+    "migrate_give_up",
+    "path",
+    "ramp_dispatch"
+   ],
+   "calls": [
+    "apply_legacy_pidcut",
+    "config_apply_prepass_key",
+    "is_sysfs_key",
+    "migrate_launch_timing_config",
+    "migrate_pid_cut_config",
+    "migrate_rescan_unit_config",
+    "parse_common_cfg",
+    "parse_debug_cfg",
+    "parse_int_cfg",
+    "parse_legacy_pidcut_cfg",
+    "parse_pid_cfg",
+    "parse_sysfs_cfg",
+    "publish_uiprefs",
+    "reset_cpu_affinity_defaults",
+    "reset_perf_layer_defaults",
+    "reset_sysfs_layer_defaults",
+    "write_log"
+   ],
+   "io": [
+    "close(",
+    "fclose",
+    "fgets",
+    "fopen",
+    "open(",
+    "stat("
+   ],
+   "body": "\n    FILE *f = fopen(path,    );\n    if (!f) {\n        write_log(            , path);\n        return 0;    /                                            \n    }\n     /                                                         \n     /                                                      \n    char line[640];\n    struct PrepassCfg pre = {1, 0, 0};    /                           \n    struct RescanCfgState rescan = {0};\n    launch_timing_seen_cooldown = 0;\n    launch_timing_seen_watchdog = 0;\n    legacy_launch_seen = 0;\n    legacy_launch_cooldown = -1;\n    legacy_launch_watchdog = -1;\n    while (fgets(line, sizeof(line), f)) {\n         /                                         \n        if (strstr(line,                                   ) != NULL)\n            rescan.unit_is_cycles = 1;\n        char *key;\n        char *val_str = config_parse_line(line, &key);\n        if (!val_str) continue;\n        config_apply_prepass_key(&pre, key, val_str);    /               \n    }\n\n     /                                        \n     /                                                               \n    if (!launch_timing_seen_cooldown && legacy_launch_cooldown >= 0)\n        app_launch_cooldown = legacy_launch_cooldown;\n    if (!launch_timing_seen_watchdog && legacy_launch_watchdog >= 0)\n        app_watchdog_cycles = legacy_launch_watchdog;\n\n     /                                          \n     /                                         \n    if (legacy_launch_seen && !launch_migrate_give_up) {\n        if (migrate_launch_timing_config(path, app_launch_cooldown, app_watchdog_cycles)) {\n            struct stat mst;\n            if (stat(path, &mst) == 0) config_mtime = mst.st_mtime;\n        } else {\n            launch_migrate_give_up = 1;\n        }\n    }\n    legacy_launch_seen = 0;\n\n     /                                       \n    publish_uiprefs();\n\n     /                                                 \n    if (!APP_LAUNCH_ENABLED && app_watchdog_cycles > 0) {\n        write_log(                                                            , app_watchdog_cycles);\n        app_watchdog_cycles = 0;\n    }\n\n     /                                                 \n     /                                              \n    if (last_perf_enabled == 1 && !pre.perf_enabled) {\n        reset_perf_layer_defaults();\n        write_log(                           );\n    }\n    if (last_sysfs_enabled == 1 && !pre.sysfs_enabled) {\n        reset_sysfs_layer_defaults();\n        write_log(                             );\n    }\n    last_perf_enabled  = pre.perf_enabled;\n    last_sysfs_enabled = pre.sysfs_enabled;\n\n     /                                                  \n    if (pre.debug_enabled) {\n        debug_mode = 1;\n        write_log(            );\n    } else {\n        debug_mode = 0;\n    }\n\n    if (!pre.perf_enabled && !pre.debug_enabled && !pre.sysfs_enabled) {\n        fclose(f);    /                         \n        return 1;     /                              \n    }\n\n    if (pre.perf_enabled) {\n        write_log(               );\n    }\n\n     /                                                \n    affinity_cfg_seen = 0;\n    memset(legacy_cnt, 0, sizeof(legacy_cnt));             /                     \n    memset(pidcut_new_seen, 0, sizeof(pidcut_new_seen));\n    rewind(f);\n    while (fgets(line, sizeof(line), f)) {\n        char *key;\n        char *val_str = config_parse_line(line, &key);\n        if (!val_str) continue;\n         /                                                 \n        if (config_apply_prepass_key(NULL, key, val_str)) continue;\n        int val = atoi(val_str);\n\n         /                                        \n        if (debug_mode && strncmp(key,         , 6) == 0 && strcmp(key,                ) != 0) {\n            parse_debug_cfg(key, val);\n            continue;\n        }\n\n         /                                                      \n        if (pre.sysfs_enabled && is_sysfs_key(key)) {\n            parse_sysfs_cfg(key, val, val_str, &rescan);\n            continue;\n        }\n\n         /                                                        \n        if (!pre.perf_enabled) continue;\n\n         /                                                                       \n        if (parse_legacy_pidcut_cfg(key, val_str)) continue;\n\n         /                          \n        if (strcmp(key,                ) == 0) { ramp_dispatch = clamp(atoi(val_str), 0, 1); continue; }\n\n         /                                \n        if (parse_int_cfg(key, val)) continue;\n        if (parse_pid_cfg(key, val, val_str)) continue;\n        if (parse_common_cfg(key, val, val_str)) continue;\n        debug_log(debug_config,                  , key);\n    }\n\n     /                                                   \n     /                               \n    if (pre.sysfs_enabled && !affinity_cfg_seen) reset_cpu_affinity_defaults();\n\n    apply_legacy_pidcut();    /                                   \n\n    fclose(f);\n\n     /                                                                \n     /                                                   \n     /                                          \n    if (legacy_pidcut_seen && !migrate_give_up) {\n        if (migrate_pid_cut_config(path)) {\n            struct stat mst;\n            if (stat(path, &mst) == 0) config_mtime = mst.st_mtime;    /                  \n        } else {\n            migrate_give_up = 1;    /                              \n        }\n    }\n    legacy_pidcut_seen = 0;\n\n     /                                          \n     /                             \n    if (rescan.legacy_seen) {\n        if (!legacy_rescan_logged) {\n            write_log(                                                   ,\n                      rescan.legacy_sec, rescan.converted_cycles);\n            legacy_rescan_logged = 1;\n        }\n        if (migrate_rescan_unit_config(path, rescan.converted_cycles)) {\n            struct stat mst;\n            if (stat(path, &mst) == 0) config_mtime = mst.st_mtime;\n        }\n    }\n\n    return 1;    /       \n",
+   "pure0": false
+  },
+  {
+   "name": "read_self_exe",
+   "start": 1291,
+   "end": 1296,
+   "lines": 6,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    ssize_t len = readlink(                , out, size - 1);\n    if (len <= 0) return 0;\n    out[len] =     ;\n    return 1;\n",
+   "pure0": true
+  },
+  {
+   "name": "get_exe_basename",
+   "start": 1302,
+   "end": 1310,
+   "lines": 9,
+   "static_refs": [],
+   "calls": [
+    "read_self_exe"
+   ],
+   "io": [],
+   "body": "\n    char exe_path[512];\n    if (!read_self_exe(exe_path, sizeof(exe_path))) return 0;\n    char *slash = strrchr(exe_path,    );\n    if (!slash) return 0;\n    strncpy(buf, slash + 1, size - 1);\n    buf[size - 1] =     ;\n    return 1;\n",
+   "pure0": true
+  },
+  {
+   "name": "set_default_log_path",
+   "start": 1318,
+   "end": 1332,
+   "lines": 15,
+   "static_refs": [
+    "log_file_path"
+   ],
+   "calls": [
+    "ensure_private_dir",
+    "get_exe_basename"
+   ],
+   "io": [
+    "fprintf",
+    "printf",
+    "snprintf"
+   ],
+   "body": "\n    char basename[64];\n    if (!get_exe_basename(basename, sizeof(basename))) {\n        strncpy(basename,           , sizeof(basename) - 1);\n        basename[sizeof(basename) - 1] =     ;\n    }\n    if (ensure_private_dir()) {\n        snprintf(log_file_path, sizeof(log_file_path), PRIVATE_DIR       PROTO_LOG_EXT, basename);\n        return;\n    }\n    fprintf(stderr,                              \n            PROTO_PATH_CACHE_DIR     , PRIVATE_DIR);\n    snprintf(log_file_path, sizeof(log_file_path),\n             PROTO_PATH_CACHE_DIR       PROTO_LOG_EXT, basename);\n",
+   "pure0": false
+  },
+  {
+   "name": "detect_config_path",
+   "start": 1341,
+   "end": 1349,
+   "lines": 9,
+   "static_refs": [
+    "config_path"
+   ],
+   "calls": [
+    "ensure_private_dir"
+   ],
+   "io": [
+    "access(",
+    "printf",
+    "snprintf"
+   ],
+   "body": "\n    if (!ensure_private_dir()) return 0;\n\n    snprintf(config_path, sizeof(config_path), PROTO_PATH_CONFIG);\n    if (access(config_path, F_OK) == 0) return 1;\n\n    config_path[0] =     ;\n    return 0;\n",
+   "pure0": false
+  },
+  {
+   "name": "config_retry_if_needed",
+   "start": 1356,
+   "end": 1373,
+   "lines": 18,
+   "static_refs": [
+    "config_explicit",
+    "config_loaded",
+    "config_mtime",
+    "config_path",
+    "config_retry_at"
+   ],
+   "calls": [
+    "detect_config_path",
+    "load_config",
+    "write_log"
+   ],
+   "io": [
+    "access(",
+    "stat("
+   ],
+   "body": "\n    if (config_loaded) return 0;                  /                         \n    time_t now = mono_now();                      /                   \n    if (config_retry_at != 0 && now - config_retry_at < CONFIG_RETRY_INTERVAL) return 0;\n    config_retry_at = now;\n     /                                 \n     /                                                   \n     /                                 \n    int have_path = config_explicit ? (access(config_path, R_OK) == 0)\n                                    : (detect_config_path() != 0);\n    if (!have_path) return 0;\n    if (!load_config(config_path)) return 0;\n    config_loaded = 1;\n    struct stat st;\n    if (stat(config_path, &st) == 0) config_mtime = st.st_mtime;\n    write_log(              , config_path);\n    return 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "write_log",
+   "start": 1384,
+   "end": 1441,
+   "lines": 58,
+   "static_refs": [
+    "LOG_MAX",
+    "log_file_path",
+    "log_fp",
+    "log_path_opened"
+   ],
+   "calls": [],
+   "io": [
+    "close(",
+    "fclose",
+    "fflush",
+    "fopen",
+    "fprintf",
+    "open(",
+    "printf",
+    "read(",
+    "snprintf",
+    "stat(",
+    "write("
+   ],
+   "body": "\n    if (LOG_MAX == 0) return;      /                     \n\n     /                                     \n    int max_bytes = (debug_mode && LOG_MAX < LOG_MAX_DEBUG) ? LOG_MAX_DEBUG : LOG_MAX;\n\n     /                                 \n     /                                        \n    struct stat st;\n    if (stat(log_file_path, &st) == 0 && st.st_size > max_bytes) {\n        int fd = open(log_file_path, O_RDWR);\n        if (fd >= 0) {\n            off_t keep = (off_t)max_bytes;             /               \n            off_t del  = (off_t)st.st_size - keep;     /          \n            char *buf = malloc((size_t)keep);\n            if (buf) {\n                ssize_t got = pread(fd, buf, (size_t)keep, del);\n                 /                               \n                size_t start = 0;\n                char prev =     ;\n                if (del > 0 && pread(fd, &prev, 1, del - 1) == 1 && prev !=     ) {\n                    for (size_t i = 0; i < (size_t)got; i++) {\n                        if (buf[i] ==     ) { start = i + 1; break; }\n                    }\n                }\n                if (got - (off_t)start > 0) {\n                    pwrite(fd, buf + start, (size_t)(got - (off_t)start), 0);\n                    ftruncate(fd, (off_t)(got - (off_t)start));\n                }\n                free(buf);\n            }\n            close(fd);\n        }\n    }\n\n     /                         \n    if (!log_fp || strcmp(log_file_path, log_path_opened) != 0) {\n        if (log_fp) fclose(log_fp);\n        log_fp = fopen(log_file_path,    );\n        if (!log_fp) return;\n        strncpy(log_path_opened, log_file_path, sizeof(log_path_opened) - 1);\n    }\n\n     /           \n    time_t now = time(NULL);\n    struct tm *tm = localtime(&now);\n    char ts[24];\n    snprintf(ts, sizeof(ts),                      , tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);\n    fprintf(log_fp,        , ts);\n\n    va_list args;\n    va_start(args, fmt);\n    vfprintf(log_fp, fmt, args);\n    va_end(args);\n\n    fprintf(log_fp,     );\n    fflush(log_fp);     /             \n",
+   "pure0": false
+  },
+  {
+   "name": "device_tag_of",
+   "start": 1445,
+   "end": 1447,
+   "lines": 3,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    return (dev == DEVICE_B7X) ?       :      ;\n",
+   "pure0": true
+  },
+  {
+   "name": "update_cpu_filtered",
+   "start": 1454,
+   "end": 1462,
+   "lines": 9,
+   "static_refs": [
+    "CPU_FILTER_ALPHA",
+    "cpu_filtered_temp",
+    "first_run"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    if (cpu_now < 0) return;\n    if (first_run) {\n        cpu_filtered_temp = cpu_now;\n        first_run = 0;\n    } else {\n        cpu_filtered_temp = EMA_DIR(cpu_now, cpu_filtered_temp, CPU_FILTER_ALPHA);\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "publish_temp_stop_state",
+   "start": 1471,
+   "end": 1478,
+   "lines": 8,
+   "static_refs": [
+    "temp_stop_enabled"
+   ],
+   "calls": [],
+   "io": [
+    "chmod",
+    "close(",
+    "fclose",
+    "fopen",
+    "fputs",
+    "open("
+   ],
+   "body": "\n    FILE *f = fopen(TEMP_STOP_FLAG_PATH,    );\n    if (!f) return 0;\n    fputs(temp_stop_enabled ?       :      , f);\n    fclose(f);\n    chmod(TEMP_STOP_FLAG_PATH, 0666);\n    return 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "create_status_files",
+   "start": 1487,
+   "end": 1514,
+   "lines": 28,
+   "static_refs": [],
+   "calls": [
+    "publish_temp_stop_state",
+    "write_log"
+   ],
+   "io": [
+    "chmod",
+    "close(",
+    "fclose",
+    "fopen",
+    "open("
+   ],
+   "body": "\n    const char *paths[] = {status_file_path_b6, status_file_path_b7};\n    for (int i = 0; i < 2; i++) {\n        FILE *f = fopen(paths[i],    );\n        if (f) {\n            fclose(f);\n            chmod(paths[i], 0666);\n            write_log(            , paths[i]);\n        } else {\n            write_log(              , paths[i]);\n        }\n    }\n     /                                                        \n    FILE *bf = fopen(BT_REQ_PATH,    );\n    if (bf) {\n        fclose(bf);\n        chmod(BT_REQ_PATH, 0666);\n        write_log(               , BT_REQ_PATH);\n    } else {\n        write_log(                 , BT_REQ_PATH);\n    }\n     /                                                   \n    if (publish_temp_stop_state()) {\n        write_log(                , TEMP_STOP_FLAG_PATH);\n    } else {\n        write_log(                  , TEMP_STOP_FLAG_PATH);\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "invalidate_report_ok",
+   "start": 1559,
+   "end": 1563,
+   "lines": 5,
+   "static_refs": [],
+   "calls": [
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n    report_ok_streak = 0;\n    if (report_ok) write_log(                         , REPORT_OK_N);\n    report_ok = 0;\n",
+   "pure0": true
+  },
+  {
+   "name": "eff_cold_max",
+   "start": 1653,
+   "end": 1657,
+   "lines": 5,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    int m = base_max - hot_derate;\n    if (m < cold_min) m = cold_min;\n    return m;\n",
+   "pure0": true
+  },
+  {
+   "name": "update_hot_derate",
+   "start": 1664,
+   "end": 1703,
+   "lines": 40,
+   "static_refs": [
+    "HOT_DERATE_COOLDOWN",
+    "HOT_DERATE_MULT",
+    "HOT_DERATE_THRESHOLD",
+    "actual_cold",
+    "pid_cold_min"
+   ],
+   "calls": [
+    "eff_cold_max",
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n    if (hot_derate_cooldown > 0) hot_derate_cooldown--;\n    if (hot_recover_cooldown > 0) hot_recover_cooldown--;\n    if (cooler_hot_temp < 0) return;    /            \n\n    if (cooler_hot_temp > HOT_DERATE_THRESHOLD) {\n        if (hot_derate_cooldown == 0) {\n            int reduction = (cooler_hot_temp - HOT_DERATE_THRESHOLD) * HOT_DERATE_MULT / 10;\n            if (reduction > 0) {    /                      \n                int before = eff_cold_max(active_pid_cold_max, pid_cold_min);\n                if (hot_derate == 0) {\n                     /                                         \n                     /                                                           \n                     /                                                          \n                    int cold_now = (actual_cold >= COLD_MIN) ? actual_cold : active_pid_cold_max;\n                    if (cold_now > active_pid_cold_max) cold_now = active_pid_cold_max;\n                    if (cold_now < COLD_MIN) cold_now = COLD_MIN;\n                    hot_derate = active_pid_cold_max - cold_now + reduction;\n                } else {\n                    hot_derate += reduction;    /                \n                }\n                if (hot_derate < 0) hot_derate = 0;    /           \n                hot_derate_cooldown = HOT_DERATE_COOLDOWN;\n                write_log(                                   ,\n                          cooler_hot_temp / 10, cooler_hot_temp % 10,\n                          before, eff_cold_max(active_pid_cold_max, pid_cold_min), reduction);\n            }\n        }\n    } else {\n        if (hot_derate > 0 && hot_recover_cooldown == 0) {\n            int before = eff_cold_max(active_pid_cold_max, pid_cold_min);\n            hot_derate -= HOT_DERATE_MULT;\n            if (hot_derate < 0) hot_derate = 0;    /          \n            hot_recover_cooldown = HOT_DERATE_COOLDOWN;\n            write_log(                                   ,\n                      cooler_hot_temp / 10, cooler_hot_temp % 10,\n                      before, eff_cold_max(active_pid_cold_max, pid_cold_min), HOT_DERATE_MULT);\n        }\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "update_active_cold_range",
+   "start": 1709,
+   "end": 1712,
+   "lines": 4,
+   "static_refs": [
+    "active_cold_eff_max",
+    "active_cold_eff_min",
+    "pid_cold_min"
+   ],
+   "calls": [
+    "eff_cold_max"
+   ],
+   "io": [],
+   "body": "\n    active_cold_eff_min = pid_cold_min;\n    active_cold_eff_max = eff_cold_max(active_pid_cold_max, pid_cold_min);\n",
+   "pure0": false
+  },
+  {
+   "name": "calc_dynamic_rates",
+   "start": 1762,
+   "end": 1771,
+   "lines": 10,
+   "static_refs": [
+    "BATT_BASELINE",
+    "RATE_LIMIT_COLD",
+    "RATE_LIMIT_COLD_MULT",
+    "RATE_LIMIT_FAN",
+    "cycle_batt_temp"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    *out_fan_step = RATE_LIMIT_FAN;\n     /                                             \n    int dev = 0;\n    if (cycle_batt_temp >= 0) dev = cycle_batt_temp - BATT_BASELINE;\n    int up   = RATE_LIMIT_COLD + dev * RATE_LIMIT_COLD_MULT / 10;\n    int down = RATE_LIMIT_COLD - dev * RATE_LIMIT_COLD_MULT / 10;\n    *out_cold_up   = (up   > 0) ? up   : 0;\n    *out_cold_down = (down > 0) ? down : 0;\n",
+   "pure0": false
+  },
+  {
+   "name": "rate_limit_cold",
+   "start": 1777,
+   "end": 1786,
+   "lines": 10,
+   "static_refs": [
+    "actual_cold",
+    "cold_rate_bound",
+    "dispatch_target_cold"
+   ],
+   "calls": [
+    "calc_dynamic_rates"
+   ],
+   "io": [],
+   "body": "\n    dispatch_target_cold = desired_cold;    /                  \n    int fan_step, cold_up, cold_down;\n    calc_dynamic_rates(&fan_step, &cold_up, &cold_down);\n    int old_cold = actual_cold;\n    cold_rate_bound = (desired_cold >= old_cold) ? cold_up : cold_down;    /                 \n    rate_limit(&actual_cold, desired_cold, cold_up, cold_down);\n    debug_log(debug_exec,                                    ,\n              old_cold, actual_cold, desired_cold, cold_up, cold_down);\n",
+   "pure0": false
+  },
+  {
+   "name": "rate_limit_fan",
+   "start": 1795,
+   "end": 1827,
+   "lines": 33,
+   "static_refs": [
+    "RATE_LIMIT_FAN_DEBOUNCE",
+    "actual_rpm",
+    "dispatch_target_rpm",
+    "fan_rpm_round_unit"
+   ],
+   "calls": [
+    "calc_dynamic_rates"
+   ],
+   "io": [],
+   "body": "\n    dispatch_target_rpm = desired_rpm;      /                            \n    int fan_step, cold_up, cold_down;\n    calc_dynamic_rates(&fan_step, &cold_up, &cold_down);\n\n     /                                      \n     /                                     \n    int rising = (desired_rpm > actual_rpm);\n    int ref_room = rising ? (active_fan_max - actual_rpm)     /                                   \n                          : (actual_rpm - fan_rpm_min);       /         \n    int delta = abs(desired_rpm - actual_rpm);\n     /                                                            \n     /                                               \n    int hold = delta > 0 &&\n               ref_room >= (RATE_LIMIT_FAN_DEBOUNCE * 3 + 1) / 2 &&\n               delta <= RATE_LIMIT_FAN_DEBOUNCE;\n    if (hold) desired_rpm = actual_rpm;    /                     \n    int drop_hold = hold && !rising;       /       \n    int rise_hold = hold && rising;        /       \n\n     /              \n    rate_limit(&actual_rpm, desired_rpm, fan_step, fan_step);\n     /                                                            \n    actual_rpm = clamp(actual_rpm, fan_rpm_min, active_fan_max);\n\n     /                                                                \n    int round_unit = (fan_rpm_round_unit > 0) ? fan_rpm_round_unit : 1;\n    int send_rpm = ((actual_rpm + round_unit / 2) / round_unit) * round_unit;\n    send_rpm = clamp(send_rpm, fan_rpm_min, active_fan_max);\n    debug_log(debug_exec,                                        ,\n              desired_rpm, send_rpm, drop_hold, rise_hold);\n    return send_rpm;\n",
+   "pure0": false
+  },
+  {
+   "name": "should_skip_dispatch",
+   "start": 1841,
+   "end": 1905,
+   "lines": 65,
+   "static_refs": [
+    "COLD_DEADZONE",
+    "RATE_LIMIT_FAN_DEBOUNCE",
+    "active_cold_eff_max",
+    "active_cold_eff_min",
+    "last_bcast_valid",
+    "last_cold",
+    "last_mode",
+    "last_rpm",
+    "last_target_temp",
+    "last_wind_level"
+   ],
+   "calls": [
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n    int send_rpm = (mode == 0) ? windLevel : windOC;\n\n     /                                                   \n     /                                       \n    int feedback_invalid = (cooler_cold_real <= 0 && cooler_rpm_real <= 0);\n    if (!feedback_invalid && cooler_cold_real >= 0 && cooler_rpm_real >= 0) {\n        if (mode == 0) {\n             /                                                       \n            if (send_rpm == cooler_rpm_real) {\n                debug_log(debug_exec,                                                 ,\n                          send_rpm, cooler_rpm_real);\n                return 1;    /                    \n            }\n            return 0;\n        }\n\n         /                                                \n         /                                         \n        int cold_diff = cold - cooler_cold_real;\n        int rpm_diff  = send_rpm - cooler_rpm_real;\n        int cold_hold = 1, rpm_hold = 1;\n\n        if (cold_diff != 0) {\n            int room = (cold_diff > 0) ? (active_cold_eff_max - cooler_cold_real)     /         \n                                       : (cooler_cold_real - active_cold_eff_min);    /         \n            cold_hold = !force_dispatch && within_deadzone(cold_diff, COLD_DEADZONE, room);\n            if (abs(cold_diff) < COLD_DEADZONE) {\n                if (force_dispatch) {\n                     /                                             \n                    debug_log(debug_exec,                                               ,\n                              cold, cooler_cold_real, abs(cold_diff), COLD_DEADZONE);\n                } else if (room < deadzone_band(COLD_DEADZONE)) {\n                    debug_log(debug_exec,                                   ,\n                              cold_diff > 0 ?     :    , room, deadzone_band(COLD_DEADZONE),\n                              cold, cooler_cold_real);\n                }\n            }\n        }\n\n        if (rpm_diff != 0) {\n            int room = (rpm_diff > 0) ? (active_fan_max - cooler_rpm_real)    /         \n                                      : (cooler_rpm_real - fan_rpm_min);      /         \n            rpm_hold = within_deadzone(rpm_diff, RATE_LIMIT_FAN_DEBOUNCE, room);\n        }\n\n        if (cold_hold && rpm_hold) {\n            debug_log(debug_exec,                                                          ,\n                      cold, cooler_cold_real, abs(cold_diff), COLD_DEADZONE,\n                      send_rpm, cooler_rpm_real, abs(rpm_diff), RATE_LIMIT_FAN_DEBOUNCE);\n            return 1;    /                    \n        }\n        return 0;\n    }\n\n     /                                             \n    int skip = last_bcast_valid &&\n               mode == last_mode && target == last_target_temp &&\n               windOC == last_rpm && cold == last_cold &&\n               windLevel == last_wind_level;\n    if (skip)\n        write_log(                                                            ,\n                  cooler_cold_real, cooler_rpm_real, last_mode, last_cold, last_rpm);\n    return skip;\n",
+   "pure0": false
+  },
+  {
+   "name": "is_app_alive",
+   "start": 1919,
+   "end": 1936,
+   "lines": 18,
+   "static_refs": [
+    "STATUS_TIMEOUT",
+    "path",
+    "status_fresh_at",
+    "status_mtime_seen"
+   ],
+   "calls": [],
+   "io": [
+    "stat("
+   ],
+   "body": "\n     /                                                                 \n     /                                             \n    time_t mt = active_status_mtime;\n    if (mt == 0) {\n        const char *path = (active_device == DEVICE_B7X) ? status_file_path_b7 : status_file_path_b6;\n        struct stat st;\n        if (stat(path, &st) != 0) return 0;\n        mt = st.st_mtime;\n    }\n    time_t now = mono_now();\n    if (mt != status_mtime_seen) {    /                         \n        status_mtime_seen = mt;\n        status_fresh_at   = now;\n        return 1;\n    }\n    return (now - status_fresh_at <= STATUS_TIMEOUT);\n",
+   "pure0": false
+  },
+  {
+   "name": "app_process_scan",
+   "start": 1945,
+   "end": 1980,
+   "lines": 36,
+   "static_refs": [
+    "path"
+   ],
+   "calls": [
+    "install_cache_mark"
+   ],
+   "io": [
+    "close(",
+    "open(",
+    "opendir",
+    "printf",
+    "read(",
+    "readdir",
+    "snprintf"
+   ],
+   "body": "\n    for (int i = 0; i < count; i++) alive[i] = 0;\n    DIR *d = opendir(       );\n    if (!d) return;\n    struct dirent *de;\n    char buf[4096];\n    int found_all = 0;\n    while (!found_all && (de = readdir(d)) != NULL) {\n        if (de->d_name[0] <     || de->d_name[0] >    ) continue;\n        char path[64];\n        snprintf(path, sizeof(path),                   , de->d_name);\n        int fd = open(path, O_RDONLY);\n        if (fd < 0) continue;\n        ssize_t n = read(fd, buf, sizeof(buf) - 1);\n        close(fd);\n        if (n <= 0) continue;\n        buf[n] =     ;\n        for (char *tok = buf; tok < buf + n; ) {\n            size_t len = strnlen(tok, (size_t)(buf + n - tok));\n            if (len > 0) {\n                for (int i = 0; i < count; i++) {\n                    if (!alive[i] &&\n                        (strcmp(tok, pkgs[i]) == 0 ||\n                         (strncmp(tok,               , 12) == 0 && strcmp(tok + 12, pkgs[i]) == 0))) {\n                        alive[i] = 1;\n                        install_cache_mark(pkgs[i]);    /                                                  \n                    }\n                }\n            }\n            tok += len + 1;\n        }\n        found_all = 1;\n        for (int i = 0; i < count; i++) if (!alive[i]) { found_all = 0; break; }\n    }\n    closedir(d);\n",
+   "pure0": false
+  },
+  {
+   "name": "app_installed",
+   "start": 2023,
+   "end": 2043,
+   "lines": 21,
+   "static_refs": [
+    "install_cache_used"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    for (int i = 0; i < install_cache_used; i++)\n        if (strcmp(install_cache_pkg[i], pkg) == 0) return install_cache_val[i];\n\n    int r = app_installed_probe(pkg);\n    if (r == CMD_RESULT_TIMEOUT) return -1;    /                       \n    if (r < 0) return 0;    /                                         \n\n    int slot = install_cache_used;\n    if (slot >= INSTALL_CACHE_SLOTS) {    /                 \n        slot = 0;\n        for (int i = 1; i < INSTALL_CACHE_SLOTS; i++)\n            if (install_cache_at[i] < install_cache_at[slot]) slot = i;\n    } else {\n        install_cache_used++;\n    }\n    install_cache_pkg[slot] = pkg;\n    install_cache_val[slot] = r;\n    install_cache_at[slot]  = time(NULL);\n    return r;\n",
+   "pure0": false
+  },
+  {
+   "name": "app_installed_cached",
+   "start": 2049,
+   "end": 2053,
+   "lines": 5,
+   "static_refs": [
+    "install_cache_used"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    for (int i = 0; i < install_cache_used; i++)\n        if (strcmp(install_cache_pkg[i], pkg) == 0) return install_cache_val[i];\n    return -1;\n",
+   "pure0": false
+  },
+  {
+   "name": "install_cache_mark",
+   "start": 2060,
+   "end": 2075,
+   "lines": 16,
+   "static_refs": [
+    "install_cache_used"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    for (int i = 0; i < install_cache_used; i++) {\n        if (strcmp(install_cache_pkg[i], pkg) == 0) { install_cache_val[i] = 1; return; }\n    }\n    int slot = install_cache_used;\n    if (slot >= INSTALL_CACHE_SLOTS) {    /                       \n        slot = 0;\n        for (int i = 1; i < INSTALL_CACHE_SLOTS; i++)\n            if (install_cache_at[i] < install_cache_at[slot]) slot = i;\n    } else {\n        install_cache_used++;\n    }\n    install_cache_pkg[slot] = pkg;\n    install_cache_val[slot] = 1;\n    install_cache_at[slot]  = time(NULL);\n",
+   "pure0": false
+  },
+  {
+   "name": "install_cache_warmup",
+   "start": 2092,
+   "end": 2106,
+   "lines": 15,
+   "static_refs": [
+    "INSTALL_WARMUP_PKGS",
+    "install_warmup_done",
+    "install_warmup_tries"
+   ],
+   "calls": [
+    "app_installed",
+    "app_installed_cached",
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n    if (install_warmup_done) return;\n    int pending = 0;\n    for (int i = 0; i < INSTALL_WARMUP_PKGS_N; i++) {\n        if (app_installed_cached(INSTALL_WARMUP_PKGS[i]) >= 0) continue;    /     \n        app_installed(INSTALL_WARMUP_PKGS[i]);    /                              \n        if (app_installed_cached(INSTALL_WARMUP_PKGS[i]) < 0) pending++;    /      \n    }\n    if (pending == 0) { install_warmup_done = 1; return; }\n    if (++install_warmup_tries >= INSTALL_WARMUP_MAX_TRIES) {\n        install_warmup_done = 1;\n        write_log(                                                  ,\n                  install_warmup_tries, pending);\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "resolve_launch_pkg",
+   "start": 2114,
+   "end": 2138,
+   "lines": 25,
+   "static_refs": [
+    "debug_launch"
+   ],
+   "calls": [
+    "app_installed"
+   ],
+   "io": [],
+   "body": "\n    const char *pkg;\n    if      (last_owner == 2)                     pkg = APP_PKG_B6X_NEW;\n    else if (last_owner == 6 || last_owner == 7)  pkg = APP_PKG_B7X;\n    else                                          pkg = APP_PKG_B6X_OLD;   /          \n\n    int installed = app_installed(pkg);\n    if (installed < 0) {    /                                     \n        if (out_installed) *out_installed = installed;\n        return pkg;\n    }\n    if (installed == 0\n        && strcmp(pkg, APP_PKG_B6X_OLD) == 0 && app_installed(APP_PKG_B6X_NEW) == 1) {\n        debug_log(debug_launch,                             );\n        pkg = APP_PKG_B6X_NEW;\n        installed = 1;    /            \n    } else if (installed == 0\n        && strcmp(pkg, APP_PKG_B6X_NEW) == 0 && app_installed(APP_PKG_B6X_OLD) == 1) {\n        debug_log(debug_launch,                             );\n        pkg = APP_PKG_B6X_OLD;\n        installed = 1;\n    }\n    if (out_installed) *out_installed = installed;\n    return pkg;\n",
+   "pure0": false
+  },
+  {
+   "name": "launch_last_app",
+   "start": 2154,
+   "end": 2226,
+   "lines": 73,
+   "static_refs": [
+    "APP_LAUNCH_ENABLED",
+    "app_launch_cooldown",
+    "app_launch_screen_dozing_on",
+    "app_launch_screen_gate_enabled",
+    "debug_launch",
+    "last_disconnect_time",
+    "last_launch_attempt",
+    "last_launch_probe_at",
+    "last_probe_off_at",
+    "last_screen_off"
+   ],
+   "calls": [
+    "app_process_scan",
+    "resolve_launch_pkg",
+    "temp_stop_active",
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n     /                                      \n    if (temp_stop_active()) {\n        debug_log(debug_launch,                 );\n        return;\n    }\n    time_t now = mono_now();    /                           \n    if (now - last_launch_attempt < app_launch_cooldown) return;    /                          \n    if (!APP_LAUNCH_ENABLED) {\n        debug_log(debug_launch,               );\n        return;\n    }\n\n     /                                                    \n     /                                                                \n     /                               \n     /                                                                              \n     /                                                    \n    int probe_interval = APP_LAUNCH_PROBE_INTERVAL;                  /         \n    if (last_disconnect_time > 0\n            && now - last_disconnect_time < APP_LAUNCH_PROBE_FAST_WINDOW)\n        probe_interval = APP_LAUNCH_PROBE_FAST_INTERVAL;             /         \n    if (now - last_launch_probe_at < probe_interval) return;\n    last_launch_probe_at = now;\n\n     /                                                           \n     /                           \n    if (app_launch_screen_gate_enabled) {\n         /                                          \n         /                                                       \n         /                                                   \n         /                          \n        if (last_screen_off && now - last_probe_off_at < APP_LAUNCH_PROBE_OFF_INTERVAL) return;\n\n        int sc = is_screen_awake();\n        if (sc == 2) sc = app_launch_screen_dozing_on ? 1 : 0;    /                         \n        if (sc < 0) sc = 1;                                       /                          \n        if (sc != 1) {\n             /                                         \n             /                                             \n             /                                                          \n             /                                                            \n             /                                               \n            last_screen_off = 1;\n            last_probe_off_at = now;\n            debug_log(debug_launch,                                        );\n            return;\n        }\n        last_screen_off = 0;    /                                     \n    }\n\n    int installed = 1;\n    const char *pkg = resolve_launch_pkg(&installed);\n    debug_log(debug_launch,                            , pkg, last_owner);\n    if (installed == 0) {\n        write_log(                    , pkg);\n        return;\n    }\n    if (installed < 0)    /                                          \n        write_log(                               , pkg);\n    if (!pkg_known_dead) {    /                    \n        int pkg_alive = 0;\n        app_process_scan(&pkg, &pkg_alive, 1);    /               \n        if (pkg_alive) {\n            debug_log(debug_launch,                    , pkg);\n            return;    /                                                         \n        }\n    }\n\n    last_launch_attempt = now;    /                              \n    int rc = am_start_app(pkg);\n    write_log(                          , pkg, rc);\n",
+   "pure0": false
+  },
+  {
+   "name": "watchdog_check",
+   "start": 2234,
+   "end": 2280,
+   "lines": 47,
+   "static_refs": [
+    "app_watchdog_cycles",
+    "last_cold",
+    "last_mode",
+    "watchdog_last_cmd",
+    "watchdog_last_cold",
+    "watchdog_last_kill_at",
+    "watchdog_stall_count"
+   ],
+   "calls": [
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n    if (app_watchdog_cycles <= 0)      { watchdog_stall_count = 0; return; }   /   \n    if (cooler_cold_real < 0)          { watchdog_stall_count = 0; return; }   /        \n    if (last_cold < 0)                 { watchdog_stall_count = 0; return; }   /       \n    if (active_device == DEVICE_NONE)  { watchdog_stall_count = 0; return; }   /        \n     /                                    \n     /                               \n    if (last_mode == 0) {\n        watchdog_stall_count = 0;\n        watchdog_last_cold = cooler_cold_real;\n        watchdog_last_cmd  = last_cold;\n        return;\n    }\n    time_t now = mono_now();    /             \n\n     /                           \n    if (watchdog_last_cold < 0 || watchdog_last_cmd < 0) {\n        watchdog_last_cold = cooler_cold_real;\n        watchdog_last_cmd  = last_cold;\n        return;\n    }\n     /                               \n    if (now - watchdog_last_kill_at < 300) {    /                      \n        watchdog_last_cold = cooler_cold_real;\n        watchdog_last_cmd  = last_cold;\n        return;\n    }\n     /                                            \n     /                                 \n    if (cooler_cold_real == watchdog_last_cold && cooler_cold_real != watchdog_last_cmd) {\n        watchdog_stall_count++;\n    } else {\n        watchdog_stall_count = 0;\n    }\n     /                           \n    watchdog_last_cold = cooler_cold_real;\n    watchdog_last_cmd  = last_cold;\n\n     /            \n    if (watchdog_stall_count >= app_watchdog_cycles) {\n        write_log(                                                    ,\n                  cooler_cold_real, watchdog_last_cmd, app_watchdog_cycles);\n        watchdog_stall_count = 0;\n        watchdog_last_kill_at = now;\n        force_kill_and_relaunch();\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "deadlink_check",
+   "start": 2289,
+   "end": 2306,
+   "lines": 18,
+   "static_refs": [
+    "deadlink_cycles",
+    "pending_align",
+    "watchdog_last_kill_at"
+   ],
+   "calls": [
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n    if (pending_align)                       { deadlink_cycles = 0; return; }   /         \n    if (!app_ble_connected || active_device == DEVICE_NONE) { deadlink_cycles = 0; return; }\n    int dead = (cooler_cold_real == 0 && cooler_rpm_real == 0\n                && cooler_hot_temp <= 0 && cooler_cold_temp <= 0);\n    if (!dead)                               { deadlink_cycles = 0; return; }\n    time_t now = mono_now();    /              \n    if (watchdog_last_kill_at > 0 && now - watchdog_last_kill_at < 300) {\n        deadlink_cycles = 0;    /                   \n        return;\n    }\n    if (++deadlink_cycles < DEADLINK_CYCLES) return;\n    write_log(                                                  ,\n              DEADLINK_CYCLES);\n    deadlink_cycles = 0;\n    watchdog_last_kill_at = now;\n    force_kill_and_relaunch();\n",
+   "pure0": false
+  },
+  {
+   "name": "arbitrate_apps",
+   "start": 2311,
+   "end": 2377,
+   "lines": 67,
+   "static_refs": [
+    "APP_LAUNCH_ENABLED",
+    "debug_launch"
+   ],
+   "calls": [
+    "app_installed_cached",
+    "app_process_scan",
+    "launch_last_app",
+    "temp_stop_active"
+   ],
+   "io": [],
+   "body": "\n     /                                       \n     /                                         \n     /                                                   \n     /                                                               \n    const char *cand[3] = { APP_PKG_B6X_OLD, APP_PKG_B6X_NEW, APP_PKG_B7X };\n    const char *scan_pkgs[3];\n    int scan_orig[3];\n    int scan_n = 0;\n    for (int i = 0; i < 3; i++) {\n        if (app_installed_cached(cand[i]) == 0) continue;    /            \n        scan_pkgs[scan_n] = cand[i];\n        scan_orig[scan_n] = i;\n        scan_n++;\n    }\n     /                                                       \n     /                                                                                   \n     /                                                                   \n     /                                                                 \n     /                                                                \n     /                                                     \n    if (scan_n <= 1 && !APP_LAUNCH_ENABLED) return;\n    int alive[3] = { 0, 0, 0 };\n    if (scan_n > 0) {\n        int scan_alive[3];\n        app_process_scan(scan_pkgs, scan_alive, scan_n);\n        for (int k = 0; k < scan_n; k++) alive[scan_orig[k]] = scan_alive[k];\n    }\n    int old_alive = alive[0];\n    int new_alive = alive[1];\n    int far_alive = alive[2];\n    int far_in = far_alive && (last_owner == 6);   /                        \n\n     /                                                    \n    if (old_alive + new_alive + far_alive == 0) {\n         /                             \n        if (temp_stop_active()) {\n            debug_log(debug_launch,                 );\n            return;\n        }\n         /                                                            \n        launch_last_app(1);\n        return;\n    }\n\n    if (old_alive + new_alive + far_in < 2) return;   /                 \n\n     /                                                          \n    const char *keep = APP_PKG_B6X_OLD;\n    if (last_owner == 2) keep = APP_PKG_B6X_NEW;\n    else if (last_owner == 1) keep = APP_PKG_B6X_OLD;\n    else if (last_owner == 6 && far_alive) keep = APP_PKG_B7X;   /                               \n    else if (b6_owner == 2) keep = APP_PKG_B6X_NEW;\n    else if (b6_owner == 1) keep = APP_PKG_B6X_OLD;\n\n     /                                         \n     /                                                       \n     /                                                 \n     /                               \n    if (strcmp(keep, APP_PKG_B7X) == 0 && b6_connected_at > last_owner_at)\n        keep = (b6_owner == 2) ? APP_PKG_B6X_NEW : APP_PKG_B6X_OLD;\n\n     /                           \n    evict_app_if_eligible(old_alive, keep, APP_PKG_B6X_OLD);\n    evict_app_if_eligible(new_alive, keep, APP_PKG_B6X_NEW);\n    evict_app_if_eligible(far_in, keep, APP_PKG_B7X);\n",
+   "pure0": false
+  },
+  {
+   "name": "cpu_comp_now",
+   "start": 2390,
+   "end": 2409,
+   "lines": 20,
+   "static_refs": [
+    "cpu_filtered_temp",
+    "pid_cpu_comp_active",
+    "pid_cpu_comp_divisor",
+    "pid_cpu_comp_filter_alpha",
+    "pid_cpu_comp_offset",
+    "pid_cpu_comp_ready",
+    "pid_cpu_comp_smooth"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    if (cpu_filtered_temp < 0) return 0;\n    float raw = (float)(cpu_filtered_temp - batt - pid_cpu_comp_offset) / (pid_cpu_comp_divisor * 10);\n    if (raw < 0.0f) raw = 0.0f;\n     /                                   \n    if (raw > 0.0f) pid_cpu_comp_active = 1;\n     /                          \n    if (!pid_cpu_comp_active) return 0;\n     /                                           \n    float prev = pid_cpu_comp_ready ? pid_cpu_comp_smooth : 0.0f;\n    pid_cpu_comp_smooth = (pid_cpu_comp_filter_alpha * raw +\n                          (100 - pid_cpu_comp_filter_alpha) * prev) / 100.0f;\n    pid_cpu_comp_ready = 1;\n     /                                          \n    if (pid_cpu_comp_smooth <= 0.0001f) {\n        pid_cpu_comp_active = 0;\n        pid_cpu_comp_smooth = 0.0f;\n    }\n    return (int)(pid_cpu_comp_smooth * 10 + 0.5f);\n",
+   "pure0": false
+  },
+  {
+   "name": "ki_cut_parse_row",
+   "start": 2433,
+   "end": 2527,
+   "lines": 95,
+   "static_refs": [
+    "idx_str"
+   ],
+   "calls": [
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n    char *endp = NULL;\n    long idx = strtol(idx_str, &endp, 10);\n    if (endp == idx_str || idx < 1 || idx > KI_CUT_MAX_CLUSTERS) {\n        write_log(                           , idx_str);\n        return;\n    }\n     /                                           \n    {\n        const char *p = val_str;\n        while (*p ==     || *p ==     ) p++;\n        if (*p ==     ) {\n            ki_cut_cnt[idx - 1] = 0;\n            pidcut_new_seen[idx - 1] = 1;    /               \n            write_log(                                 , idx);\n            return;\n        }\n    }\n     /                                         \n    const char *tok[KI_CUT_MAX_POINTS * 4];\n    size_t tlen[KI_CUT_MAX_POINTS * 4];\n    int ntok = 0;\n    const char *s = val_str;\n    while (ntok < KI_CUT_MAX_POINTS * 4) {\n        const char *b = s;\n        while (*s && *s !=    ) s++;\n        const char *e = s;\n        while (b < e && (*b ==     || *b ==     )) b++;       /         \n        while (e > b && (e[-1] ==     || e[-1] ==     )) e--;\n        tok[ntok] = b;\n        tlen[ntok] = (size_t)(e - b);\n        ntok++;\n        if (*s !=    ) break;                                 /              \n        s++;\n    }\n    if (ntok == KI_CUT_MAX_POINTS * 4 && *s) {\n        write_log(                                  , idx, KI_CUT_MAX_POINTS);\n    }\n    if (ntok % 4 != 0) {\n        write_log(                                     , idx, ntok);\n        return;\n    }\n     /                                    \n    KiCutPoint tmp[KI_CUT_MAX_POINTS];\n    int np = 0;         /             \n    int nblank = 0;     /         \n    int nbad = 0;       /              \n    for (int i = 0; i + 3 < ntok; i += 4) {\n        if (tlen[i] == 0) {                                   /                    \n            nblank++;\n            continue;\n        }\n        int cold;\n        if (!ki_cut_tok_int(tok[i], tlen[i], &cold)) {        /             \n            write_log(                                  , idx, i / 4 + 1);\n            nbad++;\n            continue;\n        }\n        KiCutPoint pk;\n        pk.cold = clamp(cold, CFG_MIN_PID_CUT_F1, CFG_MAX_PID_CUT_F1);\n        pk.skip = 0;\n        static const unsigned char rate_bit[3] = { KI_CUT_SKIP_KDP, KI_CUT_SKIP_UP, KI_CUT_SKIP_DN };\n        static const int rate_min[3] = { CFG_MIN_PID_CUT_F2, CFG_MIN_PID_CUT_F3, CFG_MIN_PID_CUT_F4 };\n        static const int rate_max[3] = { CFG_MAX_PID_CUT_F2, CFG_MAX_PID_CUT_F3, CFG_MAX_PID_CUT_F4 };\n        int rate[3] = { KI_CUT_NONE, KI_CUT_NONE, KI_CUT_NONE };\n        int bad = 0;\n        for (int a = 0; a < 3; a++) {\n            if (tlen[i + 1 + a] == 0) { pk.skip |= rate_bit[a]; continue; }    /          \n            if (!ki_cut_tok_int(tok[i + 1 + a], tlen[i + 1 + a], &rate[a])) { bad = 1; break; }\n            rate[a] = clamp(rate[a], rate_min[a], rate_max[a]);\n        }\n        if (bad) {\n            write_log(                                   , idx, i / 4 + 1);\n            return;\n        }\n        pk.kdp = rate[0];\n        pk.up  = rate[1];\n        pk.dn  = rate[2];\n        tmp[np++] = pk;\n    }\n    if (np == 0) {\n        if (nblank > 0 && nbad == 0) {\n             /                                           \n            ki_cut_cnt[idx - 1] = 0;\n            pidcut_new_seen[idx - 1] = 1;\n            write_log(                                    , idx);\n            return;\n        }\n        write_log(                            , idx);    /             \n        return;\n    }\n    for (int k = 0; k < np; k++) ki_cut_rows[idx - 1][k] = tmp[k];\n    ki_cut_cnt[idx - 1] = np;\n    pidcut_new_seen[idx - 1] = 1;    /                         \n",
+   "pure0": false
+  },
+  {
+   "name": "parse_legacy_pidcut_cfg",
+   "start": 2535,
+   "end": 2575,
+   "lines": 41,
+   "static_refs": [
+    "idx_str",
+    "key",
+    "legacy_pidcut_seen"
+   ],
+   "calls": [
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n     /                                                                             \n    if (strncmp(key,                , 13) == 0) {    /                    \n        legacy_pidcut_seen = 1;\n        return 1;\n    }\n    const size_t plen = sizeof(CFG_ROW_PREFIX_KI_CUT_LEGACY) - 1;\n    if (strncmp(key, CFG_ROW_PREFIX_KI_CUT_LEGACY, plen) != 0) return 0;\n    legacy_pidcut_seen = 1;\n    const char *idx_str = key + plen;\n    char *endp = NULL;\n    long idx = strtol(idx_str, &endp, 10);\n    if (endp == idx_str || idx < 1 || idx > KI_CUT_MAX_CLUSTERS) {\n        write_log(                             , idx_str);\n        return 1;\n    }\n    int vals[KI_CUT_MAX_POINTS * 3];\n    int cnt = 0;\n    const char *s = val_str;\n    while (*s && cnt < KI_CUT_MAX_POINTS * 3) {\n        char *e = NULL;\n        long v = strtol(s, &e, 10);\n        if (e == s) break;\n        vals[cnt++] = (int)v;\n        s = e;\n        while (*s ==     || *s ==     || *s ==     ) s++;\n    }\n    if (cnt == 0 || cnt % 3 != 0) {\n        write_log(                                      , idx, cnt);\n        return 1;\n    }\n    int np = cnt / 3;\n    for (int i = 0; i < np; i++) {\n        legacy_rows[idx - 1][i].cold = clamp(vals[3 * i],     CFG_MIN_PID_CUT_F1, CFG_MAX_PID_CUT_F1);\n        legacy_rows[idx - 1][i].kdp  = (int)KI_CUT_NONE;    /                \n        legacy_rows[idx - 1][i].up   = clamp(vals[3 * i + 1], CFG_MIN_PID_CUT_F2, CFG_MAX_PID_CUT_F2);\n        legacy_rows[idx - 1][i].dn   = clamp(vals[3 * i + 2], CFG_MIN_PID_CUT_F3, CFG_MAX_PID_CUT_F3);\n    }\n    legacy_cnt[idx - 1] = np;\n    return 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "apply_legacy_pidcut",
+   "start": 2578,
+   "end": 2584,
+   "lines": 7,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    for (int i = 0; i < KI_CUT_MAX_CLUSTERS; i++) {\n        if (pidcut_new_seen[i] || legacy_cnt[i] <= 0) continue;\n        for (int k = 0; k < legacy_cnt[i]; k++) ki_cut_rows[i][k] = legacy_rows[i][k];\n        ki_cut_cnt[i] = legacy_cnt[i];\n    }\n",
+   "pure0": true
+  },
+  {
+   "name": "commit_config_rewrite",
+   "start": 2592,
+   "end": 2609,
+   "lines": 18,
+   "static_refs": [
+    "path"
+   ],
+   "calls": [
+    "write_log"
+   ],
+   "io": [
+    "chmod",
+    "chown",
+    "close(",
+    "fclose",
+    "fflush"
+   ],
+   "body": "\n    fflush(g);\n    int m1 = fchmod(fileno(g), st->st_mode & 07777);\n    int m2 = fchown(fileno(g), st->st_uid, st->st_gid);\n    fclose(g);\n    if (m1 != 0 || m2 != 0) {\n        write_log(                                             ,\n                  what, m1, m2, path);\n        remove(tmp);\n        return 0;\n    }\n    if (rename(tmp, path) != 0) {\n        write_log(                             , what, path);\n        remove(tmp);\n        return 0;\n    }\n    return 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "read_first_line",
+   "start": 2612,
+   "end": 2627,
+   "lines": 16,
+   "static_refs": [
+    "path"
+   ],
+   "calls": [],
+   "io": [
+    "close(",
+    "fclose",
+    "fgets",
+    "fopen",
+    "open("
+   ],
+   "body": "\n    FILE *f = fopen(path,    );\n    if (!f) return 0;\n    char buf[128];\n    int ok = 0;\n    if (fgets(buf, sizeof(buf), f)) {\n        char *v = trim_value(buf);\n        if (*v) {\n            strncpy(out, v, out_size - 1);\n            out[out_size - 1] =     ;\n            ok = 1;\n        }\n    }\n    fclose(f);\n    return ok;\n",
+   "pure0": false
+  },
+  {
+   "name": "write_boot_marker",
+   "start": 2630,
+   "end": 2636,
+   "lines": 7,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "close(",
+    "fclose",
+    "fopen",
+    "fprintf",
+    "open(",
+    "printf"
+   ],
+   "body": "\n    FILE *f = fopen(TEMP_STOP_BOOT_PATH,    );\n    if (!f) return 0;\n    int ok = fprintf(f,       , boot_id) > 0;\n    fclose(f);\n    return ok;\n",
+   "pure0": false
+  },
+  {
+   "name": "config_write_lock",
+   "start": 2652,
+   "end": 2692,
+   "lines": 41,
+   "static_refs": [
+    "path"
+   ],
+   "calls": [
+    "write_log"
+   ],
+   "io": [
+    "chmod",
+    "chown",
+    "close(",
+    "fcntl",
+    "flock",
+    "open(",
+    "printf",
+    "sleep(",
+    "snprintf",
+    "stat(",
+    "usleep"
+   ],
+   "body": "\n     /                                             \n    struct stat cst;\n    if (stat(path, &cst) != 0) return -1;\n\n    char lock_path[576];\n    int n = snprintf(lock_path, sizeof(lock_path),          , path);\n    if (n < 0 || n >= (int)sizeof(lock_path)) return -1;\n    int fd = open(lock_path, O_RDWR | O_CREAT | O_CLOEXEC, 0600);\n    if (fd < 0) {\n        write_log(                               , lock_path, errno);\n        return -1;\n    }\n     /                                                             \n     /                                               \n     /                    \n    fchown(fd, cst.st_uid, cst.st_gid);\n    fchmod(fd, 0600);\n    struct flock fl;\n    memset(&fl, 0, sizeof(fl));\n    fl.l_type   = F_WRLCK;\n    fl.l_whence = SEEK_SET;\n    fl.l_start  = 0;\n    fl.l_len    = 0;                  /               \n    int waited_ms = 0;\n    for (;;) {\n        if (fcntl(fd, F_SETLK, &fl) == 0) return fd;\n        if (errno != EACCES && errno != EAGAIN) {\n            write_log(                             , lock_path, errno);\n            close(fd);\n            return -1;\n        }\n        if (waited_ms >= CONFIG_LOCK_TIMEOUT_MS) {\n            write_log(                         , CONFIG_LOCK_TIMEOUT_MS, lock_path);\n            close(fd);\n            return -1;\n        }\n        usleep(CONFIG_LOCK_POLL_US);\n        waited_ms += CONFIG_LOCK_POLL_US / 1000;\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "config_write_unlock",
+   "start": 2695,
+   "end": 2705,
+   "lines": 11,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "close(",
+    "fcntl",
+    "flock"
+   ],
+   "body": "\n    if (fd < 0) return;\n    struct flock fl;\n    memset(&fl, 0, sizeof(fl));\n    fl.l_type   = F_UNLCK;\n    fl.l_whence = SEEK_SET;\n    fl.l_start  = 0;\n    fl.l_len    = 0;\n    fcntl(fd, F_SETLK, &fl);\n    close(fd);\n",
+   "pure0": false
+  },
+  {
+   "name": "writeback_temp_stop_disabled",
+   "start": 2711,
+   "end": 2752,
+   "lines": 42,
+   "static_refs": [
+    "lock_fd",
+    "path"
+   ],
+   "calls": [
+    "commit_config_rewrite",
+    "config_write_lock",
+    "config_write_unlock"
+   ],
+   "io": [
+    "close(",
+    "fclose",
+    "fgets",
+    "fopen",
+    "fprintf",
+    "fputc",
+    "fputs",
+    "fwrite",
+    "open(",
+    "printf",
+    "snprintf",
+    "stat(",
+    "write("
+   ],
+   "body": "\n    int lock_fd = config_write_lock(path);\n    if (lock_fd < 0) return 0;\n    FILE *f = fopen(path,    );\n    if (!f) { config_write_unlock(lock_fd); return 0; }\n    struct stat st;\n    if (stat(path, &st) != 0) { fclose(f); config_write_unlock(lock_fd); return 0; }\n\n    char tmp[300];\n    snprintf(tmp, sizeof(tmp),             , path);\n    FILE *g = fopen(tmp,    );\n    if (!g) { fclose(f); config_write_unlock(lock_fd); return 0; }\n\n    static const char KEY[] =               ;\n    const size_t KEY_LEN = sizeof(KEY) - 1;\n    int changed = 0;\n    char line[640];\n    while (fgets(line, sizeof(line), f)) {\n        const char *p = line;\n        while (*p ==     || *p ==     ) p++;\n        const char *eq = strchr(p,    );\n        if (*p !=     && eq) {\n            size_t klen = (size_t)(eq - p);\n            while (klen > 0 && (p[klen - 1] ==     || p[klen - 1] ==     )) klen--;\n            if (klen == KEY_LEN && strncmp(p, KEY, KEY_LEN) == 0) {\n                const char *hash = strchr(eq + 1,    );\n                fwrite(line, 1, (size_t)(p - line), g);    /       \n                fprintf(g,         , (int)KEY_LEN, KEY);\n                if (hash) fprintf(g,       , hash);         /              \n                else fputc(    , g);\n                changed = 1;\n                continue;\n            }\n        }\n        fputs(line, g);\n    }\n    fclose(f);\n    if (!changed) { fclose(g); remove(tmp); config_write_unlock(lock_fd); return 0; }\n    int ok = commit_config_rewrite(path, tmp, g, &st,           );\n    config_write_unlock(lock_fd);\n    return ok;\n",
+   "pure0": false
+  },
+  {
+   "name": "maintain_temp_stop",
+   "start": 2759,
+   "end": 2822,
+   "lines": 64,
+   "static_refs": [
+    "actual_cold",
+    "actual_rpm",
+    "config_mtime",
+    "config_path",
+    "debug_main",
+    "pid_cold_min",
+    "ramp_slots_left",
+    "sent_cold",
+    "sent_rpm",
+    "temp_stop_active_last",
+    "temp_stop_enabled",
+    "temp_stop_writeback_pending"
+   ],
+   "calls": [
+    "publish_temp_stop_state",
+    "read_first_line",
+    "write_boot_marker",
+    "write_log",
+    "writeback_temp_stop_disabled"
+   ],
+   "io": [
+    "stat("
+   ],
+   "body": "\n    if (!temp_stop_enabled) {\n         /                            \n         /                               \n        remove(TEMP_STOP_BOOT_PATH);\n        if (temp_stop_active_last) {\n             /                                          \n             /                                                \n            int base_cold = (cooler_cold_real >= COLD_MIN) ? cooler_cold_real\n                          : (sent_cold >= COLD_MIN ? sent_cold : pid_cold_min);\n            int base_rpm  = (cooler_rpm_real >= fan_rpm_min) ? cooler_rpm_real\n                          : (sent_rpm >= fan_rpm_min ? sent_rpm : fan_rpm_min);\n            actual_cold = base_cold;\n            actual_rpm  = base_rpm;\n            sent_cold   = base_cold;\n            sent_rpm    = base_rpm;\n            ramp_slots_left = 0;    /              \n            debug_log(debug_main,                                     ,\n                      base_cold, base_rpm);\n            temp_stop_active_last = 0;\n        }\n        if (temp_stop_writeback_pending && writeback_temp_stop_disabled(config_path)) {\n            temp_stop_writeback_pending = 0;\n            struct stat mst;\n            if (stat(config_path, &mst) == 0) config_mtime = mst.st_mtime;\n            write_log(                             );\n        }\n        publish_temp_stop_state();    /                     \n        return;\n    }\n\n    char boot_id[64];\n    int boot_ok = read_first_line(KERNEL_BOOT_ID_PATH, boot_id, sizeof(boot_id));\n    char marker[64];\n    int have_marker = read_first_line(TEMP_STOP_BOOT_PATH, marker, sizeof(marker));\n\n    if (!have_marker) {\n         /                                   \n        if (boot_ok) write_boot_marker(boot_id);\n    } else if (boot_ok && strcmp(marker, boot_id) != 0) {\n         /                           \n        temp_stop_enabled = 0;\n        ramp_slots_left = 0;\n        write_boot_marker(boot_id);\n        if (writeback_temp_stop_disabled(config_path)) {\n            struct stat mst;\n            if (stat(config_path, &mst) == 0) config_mtime = mst.st_mtime;\n        } else {\n            temp_stop_writeback_pending = 1;\n        }\n        if (temp_stop_active_last) {\n            debug_log(debug_main,                     );\n            temp_stop_active_last = 0;\n        }\n        write_log(                                  );\n        publish_temp_stop_state();    /            \n        return;\n    }\n\n    temp_stop_active_last = 1;\n    ramp_slots_left = 0;    /              \n    debug_log(debug_main,                          );\n    publish_temp_stop_state();    /                             \n",
+   "pure0": false
+  },
+  {
+   "name": "temp_stop_active",
+   "start": 2825,
+   "end": 2827,
+   "lines": 3,
+   "static_refs": [
+    "temp_stop_enabled"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    return temp_stop_enabled;\n",
+   "pure0": false
+  },
+  {
+   "name": "migrate_pid_cut_config",
+   "start": 2837,
+   "end": 2931,
+   "lines": 95,
+   "static_refs": [
+    "lock_fd",
+    "path"
+   ],
+   "calls": [
+    "commit_config_rewrite",
+    "config_write_lock",
+    "config_write_unlock",
+    "write_log"
+   ],
+   "io": [
+    "close(",
+    "fclose",
+    "fgets",
+    "fopen",
+    "fputc",
+    "fputs",
+    "open(",
+    "printf",
+    "snprintf",
+    "stat(",
+    "write("
+   ],
+   "body": "\n    int lock_fd = config_write_lock(path);    /                       \n    if (lock_fd < 0) return 0;\n    FILE *f = fopen(path,    );\n    if (!f) { config_write_unlock(lock_fd); return 0; }\n    struct stat st;\n    if (stat(path, &st) != 0) { fclose(f); config_write_unlock(lock_fd); return 0; }\n\n    char tmp[300];\n    snprintf(tmp, sizeof(tmp),         , path);\n    FILE *g = fopen(tmp,    );\n    if (!g) { fclose(f); config_write_unlock(lock_fd); return 0; }\n\n     /                                                       \n    int new_seen[KI_CUT_MAX_CLUSTERS] = {0};\n    {\n        char l2[640];\n        const size_t NPFX = sizeof(CFG_ROW_PREFIX_PID_CUT) - 1;\n        while (fgets(l2, sizeof(l2), f)) {\n            const char *q = l2;\n            while (*q ==     || *q ==     ) q++;\n            if (*q ==     || strncmp(q, CFG_ROW_PREFIX_PID_CUT, NPFX) != 0) continue;\n            char *e2 = NULL;\n            long n2 = strtol(q + NPFX, &e2, 10);\n            if (e2 != q + NPFX && n2 >= 1 && n2 <= KI_CUT_MAX_CLUSTERS) new_seen[n2 - 1] = 1;\n        }\n        rewind(f);\n    }\n\n    const size_t LOLDN = sizeof(CFG_ROW_PREFIX_KI_CUT_LEGACY) - 1;\n    int changed = 0;\n    char line[640];\n    while (fgets(line, sizeof(line), f)) {\n        const char *p = line;\n        while (*p ==     || *p ==     ) p++;\n        const char *eq = strchr(p,    );\n        if (*p !=     && eq) {\n            size_t klen = (size_t)(eq - p);\n            while (klen > 0 && (p[klen - 1] ==     || p[klen - 1] ==     )) klen--;\n            if (klen == 13 && strncmp(p,                , 13) == 0) {\n                changed = 1;                  /          \n                continue;\n            }\n            if (klen > LOLDN && strncmp(p, CFG_ROW_PREFIX_KI_CUT_LEGACY, LOLDN) == 0) {\n                changed = 1;\n                char *ie = NULL;\n                long lidx = strtol(p + LOLDN, &ie, 10);\n                if (ie != p + LOLDN && lidx >= 1 && lidx <= KI_CUT_MAX_CLUSTERS && new_seen[lidx - 1]) {\n                    continue;                 /                    \n                }\n                int vals[KI_CUT_MAX_POINTS * 3];\n                int cnt = 0;\n                const char *s = eq + 1;\n                while (*s && cnt < KI_CUT_MAX_POINTS * 3) {\n                    char *e = NULL;\n                    long v = strtol(s, &e, 10);\n                    if (e == s) break;\n                    vals[cnt++] = (int)v;\n                    s = e;\n                    while (*s ==     || *s ==     || *s ==     ) s++;\n                }\n                if (cnt > 0 && cnt % 3 == 0) {\n                    char out[600];\n                    int off = snprintf(out, sizeof(out),          ,\n                                       CFG_ROW_PREFIX_PID_CUT, (int)(klen - LOLDN), p + LOLDN);\n                    int ok = (off > 0 && off < (int)sizeof(out));\n                    for (int i = 0; ok && i < cnt / 3; i++) {\n                        int n = snprintf(out + off, (size_t)((int)sizeof(out) - off),\n                                                        , i ?     :   ,\n                                         vals[3 * i], KI_CUT_NONE, vals[3 * i + 1], vals[3 * i + 2]);\n                        if (n < 0 || off + n >= (int)sizeof(out)) { ok = 0; break; }\n                        off += n;\n                    }\n                    if (ok) {\n                        fputs(out, g);\n                        fputc(    , g);\n                        continue;\n                    }\n                }\n                continue;                     /                   \n            }\n        }\n        fputs(line, g);                       /        \n    }\n    fclose(f);\n\n    if (!changed) { fclose(g); remove(tmp); config_write_unlock(lock_fd); return 0; }\n    if (!commit_config_rewrite(path, tmp, g, &st,       )) {\n        config_write_unlock(lock_fd);\n        return 0;\n    }\n    write_log(                                                      );\n    config_write_unlock(lock_fd);\n    return 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "migrate_rescan_unit_config",
+   "start": 2938,
+   "end": 2995,
+   "lines": 58,
+   "static_refs": [
+    "lock_fd",
+    "path"
+   ],
+   "calls": [
+    "commit_config_rewrite",
+    "config_write_lock",
+    "config_write_unlock",
+    "write_log"
+   ],
+   "io": [
+    "close(",
+    "fclose",
+    "fgets",
+    "fopen",
+    "fputs",
+    "open(",
+    "printf",
+    "snprintf",
+    "stat(",
+    "write("
+   ],
+   "body": "\n    int lock_fd = config_write_lock(path);    /                       \n    if (lock_fd < 0) return 0;\n    FILE *f = fopen(path,    );\n    if (!f) { config_write_unlock(lock_fd); return 0; }\n    struct stat st;\n    if (stat(path, &st) != 0) { fclose(f); config_write_unlock(lock_fd); return 0; }\n\n    char tmp[300];\n    snprintf(tmp, sizeof(tmp),         , path);\n    FILE *g = fopen(tmp,    );\n    if (!g) { fclose(f); config_write_unlock(lock_fd); return 0; }\n\n    int changed = 0;\n    int has_marker = 0;\n    int migrated_from_sec = 0;\n    char line[640];\n    while (fgets(line, sizeof(line), f)) {\n        if (strstr(line,                                   ) != NULL) has_marker = 1;\n        char *p = line;\n        while (*p ==     || *p ==     ) p++;\n        if (*p !=     && strncmp(p,                  , 15) == 0) {\n            const char *q = p + 15;\n            while (*q ==     || *q ==     ) q++;\n            if (*q ==    ) {\n                int old_sec = 0, keep = 0;\n                int n = sscanf(q + 1,        , &old_sec, &keep);\n                if (n >= 2) {\n                    keep = clamp(keep, 1, 64);\n                    snprintf(line, sizeof(line),                          , cycles, keep);\n                    migrated_from_sec = old_sec;\n                } else if (n == 1) {\n                    snprintf(line, sizeof(line),                       , cycles);\n                    migrated_from_sec = old_sec;\n                } else {\n                    fputs(line, g);\n                    continue;\n                }\n                changed = 1;\n                fputs(line, g);\n                continue;\n            }\n        }\n        fputs(line, g);\n    }\n    fclose(f);\n\n    if (!changed) { fclose(g); remove(tmp); config_write_unlock(lock_fd); return 0; }\n    if (!has_marker) fputs(                                        , g);\n    if (!commit_config_rewrite(path, tmp, g, &st,                       )) {\n        config_write_unlock(lock_fd);\n        return 0;\n    }\n    write_log(                                                   ,\n              migrated_from_sec, cycles);\n    config_write_unlock(lock_fd);\n    return 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "migrate_launch_timing_config",
+   "start": 3003,
+   "end": 3078,
+   "lines": 76,
+   "static_refs": [
+    "cooldown",
+    "lock_fd",
+    "path"
+   ],
+   "calls": [
+    "commit_config_rewrite",
+    "config_write_lock",
+    "config_write_unlock",
+    "write_log"
+   ],
+   "io": [
+    "close(",
+    "fclose",
+    "fgets",
+    "fopen",
+    "fprintf",
+    "fputs",
+    "open(",
+    "printf",
+    "snprintf",
+    "stat(",
+    "write("
+   ],
+   "body": "\n    int lock_fd = config_write_lock(path);    /                       \n    if (lock_fd < 0) return 0;\n    FILE *f = fopen(path,    );\n    if (!f) { config_write_unlock(lock_fd); return 0; }\n    struct stat st;\n    if (stat(path, &st) != 0) { fclose(f); config_write_unlock(lock_fd); return 0; }\n\n    char tmp[300];\n    snprintf(tmp, sizeof(tmp),         , path);\n    FILE *g = fopen(tmp,    );\n    if (!g) { fclose(f); config_write_unlock(lock_fd); return 0; }\n\n     /                                  \n    int has_new = 0;\n    int new_has_watchdog = 0;    /               \n    {\n        char l2[640];\n        while (fgets(l2, sizeof(l2), f)) {\n            const char *q = l2;\n            while (*q ==     || *q ==     ) q++;\n            if (*q ==     || strncmp(q,                    , 17) != 0) continue;\n            const char *e2 = q + 17;\n            while (*e2 ==     || *e2 ==     ) e2++;\n            if (*e2 ==    ) {\n                has_new = 1;\n                int c1 = 0, c2 = 0;\n                if (sscanf(e2 + 1,        , &c1, &c2) >= 2) new_has_watchdog = 1;\n            }\n        }\n        rewind(f);\n    }\n\n    int changed = 0;\n    int emitted = (has_new && new_has_watchdog);    /              \n    char line[640];\n    while (fgets(line, sizeof(line), f)) {\n        const char *p = line;\n        while (*p ==     || *p ==     ) p++;\n        const char *eq = (*p ==    ) ? NULL : strchr(p,    );\n        if (eq) {\n            size_t klen = (size_t)(eq - p);\n            while (klen > 0 && (p[klen - 1] ==     || p[klen - 1] ==     )) klen--;\n            if ((klen == 19 && strncmp(p,                      , 19) == 0) ||\n                (klen == 12 && strncmp(p,               , 12) == 0)) {\n                changed = 1;\n                if (!emitted) {\n                    fprintf(g,                            , cooldown, watchdog);\n                    emitted = 1;\n                }\n                continue;    /            \n            }\n            if (!new_has_watchdog && klen == 17 && strncmp(p,                    , 17) == 0) {\n                 /                                     \n                changed = 1;\n                if (!emitted) {\n                    fprintf(g,                            , cooldown, watchdog);\n                    emitted = 1;\n                }\n                continue;\n            }\n        }\n        fputs(line, g);      /        \n    }\n    fclose(f);\n\n    if (!changed) { fclose(g); remove(tmp); config_write_unlock(lock_fd); return 0; }\n    if (!commit_config_rewrite(path, tmp, g, &st,                         )) {\n        config_write_unlock(lock_fd);\n        return 0;\n    }\n    write_log(                                                                     ,\n              cooldown, watchdog);\n    config_write_unlock(lock_fd);\n    return 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "reset_ki_cut_defaults",
+   "start": 3081,
+   "end": 3084,
+   "lines": 4,
+   "static_refs": [],
+   "calls": [
+    "ki_cut_parse_row"
+   ],
+   "io": [],
+   "body": "\n    memset(ki_cut_cnt, 0, sizeof(ki_cut_cnt));\n    ki_cut_parse_row(   , CFG_DEFAULT_PID_CUT_1);\n",
+   "pure0": true
+  },
+  {
+   "name": "ki_cut_refresh",
+   "start": 3087,
+   "end": 3095,
+   "lines": 9,
+   "static_refs": [
+    "ki_cut_mult_dn",
+    "ki_cut_mult_kdp",
+    "ki_cut_mult_up"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    KiCutCluster cs[KI_CUT_MAX_CLUSTERS];\n    int n = 0;\n    for (int i = 0; i < KI_CUT_MAX_CLUSTERS; i++)\n        if (ki_cut_cnt[i] > 0) { cs[n].pts = ki_cut_rows[i]; cs[n].n = ki_cut_cnt[i]; n++; }\n    ki_cut_eval(cs, n, cold, &ki_cut_mult_kdp, &ki_cut_mult_up, &ki_cut_mult_dn);\n    pid_log(                                         ,\n            cold, ki_cut_mult_kdp, ki_cut_mult_up, ki_cut_mult_dn, n);\n",
+   "pure0": false
+  },
+  {
+   "name": "pid_spd_nl_map",
+   "start": 3103,
+   "end": 3113,
+   "lines": 11,
+   "static_refs": [
+    "pid_spd_nl_exp_p100",
+    "pid_spd_nl_thr_p100"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    if (v == 0.0f) return 0.0f;                   /               \n    if (pid_spd_nl_exp_p100 == 0) return v;       /                     \n    float l = pid_spd_nl_thr_p100 / 100.0f;\n    if (l <= 0.0f) return v;                      /                  \n    float a = (v < 0.0f) ? -v : v;                /    \n    if (a >= l) return v;                         /             \n    float t = a / l;\n    float s = t * t * (3.0f - 2.0f * t);          /             \n    return (v < 0.0f ? -a : a) * powf(s, pid_spd_nl_exp_p100 / 100.0f);    /                \n",
+   "pure0": false
+  },
+  {
+   "name": "pid_compute",
+   "start": 3124,
+   "end": 3195,
+   "lines": 72,
+   "static_refs": [
+    "BATT_BASELINE",
+    "batt_window_changed",
+    "ki_cut_mult_dn",
+    "ki_cut_mult_kdp",
+    "ki_cut_mult_up",
+    "pid_align_cold",
+    "pid_kdp",
+    "pid_kdp_coef",
+    "pid_ki",
+    "pid_ki_down_coef",
+    "pid_ki_up_coef",
+    "pid_last_ch",
+    "pid_last_change_time",
+    "pid_last_error",
+    "pid_speed_coef",
+    "pid_target_alpha",
+    "pid_target_away_alpha",
+    "pid_target_coef",
+    "pid_target_dir_on",
+    "pid_target_f",
+    "pid_target_max",
+    "pid_target_toward_alpha"
+   ],
+   "calls": [
+    "ki_cut_refresh",
+    "pid_spd_nl_map"
+   ],
+   "io": [],
+   "body": "\n     /                                      \n    float error = (batt_cdeg - BATT_BASELINE * 10) / 100.0f;\n\n     /                                                  \n    float v = 0.0f;\n    if (recall_on)\n        v = recall_v;\n    else if (pid_last_change_time != 0)\n        v = (error - pid_last_error) / dt;\n    pid_last_error = error;\n\n     /                                     \n    v = pid_spd_nl_map(v);\n\n     /                                         \n    float sc = pid_speed_coef / 10.0f;\n    float ch    = error + v * sc + cpu_comp;\n    float chkdp = error + v * sc * 0.33f + cpu_comp;\n\n     /                                                \n    float raw_target = error * (pid_target_coef / 1000.0f);\n    float tmax = pid_target_max / 10.0f;    /           \n    if (raw_target >  tmax) raw_target =  tmax;\n    if (raw_target < -tmax) raw_target = -tmax;\n     /                                            \n    {\n        float ta = pid_target_alpha / 100.0f;\n        if (pid_target_dir_on) {\n            float ra = (raw_target < 0.0f) ? -raw_target : raw_target;\n            float tf = (pid_target_f  < 0.0f) ? -pid_target_f  : pid_target_f;\n            ta = (ra > tf) ? (pid_target_away_alpha / 100.0f) : (pid_target_toward_alpha / 100.0f);\n        }\n        pid_target_f += ta * (raw_target - pid_target_f);\n    }\n\n     /                                  \n     /                                                                \n    if (batt_window_changed)\n        ki_cut_refresh(pid_align_cold);\n\n     /                                               \n    {\n        float integrand = ch - pid_target_f;\n        float ki_rate = (integrand >= 0.0f) ? pid_ki_up_coef * (ki_cut_mult_up / 100.0f)\n                                            : pid_ki_down_coef * (ki_cut_mult_dn / 100.0f);\n        pid_ki += (ki_rate / 1000.0f) * integrand;\n    }\n\n     /                                                                  \n     /                                               \n     /                                        \n    if (batt_window_changed)\n        pid_kdp = (pid_kdp_coef / 1000.0f) * chkdp * (ki_cut_mult_kdp / 100.0f);\n\n     /                                                              \n    float budget = 1.0f - pid_kdp;\n    if (budget < 0.0f) budget = 0.0f;\n    if (pid_ki > budget) pid_ki = budget;\n    if (pid_ki < 0.0f)   pid_ki = 0.0f;\n\n    pid_last_ch = ch;\n\n     /       \n    float out = pid_ki + pid_kdp;\n    if (out < 0.0f) out = 0.0f;\n    if (out > 1.0f) out = 1.0f;\n\n    pid_log(                                                                 ,\n            error, v, ch, pid_target_f, pid_ki, pid_kdp, out, batt_window_changed);\n    return out;\n",
+   "pure0": false
+  },
+  {
+   "name": "rpm_from_hot_end",
+   "start": 3201,
+   "end": 3246,
+   "lines": 46,
+   "static_refs": [
+    "hot_map_max",
+    "hot_map_min",
+    "rpm_smooth_alpha"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    static int prev_hot = -1;    /          \n    static int prev_rpm = 0;\n    if (hot_10 <= 0) {\n        debug_log(debug_exec,                        , hot_10, prev_rpm);\n        return prev_rpm;    /                     \n    }\n    int range = hot_map_max - hot_map_min;\n    if (range <= 0) return 0;\n\n     /                 \n    int hot_s;\n    if (prev_hot < 0) {\n        hot_s = hot_10;\n    } else {\n        hot_s = EMA_DIR(hot_10, prev_hot, rpm_smooth_alpha);\n    }\n\n     /                 \n    if (hot_s == prev_hot)\n        return prev_rpm;\n\n    int eff_hot;\n    if (hot_s < prev_hot) {\n         /                                           \n        eff_hot = hot_s + 10;\n        if (eff_hot > hot_map_max) eff_hot = hot_map_max;\n    } else {\n         /           \n        eff_hot = hot_s;\n    }\n\n    float t = (float)(eff_hot - hot_map_min) / range;\n    int rpm = fan_rpm_min + (int)(t * (active_fan_max - fan_rpm_min));\n\n     /            \n    if (prev_hot >= 0) {\n        if (hot_s < prev_hot && rpm > prev_rpm) rpm = prev_rpm;   /                    \n        if (hot_s > prev_hot && rpm < prev_rpm) rpm = prev_rpm;   /              \n    }\n\n    prev_hot = hot_s;\n    prev_rpm = rpm;\n    debug_log(debug_exec,                           , hot_10, hot_s, rpm);\n    return rpm;\n",
+   "pure0": false
+  },
+  {
+   "name": "rpm_from_cold_exp",
+   "start": 3252,
+   "end": 3275,
+   "lines": 24,
+   "static_refs": [
+    "cold_map_exp",
+    "cold_map_start",
+    "rpm_smooth_alpha"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    static int cold_in_smoothed = -1;    /                 \n    int range = active_pid_cold_max - cold_map_start;\n    if (range <= 0) return 0;\n\n     /                              \n    if (cold_in_smoothed < 0) {\n        cold_in_smoothed = cold;\n    } else {\n        cold_in_smoothed = EMA_DIR(cold, cold_in_smoothed, rpm_smooth_alpha);\n    }\n    int cold_s = cold_in_smoothed;\n\n    float n = (float)(cold_s - cold_map_start) / range;\n    int rpm;\n    if (n < 0.0f)\n        rpm = fan_rpm_min + (int)(n * (active_fan_max - fan_rpm_min));\n    else {\n        float n_exp = powf(n, cold_map_exp / 100.0f);\n        rpm = fan_rpm_min + (int)(n_exp * (active_fan_max - fan_rpm_min));\n    }\n    debug_log(debug_exec,                                , cold, cold_s, rpm);\n    return rpm;\n",
+   "pure0": false
+  },
+  {
+   "name": "weight_from_rpm",
+   "start": 3282,
+   "end": 3287,
+   "lines": 6,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    if (active_fan_max <= fan_rpm_min) return fan_rpm_min;    /             \n    int w_max = (fan_rpm_min > FAN_WEIGHT_MAX) ? fan_rpm_min : FAN_WEIGHT_MAX;\n    int v = clamp(rpm, fan_rpm_min, active_fan_max);\n    return fan_rpm_min + (v - fan_rpm_min) * (w_max - fan_rpm_min) / (active_fan_max - fan_rpm_min);\n",
+   "pure0": true
+  },
+  {
+   "name": "compute_fan_target",
+   "start": 3293,
+   "end": 3308,
+   "lines": 16,
+   "static_refs": [
+    "actual_cold"
+   ],
+   "calls": [
+    "rpm_from_cold_exp",
+    "rpm_from_hot_end",
+    "weight_from_rpm"
+   ],
+   "io": [],
+   "body": "\n    int rpm_cold = rpm_from_cold_exp(actual_cold);\n    int rpm = rpm_cold;\n    if (cooler_hot_temp >= 0) {    /                                           \n         /                                                        \n         /                                      \n         /                                              \n        int rpm_hot = rpm_from_hot_end(cooler_hot_temp);\n        int w_hot  = weight_from_rpm(rpm_hot);\n        int w_cold = weight_from_rpm(rpm_cold);\n         /                                                             \n        rpm = (w_hot * rpm_hot + w_cold * rpm_cold) / (w_hot + w_cold);\n    }\n    debug_log(debug_exec,                          , rpm_cold, cooler_hot_temp, rpm);\n    return rpm;\n",
+   "pure0": false
+  },
+  {
+   "name": "apply_gear_direct",
+   "start": 3316,
+   "end": 3394,
+   "lines": 79,
+   "static_refs": [
+    "BATT_BASELINE",
+    "RATE_LIMIT_FAN",
+    "active_cold_eff_max",
+    "cached_batt_raw",
+    "cold_rate_bound",
+    "dispatch_target_cold",
+    "dispatch_target_rpm",
+    "last_bcast_valid",
+    "last_cold",
+    "last_mode",
+    "last_rpm",
+    "last_target_temp",
+    "last_wind_level",
+    "logged_target_cold",
+    "logged_target_rpm",
+    "pid_last_comp_10",
+    "ramp_dispatch",
+    "ramp_mode",
+    "ramp_remain_cold",
+    "ramp_remain_rpm",
+    "ramp_slots_left",
+    "ramp_step_cold",
+    "ramp_step_rpm",
+    "ramp_target_rpm",
+    "sent_cold",
+    "sent_rpm"
+   ],
+   "calls": [
+    "device_tag_of",
+    "should_skip_dispatch",
+    "temp_stop_active",
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n     /                              \n    if (temp_stop_active()) {\n        debug_log(debug_exec,                          , cold, send_rpm);\n        return 0;\n    }\n\n     /                                                    \n\n     /                                                                   \n    int cold_pre_clamp = cold;\n    if (hot_derate > 0) {\n        int cold_cap = active_cold_eff_max;\n        if (cold > cold_cap) cold = cold_cap;\n    }\n     /                                                  \n    int hot_forced_down = (hot_derate > 0 && cold < cold_pre_clamp);\n\n     /                                   \n    if (should_skip_dispatch(mode, target, send_rpm, cold, wl, hot_forced_down)) {\n        debug_log(debug_exec,                                                     ,\n                  cold, send_rpm, cooler_cold_real, cooler_rpm_real);\n        return 0;\n    }\n\n     /                             \n    if (cold < cold_pre_clamp)\n        write_log(                     , cold_pre_clamp, cold, hot_derate);\n\n     /                          \n    int batt_10 = (cached_batt_raw >= 0) ? cached_batt_raw : BATT_BASELINE;\n    int dev_10 = batt_10 + pid_last_comp_10 - BATT_BASELINE;\n    int hot_deg = (cooler_hot_temp > 0) ? cooler_hot_temp / 10 : 0;\n    if (dispatch_target_cold != logged_target_cold ||\n        dispatch_target_rpm  != logged_target_rpm) {\n        write_log(                            ,\n                  BATT_BASELINE / 10, dev_10 / 10.0f,\n                  device_tag_of(active_device),\n                  cold, hot_deg, send_rpm);\n        logged_target_cold = dispatch_target_cold;\n        logged_target_rpm  = dispatch_target_rpm;\n    } else {\n        debug_log(debug_exec,                                       ,\n                  cold, hot_deg, send_rpm, dispatch_target_cold, dispatch_target_rpm);\n    }\n\n     /                                            \n     /                                     \n     /                              \n    int ramp_able = ramp_dispatch && !hot_forced_down && sent_rpm >= 0 && sent_cold >= 0\n                    && (send_rpm != sent_rpm || cold != sent_cold);\n    if (ramp_able) {\n        ramp_mode        = mode;\n        ramp_target_temp = target;\n        ramp_wl          = wl;\n        ramp_target_rpm  = send_rpm;\n        ramp_remain_rpm  = send_rpm - sent_rpm;\n        ramp_remain_cold = cold - sent_cold;\n         /                                 \n        ramp_step_rpm    = RATE_LIMIT_FAN / RAMP_SLOTS;\n        ramp_step_cold   = cold_rate_bound / RAMP_SLOTS;\n        if (ramp_step_rpm  < 1) ramp_step_rpm  = 1;\n        if (ramp_step_cold < 1) ramp_step_cold = 1;\n        ramp_slots_left  = RAMP_SLOTS;\n    } else {\n        send_am_broadcast(mode, target, send_rpm, cold, wl);\n        sent_rpm        = send_rpm;\n        sent_cold       = cold;\n        ramp_slots_left = 0;\n    }\n\n    last_bcast_valid   = 1;\n    last_mode          = mode;\n    last_target_temp   = target;\n    last_rpm           = send_rpm;\n    last_cold          = cold;\n    last_wind_level    = wl;\n    return 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "ramp_tick",
+   "start": 3400,
+   "end": 3434,
+   "lines": 35,
+   "static_refs": [
+    "fan_rpm_round_unit",
+    "ramp_mode",
+    "ramp_remain_cold",
+    "ramp_remain_rpm",
+    "ramp_slots_left",
+    "ramp_step_cold",
+    "ramp_step_rpm",
+    "ramp_target_rpm",
+    "sent_cold",
+    "sent_rpm"
+   ],
+   "calls": [
+    "temp_stop_active"
+   ],
+   "io": [],
+   "body": "\n     /                              \n    if (temp_stop_active()) { ramp_slots_left = 0; return; }\n    if (ramp_slots_left <= 0) return;\n\n    int step_r = ramp_step_rpm;\n    if (abs(ramp_remain_rpm) < step_r) step_r = abs(ramp_remain_rpm);\n    if (ramp_remain_rpm < 0) step_r = -step_r;\n\n    int step_c = ramp_step_cold;\n    if (abs(ramp_remain_cold) < step_c) step_c = abs(ramp_remain_cold);\n    if (ramp_remain_cold < 0) step_c = -step_c;\n\n    sent_rpm         += step_r;\n    sent_cold        += step_c;\n    ramp_remain_rpm  -= step_r;\n    ramp_remain_cold -= step_c;\n    ramp_slots_left--;\n\n    int done = (ramp_remain_rpm == 0 && ramp_remain_cold == 0);\n    int out_rpm = sent_rpm;\n    if (done) {\n        out_rpm  = ramp_target_rpm;    /                   \n        sent_rpm = ramp_target_rpm;\n    } else {\n        int u = (fan_rpm_round_unit > 0) ? fan_rpm_round_unit : 1;\n        out_rpm = ((sent_rpm + u / 2) / u) * u;\n    }\n\n    send_am_broadcast(ramp_mode, ramp_target_temp, out_rpm, sent_cold, ramp_wl);\n    debug_log(debug_exec,                                       ,\n              RAMP_SLOTS - ramp_slots_left, RAMP_SLOTS,\n              sent_cold, out_rpm, ramp_remain_cold, ramp_remain_rpm);\n    if (done) ramp_slots_left = 0;\n",
+   "pure0": false
+  },
+  {
+   "name": "pid_reset_core",
+   "start": 3440,
+   "end": 3462,
+   "lines": 23,
+   "static_refs": [
+    "ki_cut_mult_dn",
+    "ki_cut_mult_kdp",
+    "ki_cut_mult_up",
+    "pid_batt_filtered",
+    "pid_batt_last_update_cycle",
+    "pid_cpu_comp_active",
+    "pid_cpu_comp_ready",
+    "pid_cpu_comp_smooth",
+    "pid_input_cdeg",
+    "pid_kdp",
+    "pid_ki",
+    "pid_last_ch",
+    "pid_last_change_time",
+    "pid_last_comp_10",
+    "pid_last_error",
+    "pid_recompute_pending",
+    "pid_target_f",
+    "recall_anchor",
+    "recall_cycles",
+    "recall_prev_batt"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    pid_ki = 0.0f;\n    pid_kdp = 0.0f;\n    pid_target_f = 0.0f;\n    pid_last_error = 0.0f;\n    pid_last_ch = 0.0f;\n    pid_last_change_time = 0;\n    pid_cpu_comp_smooth = 0.0f;\n    pid_last_comp_10 = 0;\n    pid_cpu_comp_ready = 0;\n    pid_cpu_comp_active = 0;\n    pid_batt_filtered = -1;           /                         \n    pid_batt_last_update_cycle = -1;\n    pid_input_cdeg = -1;              /                            \n    pid_recompute_pending = 0;\n    recall_anchor = 0;\n    recall_prev_batt = 0;\n    recall_cycles = 0;\n     /                                      \n    ki_cut_mult_kdp = (float)KI_CUT_NONE;\n    ki_cut_mult_up = (float)KI_CUT_NONE;\n    ki_cut_mult_dn = (float)KI_CUT_NONE;\n",
+   "pure0": false
+  },
+  {
+   "name": "pid_ratio_from_cold",
+   "start": 3470,
+   "end": 3480,
+   "lines": 11,
+   "static_refs": [
+    "pid_align_cold",
+    "pid_align_rpm",
+    "pid_cold_min"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n     /                                      \n    int span = cold_max - pid_cold_min;\n    if (span < 1) span = 1;\n    float ratio = (float)(cold_ref - pid_cold_min) / span;\n    if (ratio < 0.0f) ratio = 0.0f;\n    if (ratio > 1.0f) ratio = 1.0f;\n    pid_align_cold = cold_ref;\n    pid_align_rpm  = fan_rpm_min + (int)(ratio * (active_fan_max - fan_rpm_min));\n    return ratio;\n",
+   "pure0": false
+  },
+  {
+   "name": "host_app_uninstalled",
+   "start": 3501,
+   "end": 3533,
+   "lines": 33,
+   "static_refs": [
+    "host_miss_hits",
+    "host_probe_at",
+    "host_probe_gone",
+    "host_probe_unknown"
+   ],
+   "calls": [
+    "write_log"
+   ],
+   "io": [
+    "stat("
+   ],
+   "body": "\n    struct stat st;\n    if (stat(HOST_DATA_DIR, &st) == 0) {\n        host_miss_hits = 0;    /                              \n        return 0;\n    }\n\n     /                                  \n    time_t now = mono_now();    /          \n    if (now - host_probe_at >= HOST_PROBE_INTERVAL) {\n        host_probe_at = now;\n         /                                               \n         /                                      \n        int probe = app_installed_probe(HOST_PKG);\n        host_probe_gone    = (probe == 0);    /                    \n        host_probe_unknown = (probe < 0);     /                  \n        if (host_probe_unknown)               /                            \n            write_log(                       ,\n                      probe == CMD_RESULT_TIMEOUT ?         :            );\n    }\n    if (host_probe_unknown) {\n        host_miss_hits = 0;    /                         \n        return 0;\n    }\n    if (!host_probe_gone) {\n         /                                   \n        host_miss_hits = 0;\n        return 0;\n    }\n\n    if (++host_miss_hits < HOST_CONFIRM_HITS) return 0;\n    return 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "cleanup_artifacts_on_uninstall",
+   "start": 3539,
+   "end": 3557,
+   "lines": 19,
+   "static_refs": [
+    "running"
+   ],
+   "calls": [
+    "read_self_exe",
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n     /                                     \n    write_log(                        );\n\n     /                                                    \n    char self[512];\n    if (read_self_exe(self, sizeof(self))) unlink(self);\n    unlink(PROTO_PATH_BIN);\n\n                               \n    static const char *artifacts[] = {\n         /                                                  \n        PROTO_CLEANUP_DAEMON(CLEANUP_ENTRY)\n    };\n                    \n    for (size_t i = 0; i < sizeof(artifacts) / sizeof(artifacts[0]); i++) unlink(artifacts[i]);\n\n    running = 0;    /                                \n",
+   "pure0": false
+  },
+  {
+   "name": "handle_signal",
+   "start": 3562,
+   "end": 3565,
+   "lines": 4,
+   "static_refs": [
+    "running"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    (void)sig;\n    running = 0;\n",
+   "pure0": false
+  },
+  {
+   "name": "alarm_handler",
+   "start": 3568,
+   "end": 3571,
+   "lines": 4,
+   "static_refs": [
+    "alarm_fired"
+   ],
+   "calls": [],
+   "io": [],
+   "body": "\n    (void)sig;\n    alarm_fired = 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "try_align_actual",
+   "start": 3582,
+   "end": 3604,
+   "lines": 23,
+   "static_refs": [
+    "actual_cold",
+    "actual_rpm",
+    "pending_align",
+    "pending_align_since",
+    "pid_cold_min",
+    "sent_cold",
+    "sent_rpm"
+   ],
+   "calls": [
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n    if (!pending_align) return 0;\n    if (report_ok) {\n        actual_cold = (cooler_cold_real >= COLD_MIN) ? cooler_cold_real : pid_cold_min;\n        actual_rpm = (cooler_rpm_real >= fan_rpm_min) ? cooler_rpm_real : fan_rpm_min;\n        sent_cold = actual_cold;    /                     \n        sent_rpm  = actual_rpm;\n        write_log(                    , actual_cold, actual_rpm);\n        pending_align = 0;\n        return 1;\n    }\n    if (pending_align_since > 0 && mono_now() - pending_align_since >= ALIGN_WAIT_TIMEOUT) {\n        actual_cold = pid_cold_min;\n        actual_rpm = fan_rpm_min;\n        sent_cold = actual_cold;\n        sent_rpm  = actual_rpm;\n        write_log(                                  ,\n                  ALIGN_WAIT_TIMEOUT, actual_cold, actual_rpm);\n        pending_align = 0;\n        return 1;\n    }\n    return 0;\n",
+   "pure0": false
+  },
+  {
+   "name": "reconnect_align",
+   "start": 3610,
+   "end": 3644,
+   "lines": 35,
+   "static_refs": [
+    "actual_cold",
+    "actual_rpm",
+    "batt_changed_since_ctrl",
+    "batt_window_changed",
+    "first_run",
+    "last_disconnect_time",
+    "logged_target_cold",
+    "logged_target_rpm",
+    "pending_align",
+    "pending_align_since",
+    "ramp_slots_left",
+    "reconnect_keep_cycles",
+    "sent_cold",
+    "sent_rpm"
+   ],
+   "calls": [
+    "pid_reset_core",
+    "write_log"
+   ],
+   "io": [],
+   "body": "\n    batt_changed_since_ctrl = 0;\n    batt_window_changed = 0;\n\n     /                                \n    int discon_sec = 0;\n    if (last_disconnect_time > 0) {\n        discon_sec = (int)(mono_now() - last_disconnect_time);\n        write_log(                      ,\n                  discon_sec, cooler_cold_real, cooler_rpm_real);\n        last_disconnect_time = 0;\n    }\n\n     /                                                           \n     /                                                     \n    if (discon_sec > 0) {\n        if (reconnect_keep_cycles > 0 && discon_sec < reconnect_keep_cycles * 5) {\n            write_log(                         , discon_sec, reconnect_keep_cycles);\n        } else {\n             /                                                              \n            pid_reset_core();\n            actual_cold = -1;       /                                  \n            actual_rpm = -1;\n            sent_cold = -1;         /                         \n            sent_rpm  = -1;\n            ramp_slots_left = 0;    /            \n            logged_target_cold = -1;    /                    \n            logged_target_rpm  = -1;\n            pending_align = 1;\n            pending_align_since = mono_now();\n            write_log(                            );\n            first_run = 1;\n        }\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "rate_limited_execute",
+   "start": 3650,
+   "end": 3659,
+   "lines": 10,
+   "static_refs": [
+    "actual_cold",
+    "actual_rpm",
+    "pid_align_cold"
+   ],
+   "calls": [
+    "apply_gear_direct",
+    "compute_fan_target",
+    "rate_limit_cold",
+    "rate_limit_fan"
+   ],
+   "io": [],
+   "body": "\n     /                                                       \n    if (actual_cold < COLD_MIN || actual_rpm < fan_rpm_min) {\n        debug_log(debug_exec,                         , actual_cold, actual_rpm);\n        return 0;\n    }\n    rate_limit_cold(pid_align_cold);\n    int send_rpm = rate_limit_fan(compute_fan_target());\n    return apply_gear_direct(1, 5, send_rpm, actual_cold, 0);\n",
+   "pure0": false
+  },
+  {
+   "name": "pid_cycle",
+   "start": 3665,
+   "end": 3780,
+   "lines": 116,
+   "static_refs": [
+    "BATT_BASELINE",
+    "active_cold_eff_max",
+    "batt_window_changed",
+    "cached_batt_raw",
+    "cached_cpu_now",
+    "debug_pid",
+    "pid_align_cold",
+    "pid_batt_filtered",
+    "pid_batt_last_update_cycle",
+    "pid_ch_threshold",
+    "pid_cold_min",
+    "pid_ctrl_cycles",
+    "pid_input_cdeg",
+    "pid_last_ch",
+    "pid_last_change_time",
+    "pid_last_comp_10",
+    "pid_recompute_pending",
+    "pid_spd_recall_on",
+    "pid_spd_recall_weight",
+    "recall_anchor",
+    "recall_cycles",
+    "recall_prev_batt"
+   ],
+   "calls": [
+    "cpu_comp_now",
+    "pid_compute",
+    "update_cpu_filtered"
+   ],
+   "io": [],
+   "body": "\n    time_t now = mono_now();           /                           \n    time_t now_wall = time(NULL);      /              \n    pid_ctrl_cycles++;                /       \n    int batt_raw = cached_batt_raw;    /        \n    if (batt_raw < 0) return;\n\n     /                                              \n    if (batt_window_changed) {\n        recall_anchor  = recall_prev_batt;\n        recall_cycles  = 1;\n    } else {\n        recall_cycles++;\n    }\n    recall_prev_batt = batt_raw;\n\n     /                          \n    int cpu_now = cached_cpu_now;    /        \n    update_cpu_filtered(cpu_now);\n\n     /                                                        \n    int total_comp_10 = cpu_comp_now(batt_raw);\n    float cpu_comp = total_comp_10 / 10.0f;    /                \n\n     /                                                  \n     /                                                          \n     /                                          \n     /                                                             \n     /                  \n    int batt_cdeg = batt_raw * 10;           /                   \n    if (pid_batt_filtered < 0) {\n        pid_batt_filtered = batt_cdeg;\n        pid_batt_last_update_cycle = pid_ctrl_cycles;\n    } else if (batt_window_changed) {\n        int interval = clamp(pid_ctrl_cycles - pid_batt_last_update_cycle, 0, 16);    /                            \n        float alpha = 0.2f + 0.05f * interval;\n        float cap = abs(batt_cdeg - pid_batt_filtered) / 30.0f;    /                           \n        if (alpha > cap) alpha = cap;\n        pid_batt_filtered = (int)(alpha * batt_cdeg + (1.0f - alpha) * pid_batt_filtered + 0.5f);\n        pid_batt_last_update_cycle = pid_ctrl_cycles;\n    }\n\n     /                                      \n    pid_input_cdeg = pid_batt_filtered;\n\n     /                                        \n    int filter_lag = abs(pid_batt_filtered - batt_cdeg) >= 5;\n     /                                            \n     /                                             \n     /                       \n    int filter_forced = 0;\n    if (!batt_window_changed && filter_lag) {\n        int diff = batt_cdeg - pid_batt_filtered;\n        float cap = abs(diff) / 30.0f;\n        if (cap > 1.0f) cap = 1.0f;\n        int step = (int)(cap * (diff > 0 ? diff : -diff) + 0.5f);\n        pid_batt_filtered += (diff > 0) ? step : -step;\n        if (abs(batt_cdeg - pid_batt_filtered) < 5) pid_batt_filtered = batt_cdeg;\n        filter_forced = 1;\n    }\n\n     /                                             \n    int should_recompute = batt_window_changed ||\n                           total_comp_10 != pid_last_comp_10 ||\n                           filter_forced;\n\n    if (!should_recompute) {\n        debug_log(debug_pid,                        );\n        return;\n    }\n\n     /                                                \n     /                                                                                 \n    if (!batt_window_changed && !filter_forced) {\n        float last_ch_abs = (pid_last_ch >= 0.0f) ? pid_last_ch : -pid_last_ch;\n        if (last_ch_abs <= (pid_ch_threshold / 10.0f)) {\n            debug_log(debug_pid,                                   ,\n                      pid_last_ch, pid_ch_threshold / 10.0f);\n            pid_last_comp_10 = total_comp_10;    /           \n            return;\n        }\n    }\n\n     /                                      \n    pid_recompute_pending = 1;\n\n     /                                                         \n    float dt = (float)(now - pid_last_change_time) / 5.0f;\n    if (dt > 6.0f) dt = 6.0f;\n    if (dt < 0.6f) dt = 0.6f;\n\n     /                                   \n    int recall_on = 0;\n    float recall_v = 0.0f;\n    if (pid_spd_recall_on && !batt_window_changed &&\n        recall_cycles >= 1 && recall_anchor > 0 && batt_raw > 0 && pid_last_change_time != 0) {\n        recall_on = 1;\n        recall_v = ((float)(batt_raw - recall_anchor) / (float)recall_cycles / 10.0f)\n                   * (pid_spd_recall_weight / 1000.0f);\n    }\n\n     /                                                                                                        \n    float pid_out = pid_compute(pid_batt_filtered, dt, cpu_comp, batt_window_changed, recall_on, recall_v);\n\n     /                                                             \n    int cmax = active_cold_eff_max;\n    int range = cmax - pid_cold_min;\n    if (range <= 0) range = 1;\n    pid_align_cold = clamp(pid_cold_min + (int)(pid_out * range), pid_cold_min, cmax);\n\n    pid_log(                                                                    ,\n            now_wall, batt_raw, cpu_comp, batt_raw + total_comp_10, BATT_BASELINE, cooler_hot_temp, dt);\n\n    pid_last_comp_10 = total_comp_10;\n    pid_last_change_time = now;\n",
+   "pure0": false
+  },
+  {
+   "name": "maintain_config_and_temp_stop",
+   "start": 3787,
+   "end": 3809,
+   "lines": 23,
+   "static_refs": [
+    "config_loaded",
+    "config_mtime",
+    "config_path"
+   ],
+   "calls": [
+    "config_retry_if_needed",
+    "load_config",
+    "maintain_temp_stop",
+    "write_log"
+   ],
+   "io": [
+    "stat("
+   ],
+   "body": "\n    struct stat st;\n    if (!config_loaded) {\n         /                                                     \n         /                                   \n        if (config_retry_if_needed()) {\n            update_active_limits();\n            apply_cpu_affinity();\n        }\n    } else if (config_path[0] !=      && stat(config_path, &st) == 0 && st.st_mtime != config_mtime) {\n        load_config(config_path);\n         /                                                            \n        struct stat mst2;\n        if (stat(config_path, &mst2) == 0) st.st_mtime = mst2.st_mtime;\n        config_mtime = st.st_mtime;\n        write_log(        );\n         /                                             \n        update_active_limits();\n         /                                              \n        apply_cpu_affinity();\n    }\n    maintain_temp_stop();\n",
+   "pure0": false
+  },
+  {
+   "name": "main_loop",
+   "start": 3817,
+   "end": 3839,
+   "lines": 23,
+   "static_refs": [
+    "batt_changed_since_ctrl",
+    "batt_window_changed",
+    "debug_main"
+   ],
+   "calls": [
+    "pid_cycle",
+    "temp_stop_active",
+    "update_active_cold_range",
+    "update_hot_derate"
+   ],
+   "io": [],
+   "body": "\n     /                                                   \n    batt_window_changed = batt_changed_since_ctrl;\n    batt_changed_since_ctrl = 0;                  /      \n\n    debug_log(debug_main,                       ,\n              batt_window_changed ?      :     );\n\n     /                                                               \n    if (temp_stop_active()) return 1;\n\n     /                                                      \n    if (cpu_zone_list_dirty) rescan_cpu_zones();\n\n     /                                   \n    update_hot_derate();\n     /                                           \n    update_active_cold_range();\n\n     /                         \n    pid_cycle();\n    return 0;\n",
+   "pure0": false
+  },
+  {
+   "name": "sample_webui_inputs",
+   "start": 3863,
+   "end": 3874,
+   "lines": 12,
+   "static_refs": [
+    "batt_changed_since_ctrl",
+    "cached_batt_raw",
+    "cached_cpu_now",
+    "webui_batt_now",
+    "webui_conn_ok",
+    "webui_cpu_now",
+    "webui_epoch_now"
+   ],
+   "calls": [
+    "is_app_alive"
+   ],
+   "io": [],
+   "body": "\n    status_seq++;    /                                                      \n    webui_epoch_now = (long)time(NULL);\n    webui_batt_now = read_battery_temp();\n    webui_cpu_now  = read_cpu_temp_max();\n    read_cooler_params();    /                                                       \n     /                      \n    if (webui_batt_now >= 0) cached_batt_raw = webui_batt_now;\n    if (batt_temp_updated) batt_changed_since_ctrl = 1;   /                  \n    if (webui_cpu_now  >= 0) cached_cpu_now  = webui_cpu_now;\n    webui_conn_ok = app_ble_connected && is_app_alive();\n",
+   "pure0": false
+  },
+  {
+   "name": "append_webui_row",
+   "start": 3882,
+   "end": 3952,
+   "lines": 71,
+   "static_refs": [
+    "actual_cold",
+    "pid_input_cdeg",
+    "pid_recompute_pending",
+    "webui_batt_now",
+    "webui_conn_ok",
+    "webui_cpu_now",
+    "webui_epoch_now",
+    "webui_fp",
+    "webui_io_error_logged",
+    "webui_lines_since_compact"
+   ],
+   "calls": [
+    "write_log"
+   ],
+   "io": [
+    "close(",
+    "fclose",
+    "fflush",
+    "fgets",
+    "fopen",
+    "fprintf",
+    "fputs",
+    "fstat",
+    "open(",
+    "printf",
+    "stat("
+   ],
+   "body": "\n    int recomp = pid_recompute_pending;\n    pid_recompute_pending = 0;\n    if (!webui_conn_ok) return;\n\n     /                                              \n     /                            \n    if (webui_fp) {\n        struct stat fst, pst;\n        if (fstat(fileno(webui_fp), &fst) != 0 || stat(WEBUI_DATA_PATH, &pst) != 0\n                || fst.st_dev != pst.st_dev || fst.st_ino != pst.st_ino) {\n            fclose(webui_fp);\n            webui_fp = NULL;\n        }\n    }\n     /                                              \n     /                                             \n    if (!webui_fp) webui_fp = fopen(WEBUI_DATA_PATH,    );\n    int io_ok = (webui_fp != NULL);\n    if (io_ok) {\n        io_ok = (fprintf(webui_fp, WEBUI_ROW_FMT,\n                        webui_epoch_now, webui_batt_now, webui_cpu_now,\n                        cooler_hot_temp, cooler_cold_temp,\n                        cooler_rpm_real, cooler_cold_real, actual_cold,\n                        recomp ? pid_input_cdeg : -1, recomp,\n                        cooler_cold_run, cooler_rpm_run) >= 0);\n        if (io_ok) {\n            io_ok = fflush(webui_fp) == 0;    /            \n        }\n        if (!io_ok) {\n            int err = errno;\n            if (!webui_io_error_logged) {\n                webui_io_error_logged = 1;\n                write_log(                            , err);\n            }\n            fclose(webui_fp);\n            webui_fp = NULL;\n        } else {\n            webui_io_error_logged = 0;\n        }\n    } else if (!webui_io_error_logged) {\n        webui_io_error_logged = 1;\n        write_log(                          , errno);\n    }\n    webui_lines_since_compact++;\n\n     /                                                       \n    if (webui_lines_since_compact >= WEBUI_COMPACT_EVERY) {\n        webui_lines_since_compact = 0;\n         /                                                        \n         /                                     \n        char buf[WEBUI_DATA_MAX_LINES][128];\n        int total = 0;\n        FILE *rf = fopen(WEBUI_DATA_PATH,    );\n        if (rf) {\n             /                                                    \n            while (fgets(buf[total % WEBUI_DATA_MAX_LINES], sizeof(buf[0]), rf)) total++;\n            fclose(rf);\n        }\n        if (total > 0) {\n            int keep = (total < WEBUI_DATA_MAX_LINES) ? total : WEBUI_DATA_MAX_LINES;\n            int start = (total < WEBUI_DATA_MAX_LINES) ? 0 : (total % WEBUI_DATA_MAX_LINES);\n            FILE *cf = fopen(WEBUI_DATA_PATH,    );\n            if (cf) {\n                for (int i = 0; i < keep; i++)\n                    fputs(buf[(start + i) % WEBUI_DATA_MAX_LINES], cf);\n                fclose(cf);\n            }\n        }\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "write_coldmax_hint",
+   "start": 3963,
+   "end": 3972,
+   "lines": 10,
+   "static_refs": [
+    "coldmax_hint_written"
+   ],
+   "calls": [],
+   "io": [
+    "close(",
+    "open(",
+    "printf",
+    "snprintf",
+    "write("
+   ],
+   "body": "\n    if (active_pid_cold_max == coldmax_hint_written) return;\n    int fd = open(COLDMAX_HINT_PATH, O_WRONLY | O_TRUNC | O_CLOEXEC);\n    if (fd < 0) return;    /                            \n    char buf[32];\n    int n = snprintf(buf, sizeof(buf), PROTO_COLDMAX_FIELD       , active_pid_cold_max);\n    if (n > 0 && write(fd, buf, (size_t)n) == n)\n        coldmax_hint_written = active_pid_cold_max;\n    close(fd);\n",
+   "pure0": false
+  },
+  {
+   "name": "poll_bt_request",
+   "start": 3981,
+   "end": 4028,
+   "lines": 48,
+   "static_refs": [
+    "APP_LAUNCH_ENABLED",
+    "bt_auto_enable_sec",
+    "bt_req_handled",
+    "bt_req_primed"
+   ],
+   "calls": [
+    "write_log"
+   ],
+   "io": [
+    "close(",
+    "fclose",
+    "fgets",
+    "fopen",
+    "open("
+   ],
+   "body": "\n     /                                             \n     /                                     \n    static time_t bt_poll_at = 0;\n    time_t now_mono = mono_now();\n    if (bt_poll_at != 0 && now_mono - bt_poll_at < 5) return;\n    bt_poll_at = now_mono;\n\n    FILE *f = fopen(BT_REQ_PATH,    );\n    if (!f) return;                        /                    \n    long long tok = -1;\n    char line[64];\n    if (fgets(line, sizeof(line), f)) {\n        const char *p = strstr(line, PROTO_BT_REQ_FIELD);\n        if (p) tok = atoll(p + 4);\n    }\n    fclose(f);\n\n     /                                             \n     /                                                \n    long long now = (long long)time(NULL);\n    int tok_valid = (tok > 0 && tok >= now - 366LL * 86400 && tok <= now + 366LL * 86400);\n\n    if (!bt_req_primed) {\n        bt_req_primed = 1;\n        bt_req_handled = tok_valid ? tok : -1;   /                                \n        return;\n    }\n    if (!tok_valid) return;                      /                        \n    if (tok <= bt_req_handled) return;           /     \n\n     /                                            \n     /                                          \n    if (!APP_LAUNCH_ENABLED || bt_auto_enable_sec <= 0) { bt_req_handled = tok; return; }\n\n    static const char *const cmds[] = {\n                                                           ,\n                                                                   ,\n    };\n    int hit = 0;\n    for (int i = 0; i < (int)(sizeof(cmds) / sizeof(cmds[0])); i++) {\n        int st = run_shell_timeout(cmds[i]);\n        if (st != -1 && WIFEXITED(st) && WEXITSTATUS(st) == 0) { hit = i + 1; break; }\n    }\n    bt_req_handled = tok;\n    if (hit) write_log(                         , hit, tok);\n    else     write_log(                                , tok);\n",
+   "pure0": false
+  },
+  {
+   "name": "cmdline_has_script_arg",
+   "start": 4064,
+   "end": 4076,
+   "lines": 13,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    for (ssize_t pos = 0; pos < n; ) {\n        const char *arg = buf + pos;\n        size_t len = strlen(arg);           /                        \n        for (int i = 0; i < SVC_SCRIPT_PATHS_N; i++) {\n            if (len == strlen(SVC_SCRIPT_PATHS[i]) &&\n                strncmp(arg, SVC_SCRIPT_PATHS[i], len) == 0) return 1;\n        }\n        if (len == strlen(WD_NAME) && strncmp(arg, WD_NAME, len) == 0) return 1;\n        pos += (ssize_t)len + 1;            /                 \n    }\n    return 0;\n",
+   "pure0": true
+  },
+  {
+   "name": "watchdog_alive",
+   "start": 4083,
+   "end": 4103,
+   "lines": 21,
+   "static_refs": [
+    "path"
+   ],
+   "calls": [
+    "cmdline_has_script_arg"
+   ],
+   "io": [
+    "close(",
+    "open(",
+    "opendir",
+    "printf",
+    "read(",
+    "readdir",
+    "snprintf"
+   ],
+   "body": "\n    DIR *d = opendir(       );\n    if (!d) return -1;\n    struct dirent *de;\n    char buf[4096];\n    int alive = 0;\n    while (!alive && (de = readdir(d)) != NULL) {\n        if (de->d_name[0] <     || de->d_name[0] >    ) continue;\n        char path[64];\n        snprintf(path, sizeof(path),                   , de->d_name);\n        int fd = open(path, O_RDONLY);\n        if (fd < 0) continue;\n        ssize_t n = read(fd, buf, sizeof(buf) - 1);\n        close(fd);\n        if (n <= 0) continue;\n        buf[n] =     ;\n        alive = cmdline_has_script_arg(buf, n);\n    }\n    closedir(d);\n    return alive;\n",
+   "pure0": false
+  },
+  {
+   "name": "pick_script_path",
+   "start": 4106,
+   "end": 4111,
+   "lines": 6,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "access("
+   ],
+   "body": "\n    for (int i = 0; i < SVC_SCRIPT_PATHS_N; i++) {\n        if (access(SVC_SCRIPT_PATHS[i], R_OK) == 0) return SVC_SCRIPT_PATHS[i];\n    }\n    return NULL;\n",
+   "pure0": false
+  },
+  {
+   "name": "wd_spawn_stamp_read",
+   "start": 4114,
+   "end": 4121,
+   "lines": 8,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "close(",
+    "fclose",
+    "fopen",
+    "open("
+   ],
+   "body": "\n    FILE *f = fopen(WD_SPAWN_STAMP_PATH,    );\n    if (!f) return 0;\n    long v = 0;\n    if (fscanf(f,      , &v) != 1) v = 0;\n    fclose(f);\n    return (time_t)v;\n",
+   "pure0": false
+  },
+  {
+   "name": "wd_spawn_stamp_write",
+   "start": 4124,
+   "end": 4129,
+   "lines": 6,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "close(",
+    "fclose",
+    "fopen",
+    "fprintf",
+    "open(",
+    "printf"
+   ],
+   "body": "\n    FILE *f = fopen(WD_SPAWN_STAMP_PATH,    );\n    if (!f) return;\n    fprintf(f,        , (long)now);\n    fclose(f);\n",
+   "pure0": false
+  },
+  {
+   "name": "spawn_watchdog",
+   "start": 4136,
+   "end": 4175,
+   "lines": 40,
+   "static_refs": [
+    "path"
+   ],
+   "calls": [
+    "write_log"
+   ],
+   "io": [
+    "close(",
+    "dup2",
+    "execv",
+    "fork",
+    "kill(",
+    "open(",
+    "sleep(",
+    "usleep",
+    "waitpid"
+   ],
+   "body": "\n    pid_t pid = fork();\n    if (pid < 0) {\n        write_log(                  );\n        return 0;\n    }\n    if (pid == 0) {\n        setsid();                     /                                       \n                                      /                                            \n        pid_t gpid = fork();          /           \n        if (gpid != 0) _exit(0);      /                               \n        int fd = open(           , O_RDWR);\n        if (fd >= 0) {\n            dup2(fd, STDIN_FILENO);\n            dup2(fd, STDOUT_FILENO);\n            dup2(fd, STDERR_FILENO);\n            if (fd > STDERR_FILENO) close(fd);\n        }\n        char *argv[3];\n        argv[0] = (char *)    ;\n        argv[1] = (char *)path;\n        argv[2] = NULL;\n        execv(SH_BIN, argv);\n        _exit(127);                   /                               \n    }\n     /                                                       \n     /                                                            \n    int reaped = 0;\n    for (int i = 0; i < WD_REAP_TRIES; i++) {\n        pid_t r = waitpid(pid, NULL, WNOHANG);\n        if (r == pid || r < 0) { reaped = 1; break; }    /                         \n        usleep(WD_REAP_STEP_US);\n    }\n    if (!reaped) {\n        write_log(                      , WD_REAP_TRIES * (WD_REAP_STEP_US / 1000));\n        kill(pid, SIGKILL);\n        waitpid(pid, NULL, WNOHANG);    /                 \n    }\n    return reaped;\n",
+   "pure0": false
+  },
+  {
+   "name": "maybe_keepalive_watchdog",
+   "start": 4181,
+   "end": 4244,
+   "lines": 64,
+   "static_refs": [
+    "APP_LAUNCH_ENABLED",
+    "debug_main",
+    "path",
+    "wd_check_at",
+    "wd_fail_hits",
+    "wd_keepalive_enabled",
+    "wd_last_log_at",
+    "wd_miss_hits",
+    "wd_spawn_at",
+    "wd_spawn_pending"
+   ],
+   "calls": [
+    "pick_script_path",
+    "spawn_watchdog",
+    "watchdog_alive",
+    "wd_spawn_stamp_read",
+    "wd_spawn_stamp_write",
+    "write_log"
+   ],
+   "io": [
+    "read(",
+    "write("
+   ],
+   "body": "\n     /                                                            \n    if (!APP_LAUNCH_ENABLED || !wd_keepalive_enabled) return;\n    time_t now  = mono_now();    /               \n    time_t wall = time(NULL);    /                        \n    if (wd_check_at != 0 && now - wd_check_at < WD_KEEPALIVE_INTERVAL) return;\n    wd_check_at = now;\n\n     /                                                          \n     /                                                 \n    int alive = watchdog_alive();\n    if (alive > 0) {\n        if (wd_spawn_pending) {    /                                   \n            wd_spawn_pending = 0;\n            debug_log(debug_main,                   );\n        }\n        wd_miss_hits = 0;\n        wd_fail_hits = 0;\n        return;\n    }\n     /                                                             \n     /                                                                    \n    if (wd_spawn_pending) {\n        wd_spawn_pending = 0;\n        if (alive < 0) {\n            write_log(                                          );\n        } else {\n            write_log(                             );\n        }\n    }\n     /                                       \n    if (++wd_miss_hits < WD_MISS_CONFIRM) {\n        debug_log(debug_main,                         , wd_miss_hits, WD_MISS_CONFIRM);\n        return;\n    }\n     /                                           \n    const char *path = pick_script_path();\n    if (!path) {\n        if (now - wd_last_log_at >= WD_LOG_MIN_INTERVAL) {\n            wd_last_log_at = now;\n            write_log(                                   , wd_miss_hits);\n        }\n        return;\n    }\n     /                                              \n    time_t stamp = wd_spawn_stamp_read();\n    if (stamp > wall) stamp = 0;    /                           \n    if (stamp != 0 && wall - stamp < WD_SPAWN_MIN_INTERVAL) return;\n    if (wd_spawn_at != 0 && now - wd_spawn_at < WD_SPAWN_MIN_INTERVAL) return;\n    if (wd_fail_hits >= WD_SPAWN_BACKOFF_FAILS\n            && wd_spawn_at != 0 && now - wd_spawn_at < WD_SPAWN_BACKOFF) return;\n\n    wd_spawn_at = now;\n    if (spawn_watchdog(path)) {\n        wd_spawn_stamp_write(wall);\n        wd_spawn_pending = 1;    /                           \n        wd_miss_hits = 0;    /                    \n        wd_fail_hits = 0;\n        write_log(                        , WD_MISS_CONFIRM, path);\n    } else {\n        wd_fail_hits++;\n        write_log(                   , wd_fail_hits);\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "try_flock_path",
+   "start": 4257,
+   "end": 4266,
+   "lines": 10,
+   "static_refs": [
+    "path"
+   ],
+   "calls": [],
+   "io": [
+    "close(",
+    "flock",
+    "open("
+   ],
+   "body": "\n    int fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0666);\n    if (fd < 0) return -1;\n    if (flock(fd, LOCK_EX | LOCK_NB) != 0) {\n        close(fd);\n        return 0;\n    }\n    *out_fd = fd;\n    return 1;\n",
+   "pure0": false
+  },
+  {
+   "name": "acquire_single_instance_lock",
+   "start": 4273,
+   "end": 4297,
+   "lines": 25,
+   "static_refs": [
+    "lock_fd",
+    "lock_fd_fallback"
+   ],
+   "calls": [
+    "ensure_private_dir",
+    "try_flock_path"
+   ],
+   "io": [
+    "flock",
+    "fprintf",
+    "printf"
+   ],
+   "body": "\n    int r = try_flock_path(LOCK_FALLBACK_PATH, &lock_fd_fallback);\n    if (r == 0) {\n        fprintf(stderr,                                 , LOCK_FALLBACK_PATH);\n        return 0;\n    }\n    if (r < 0) {\n        fprintf(stderr,                                    , LOCK_FALLBACK_PATH);\n    }\n     /                                                                    \n     /                      \n    if (ensure_private_dir()) {\n        r = try_flock_path(LOCK_FILE_PATH, &lock_fd);\n        if (r == 0) {\n            fprintf(stderr,                                 , LOCK_FILE_PATH);\n            return 0;    /              \n        }\n        if (r < 0) {\n            fprintf(stderr,                                    , LOCK_FILE_PATH);\n        }\n    } else {\n        fprintf(stderr,                                            , PRIVATE_DIR);\n    }\n    return 1;    /                 \n",
+   "pure0": false
+  },
+  {
+   "name": "main",
+   "start": 4299,
+   "end": 4593,
+   "lines": 295,
+   "static_refs": [
+    "CPU_FILTER_ALPHA",
+    "STATUS_TIMEOUT",
+    "actual_cold",
+    "actual_rpm",
+    "app_was_alive",
+    "cached_batt_raw",
+    "config_explicit",
+    "config_loaded",
+    "config_mtime",
+    "config_path",
+    "config_retry_at",
+    "cycle_batt_temp",
+    "debug_conn",
+    "debug_main",
+    "first_run",
+    "last_arbitrate",
+    "last_bcast_valid",
+    "last_disconnect_time",
+    "lock_fd",
+    "lock_fd_fallback",
+    "log_fp",
+    "logged_target_cold",
+    "logged_target_rpm",
+    "pending_align",
+    "pending_align_since",
+    "pid_align_cold",
+    "pid_align_rpm",
+    "pid_cold_min",
+    "running",
+    "sent_cold",
+    "sent_rpm",
+    "webui_fp"
+   ],
+   "calls": [
+    "acquire_single_instance_lock",
+    "append_webui_row",
+    "apply_gear_direct",
+    "arbitrate_apps",
+    "cleanup_artifacts_on_uninstall",
+    "compute_fan_target",
+    "config_retry_if_needed",
+    "create_status_files",
+    "deadlink_check",
+    "detect_config_path",
+    "device_tag_of",
+    "handle_signal",
+    "host_app_uninstalled",
+    "install_cache_warmup",
+    "is_app_alive",
+    "launch_last_app",
+    "load_config",
+    "main_loop",
+    "maintain_config_and_temp_stop",
+    "maintain_temp_stop",
+    "maybe_keepalive_watchdog",
+    "pid_ratio_from_cold",
+    "pid_reset_core",
+    "poll_bt_request",
+    "ramp_tick",
+    "rate_limit_cold",
+    "rate_limit_fan",
+    "rate_limited_execute",
+    "reconnect_align",
+    "reset_ki_cut_defaults",
+    "sample_webui_inputs",
+    "set_default_log_path",
+    "temp_stop_active",
+    "try_align_actual",
+    "watchdog_check",
+    "write_coldmax_hint",
+    "write_log"
+   ],
+   "io": [
+    "close(",
+    "fclose",
+    "fprintf",
+    "printf",
+    "select",
+    "sleep(",
+    "stat("
+   ],
+   "body": "\n    signal(SIGTERM, handle_signal);\n    signal(SIGINT,  handle_signal);\n\n     /                                                          \n    if (!acquire_single_instance_lock()) {\n        fprintf(stderr,                           );\n        return EXIT_ALREADY_RUNNING;\n    }\n\n     /                  \n     /                                                  \n     /                                                            \n     /                                                       \n    set_default_log_path();\n     /                                                                    \n    reset_ki_cut_defaults();\n    if (argc >= 3 && strcmp(argv[1],           ) == 0) {\n        strncpy(config_path, argv[2], sizeof(config_path) - 1);\n        config_path[sizeof(config_path) - 1] =     ;\n        config_explicit = 1;\n    } else {\n        detect_config_path();    /                               \n    }\n    if (config_path[0] !=     ) {\n        config_loaded = load_config(config_path);\n        if (config_loaded) {\n            struct stat st;\n            if (stat(config_path, &st) == 0) config_mtime = st.st_mtime;\n        }\n    }\n    if (!config_loaded) {\n        if (!config_explicit) write_log(                      ,\n                                        PRIVATE_DIR, PROTO_NAME_CONFIG);\n        config_retry_at = mono_now();    /                    \n    }\n    debug_log(debug_main,                              , CPU_FILTER_ALPHA, CPU_ZONE_MIN, CPU_ZONE_MAX);\n\n     /                 \n     /                                             \n    create_status_files();\n\n    write_log(        );\n    if (lock_fd_fallback >= 0) write_log(             , LOCK_FALLBACK_PATH);\n    else                       write_log(                            , LOCK_FALLBACK_PATH);\n    if (lock_fd < 0) write_log(                            , LOCK_FILE_PATH);\n\n     /                                                    \n     /                               \n    apply_cpu_affinity();\n\n     /                                                          \n    active_device = DEVICE_NONE;\n    while (running) {\n         /                                             \n        if (host_app_uninstalled()) {\n            cleanup_artifacts_on_uninstall();\n            break;    /                                            \n        }\n         /                                              \n        maybe_keepalive_watchdog();\n         /                                            \n         /                                        \n        install_cache_warmup();\n         /                                        \n         /                                               \n         /                                                                   \n         /                                                    \n         /                                                  \n        if (config_retry_if_needed()) apply_cpu_affinity();\n         /                                      \n         /                                            \n         /                                      \n        struct stat st_cfg;\n        if (config_loaded && config_path[0] !=     \n                && stat(config_path, &st_cfg) == 0 && st_cfg.st_mtime != config_mtime) {\n            load_config(config_path);\n            struct stat st_cfg2;\n            if (stat(config_path, &st_cfg2) == 0) config_mtime = st_cfg2.st_mtime;\n            apply_cpu_affinity();\n        }\n         /                                      \n         /                                                           \n        cpu_affinity_reassert();\n         /                                               \n         /                           \n        poll_bt_request();\n        read_status_ble_both();\n        DeviceType dev = select_active_device();\n        if (dev != DEVICE_NONE) {\n            active_device = dev;\n            update_active_limits();\n            write_log(         , device_tag_of(active_device));\n            read_cooler_params();\n            break;\n        }\n         /                                       \n         /                                            \n        maintain_temp_stop();\n         /                                                      \n         /                                                  \n         /                                         \n        if (mono_now() - last_arbitrate >= ARBITRATE_INTERVAL) {\n            arbitrate_apps();\n            last_arbitrate = mono_now();\n        }\n        sleep(5);\n    }\n    if (!running) goto exit;\n\n     /                           \n    pid_reset_core();\n\n     /               \n    app_was_alive = 1;\n    first_run = 1;\n\n     /                                           \n     /                                                              \n     /                                                 \n    if (report_ok) {\n        float pid_ratio = 0.0f;\n        int cold_ref = (cooler_cold_real >= pid_cold_min) ? cooler_cold_real : pid_cold_min;\n        pid_ratio = pid_ratio_from_cold(cold_ref, active_pid_cold_max);\n        if (cooler_cold_real >= COLD_MIN) actual_cold = cooler_cold_real;\n        else actual_cold = pid_cold_min;\n        if (cooler_rpm_real >= fan_rpm_min) actual_rpm = cooler_rpm_real;\n        else actual_rpm = fan_rpm_min;\n        write_log(                                    , actual_cold, pid_ratio, pid_align_rpm);\n\n         /                         \n        sent_cold = actual_cold;\n        sent_rpm  = actual_rpm;\n        if (temp_stop_active()) {\n            write_log(                         );\n        } else {\n            last_bcast_valid = 0;\n            rate_limit_cold(pid_align_cold);\n            int send_rpm = rate_limit_fan(compute_fan_target());\n            apply_gear_direct(1, 5, send_rpm, actual_cold, 0);\n        }\n    } else {\n        actual_cold = -1;       /                                    \n        actual_rpm = -1;\n        sent_cold = -1;\n        sent_rpm  = -1;\n        logged_target_cold = -1;    /               \n        logged_target_rpm  = -1;\n        pid_align_cold = 1;     /                         \n        pending_align = 1;\n        pending_align_since = mono_now();\n        write_log(                         );\n    }\n\n     /                               \n     /                                                                 \n     /                                \n    time_t last_ctrl = 0;\n    while (running) {\n        reap_am_children();    /                       \n        sample_webui_inputs();    /                               \n        write_coldmax_hint();  /                                   \n        poll_bt_request();     /                         \n\n        if (last_ctrl == 0 || mono_now() - last_ctrl >= 5) {\n            last_ctrl = mono_now();\n\n             /                                                        \n             /                                \n            maintain_config_and_temp_stop();\n\n             /                                                       \n            if (host_app_uninstalled()) {\n                cleanup_artifacts_on_uninstall();\n                break;    /                             \n            }\n\n             /                                                         \n             /                                                     \n            maybe_keepalive_watchdog();\n\n             /                                                      \n             /                                            \n             /                                                       \n             /                                         \n             /                                                     \n             /                               \n            cpu_affinity_reassert();\n\n             /                                                            \n             /                                        \n            maybe_rescan_cpu_zones();\n\n             /                \n            read_status_ble_both();\n            if (mono_now() - last_arbitrate >= ARBITRATE_INTERVAL) {\n                arbitrate_apps();   /                                                       \n                last_arbitrate = mono_now();\n            }\n            DeviceType new_device = select_active_device();\n\n             /                          \n            if (new_device != active_device) {\n                if (new_device == DEVICE_NONE) {\n                     /        \n                    if (active_device != DEVICE_NONE) {\n                        write_log(                   ,\n                                  device_tag_of(active_device));\n                        if (last_disconnect_time == 0)\n                            last_disconnect_time = mono_now();    /             \n                    }\n                    active_device = DEVICE_NONE;\n                    app_was_alive = 0;\n                    continue;    /                \n                } else {\n                     /           \n                    write_log(            ,\n                              device_tag_of(active_device),\n                              device_tag_of(new_device));\n                    active_device = new_device;\n                    update_active_limits();\n                    read_cooler_params();\n                    reconnect_align();\n                }\n            } else if (active_device == DEVICE_NONE) {\n                continue;    /             \n            }\n\n             /                                        \n            debug_log(debug_conn,                      ,\n                      device_tag_of(active_device), app_ble_connected);\n\n             /                                                           \n            int app_proc_ok = is_app_alive();\n            struct stat st_conn;\n            long mtime_gap = -1;\n            if (stat((active_device == DEVICE_B7X) ? status_file_path_b7 : status_file_path_b6,\n                     &st_conn) == 0)\n                mtime_gap = (long)(time(NULL) - st_conn.st_mtime);\n            debug_log(debug_conn,                                                    ,\n                      device_tag_of(active_device), app_proc_ok, mtime_gap, STATUS_TIMEOUT);\n            if (!app_proc_ok || !app_ble_connected) {\n                 /                                                                  \n                if (last_disconnect_time == 0) {\n                    last_disconnect_time = mono_now();    /             \n                    write_log(         , device_tag_of(active_device));\n                }\n                launch_last_app(0);    /                                            \n                                       /                              \n                app_was_alive = 0;   /                             \n                continue;\n            }\n\n            if (!app_was_alive) {\n                app_was_alive = 1;\n                reconnect_align();\n            }\n\n            int control_skipped = main_loop();\n\n             /                                  \n            if (!control_skipped) {\n                 /                                         \n                if (pending_align && try_align_actual())\n                    last_bcast_valid = 0;\n\n                 /         \n                cycle_batt_temp = cached_batt_raw;    /        \n                int dispatched = rate_limited_execute();    /                 \n\n                 /                                       \n                 /                                                \n                if (dispatched) watchdog_check();\n                 /                               \n                deadlink_check();\n            }\n        }\n\n         /                                             \n         /                                                  \n        append_webui_row();\n\n         /                                             \n        ramp_tick();\n\n        sleep(1);\n    }\n\nexit:\n    close_cpu_zone_fds();        /                                       \n    close_valid_zone_fds();      /                        \n    if (webui_fp) fclose(webui_fp);    /           \n    if (log_fp) fclose(log_fp);\n    return 0;\n",
+   "pure0": false
+  }
+ ],
+ "statics": [
+  "APP_LAUNCH_ENABLED",
+  "BATT_BASELINE",
+  "BATT_CURRENT_DIVISOR",
+  "BATT_CURRENT_PATH",
+  "COLD_DEADZONE",
+  "CPU_FILTER_ALPHA",
+  "HOT_DERATE_COOLDOWN",
+  "HOT_DERATE_MULT",
+  "HOT_DERATE_THRESHOLD",
+  "INSTALL_WARMUP_PKGS",
+  "LOG_MAX",
+  "RATE_LIMIT_COLD",
+  "RATE_LIMIT_COLD_MULT",
+  "RATE_LIMIT_FAN",
+  "RATE_LIMIT_FAN_DEBOUNCE",
+  "STATUS_TIMEOUT",
+  "active_cold_eff_max",
+  "active_cold_eff_min",
+  "actual_cold",
+  "actual_rpm",
+  "affinity_cfg_seen",
+  "alarm_fired",
+  "am_pending_n",
+  "app_launch_cooldown",
+  "app_launch_screen_dozing_on",
+  "app_launch_screen_gate_enabled",
+  "app_was_alive",
+  "app_watchdog_cycles",
+  "back_hide_enabled",
+  "batt_changed_since_ctrl",
+  "batt_window_changed",
+  "bt_auto_enable_sec",
+  "bt_req_handled",
+  "bt_req_primed",
+  "cached_batt_raw",
+  "cached_cpu_now",
+  "cold_map_exp",
+  "cold_map_start",
+  "cold_rate_bound",
+  "coldmax_hint_written",
+  "config_explicit",
+  "config_loaded",
+  "config_mtime",
+  "config_path",
+  "config_retry_at",
+  "cooldown",
+  "cpu_aff_last_group",
+  "cpu_aff_reason",
+  "cpu_filtered_temp",
+  "cycle_batt_temp",
+  "deadlink_cycles",
+  "debug_config",
+  "debug_conn",
+  "debug_launch",
+  "debug_main",
+  "debug_pid",
+  "dispatch_target_cold",
+  "dispatch_target_rpm",
+  "fan_rpm_round_unit",
+  "first_run",
+  "host_miss_hits",
+  "host_probe_at",
+  "host_probe_gone",
+  "host_probe_unknown",
+  "hot_map_max",
+  "hot_map_min",
+  "idx_str",
+  "install_cache_used",
+  "install_warmup_done",
+  "install_warmup_tries",
+  "key",
+  "ki_cut_mult_dn",
+  "ki_cut_mult_kdp",
+  "ki_cut_mult_up",
+  "last_arbitrate",
+  "last_bcast_valid",
+  "last_cold",
+  "last_disconnect_time",
+  "last_launch_attempt",
+  "last_launch_probe_at",
+  "last_mode",
+  "last_perf_enabled",
+  "last_probe_off_at",
+  "last_rpm",
+  "last_screen_off",
+  "last_sysfs_enabled",
+  "last_target_temp",
+  "last_wind_level",
+  "launch_migrate_give_up",
+  "launch_timing_seen_cooldown",
+  "launch_timing_seen_watchdog",
+  "legacy_launch_cooldown",
+  "legacy_launch_seen",
+  "legacy_launch_watchdog",
+  "legacy_pidcut_seen",
+  "legacy_rescan_logged",
+  "legacy_screen_gate_logged",
+  "lock_fd",
+  "lock_fd_fallback",
+  "log_file_path",
+  "log_fp",
+  "log_path_opened",
+  "logged_target_cold",
+  "logged_target_rpm",
+  "migrate_give_up",
+  "path",
+  "pending_align",
+  "pending_align_since",
+  "pid_align_cold",
+  "pid_align_rpm",
+  "pid_batt_filtered",
+  "pid_batt_last_update_cycle",
+  "pid_ch_threshold",
+  "pid_cold_min",
+  "pid_cpu_comp_active",
+  "pid_cpu_comp_divisor",
+  "pid_cpu_comp_filter_alpha",
+  "pid_cpu_comp_offset",
+  "pid_cpu_comp_ready",
+  "pid_cpu_comp_smooth",
+  "pid_ctrl_cycles",
+  "pid_input_cdeg",
+  "pid_kdp",
+  "pid_kdp_coef",
+  "pid_ki",
+  "pid_ki_down_coef",
+  "pid_ki_up_coef",
+  "pid_last_ch",
+  "pid_last_change_time",
+  "pid_last_comp_10",
+  "pid_last_error",
+  "pid_recompute_pending",
+  "pid_spd_nl_exp_p100",
+  "pid_spd_nl_thr_p100",
+  "pid_spd_recall_on",
+  "pid_spd_recall_weight",
+  "pid_speed_coef",
+  "pid_target_alpha",
+  "pid_target_away_alpha",
+  "pid_target_coef",
+  "pid_target_dir_on",
+  "pid_target_f",
+  "pid_target_max",
+  "pid_target_toward_alpha",
+  "ramp_dispatch",
+  "ramp_mode",
+  "ramp_remain_cold",
+  "ramp_remain_rpm",
+  "ramp_slots_left",
+  "ramp_step_cold",
+  "ramp_step_rpm",
+  "ramp_target_rpm",
+  "recall_anchor",
+  "recall_cycles",
+  "recall_prev_batt",
+  "reconnect_keep_cycles",
+  "rpm_smooth_alpha",
+  "running",
+  "sent_cold",
+  "sent_rpm",
+  "status_fresh_at",
+  "status_mtime_seen",
+  "temp_stop_active_last",
+  "temp_stop_enabled",
+  "temp_stop_writeback_pending",
+  "uiprefs_fail_logged",
+  "uiprefs_last_back_hide",
+  "uiprefs_last_bt_sec",
+  "uiprefs_last_gate_le",
+  "watchdog_last_cmd",
+  "watchdog_last_cold",
+  "watchdog_last_kill_at",
+  "watchdog_stall_count",
+  "wd_check_at",
+  "wd_fail_hits",
+  "wd_keepalive_enabled",
+  "wd_last_log_at",
+  "wd_miss_hits",
+  "wd_spawn_at",
+  "wd_spawn_pending",
+  "webui_batt_now",
+  "webui_conn_ok",
+  "webui_cpu_now",
+  "webui_epoch_now",
+  "webui_fp",
+  "webui_io_error_logged",
+  "webui_lines_since_compact"
+ ]
+}

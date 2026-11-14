@@ -1,0 +1,267 @@
+{
+ "functions": [
+  {
+   "name": "status_field_value",
+   "start": 5,
+   "end": 8,
+   "lines": 4,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    size_t n = strlen(field);\n    return strncmp(line, field, n) == 0 ? line + n : NULL;\n",
+   "pure0": true
+  },
+  {
+   "name": "trim_line",
+   "start": 10,
+   "end": 17,
+   "lines": 8,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    char *p = line;\n    while (*p ==     || *p ==     ) p++;\n    size_t n = strlen(p);\n    char *end = p + (n ? n - 1 : 0);    /                             \n    while (end > p && (*end ==     || *end ==     )) *end-- =     ;\n    return p;\n",
+   "pure0": true
+  },
+  {
+   "name": "trim_right",
+   "start": 19,
+   "end": 23,
+   "lines": 5,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    size_t n = strlen(s);\n    char *end = s + (n ? n - 1 : 0);    /              \n    while (end > s && (*end ==     || *end ==     )) *end-- =     ;\n",
+   "pure0": true
+  },
+  {
+   "name": "trim_value",
+   "start": 25,
+   "end": 33,
+   "lines": 9,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    char *p = s;\n    while (*p ==     || *p ==     ) p++;\n    size_t n = strlen(p);\n    char *end = p + (n ? n - 1 : 0);    /              \n    while (end > p && (*end ==      || *end ==      || *end ==     || *end ==     ))\n        *end-- =     ;\n    return p;\n",
+   "pure0": true
+  },
+  {
+   "name": "config_read_path",
+   "start": 35,
+   "end": 41,
+   "lines": 7,
+   "static_refs": [],
+   "calls": [
+    "trim_value"
+   ],
+   "io": [],
+   "body": "\n    char *v = trim_value(src);\n    if (*v) {\n        strncpy(dest, v, dest_size - 1);\n        dest[dest_size - 1] =     ;\n    }\n",
+   "pure0": true
+  },
+  {
+   "name": "config_parse_line",
+   "start": 43,
+   "end": 55,
+   "lines": 13,
+   "static_refs": [],
+   "calls": [
+    "trim_line",
+    "trim_right",
+    "trim_value"
+   ],
+   "io": [],
+   "body": "\n    char *p = trim_line(line);\n    if (*p ==     || *p ==      || *p ==     ) return NULL;\n    char *eq = strchr(p,    );\n    if (!eq) return NULL;\n    *eq =     ;\n    *out_key = p;\n    trim_right(p);\n     /                                                         \n     /                                                  \n     /            \n    return trim_value(eq + 1);\n",
+   "pure0": true
+  },
+  {
+   "name": "cpu_set_empty",
+   "start": 57,
+   "end": 61,
+   "lines": 5,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    for (int c = 0; c < CPU_SETSIZE; c++)\n        if (CPU_ISSET(c, set)) return 0;\n    return 1;\n",
+   "pure0": true
+  },
+  {
+   "name": "cpu_set_covers",
+   "start": 63,
+   "end": 67,
+   "lines": 5,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    for (int c = 0; c < CPU_SETSIZE; c++)\n        if (CPU_ISSET(c, sub) && !CPU_ISSET(c, super)) return 0;\n    return 1;\n",
+   "pure0": true
+  },
+  {
+   "name": "cpu_set_intersect",
+   "start": 69,
+   "end": 72,
+   "lines": 4,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    for (int c = 0; c < CPU_SETSIZE; c++)\n        if (!CPU_ISSET(c, other)) CPU_CLR(c, dst);\n",
+   "pure0": true
+  },
+  {
+   "name": "cpu_set_union",
+   "start": 74,
+   "end": 77,
+   "lines": 4,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    for (int c = 0; c < CPU_SETSIZE; c++)\n        if (CPU_ISSET(c, other)) CPU_SET(c, dst);\n",
+   "pure0": true
+  },
+  {
+   "name": "cpu_set_first",
+   "start": 79,
+   "end": 83,
+   "lines": 5,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    for (int c = 0; c < CPU_SETSIZE; c++)\n        if (CPU_ISSET(c, set)) return c;\n    return CPU_SETSIZE;\n",
+   "pure0": true
+  },
+  {
+   "name": "cpu_set_format",
+   "start": 85,
+   "end": 105,
+   "lines": 21,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "printf",
+    "snprintf"
+   ],
+   "body": "\n    size_t n = 0;\n    int c = 0;\n    if (size) out[0] =     ;\n    while (c < CPU_SETSIZE && size && n + 1 < size) {\n        if (!CPU_ISSET(c, set)) { c++; continue; }\n        int lo = c, hi = c;\n        while (hi + 1 < CPU_SETSIZE && CPU_ISSET(hi + 1, set)) hi++;\n        const char *sep = n ?     :   ;    /                                \n        int w = snprintf(out + n, size - n,       , sep, lo);\n        if (w < 0 || (size_t)w >= size - n) break;\n        n += (size_t)w;\n        if (hi > lo) {\n            w = snprintf(out + n, size - n,      , hi);\n            if (w < 0 || (size_t)w >= size - n) break;\n            n += (size_t)w;\n        }\n        c = hi + 1;\n    }\n    if (n == 0 && size) snprintf(out, size,    );\n",
+   "pure0": false
+  },
+  {
+   "name": "cpu_list_parse",
+   "start": 107,
+   "end": 138,
+   "lines": 32,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    CPU_ZERO(set);\n    if (!s) return 0;\n    int any = 0;\n    const char *p = s;\n    while (*p) {\n        while (*p ==     || *p ==      || *p ==      || *p ==      || *p ==    ) p++;\n        if (!*p) break;\n        const char *tok = p;\n        while (*p && *p !=     && *p !=      && *p !=      && *p !=      && *p !=    ) p++;\n        size_t len = (size_t)(p - tok);\n        char buf[64];\n        if (len == 0 || len >= sizeof(buf)) return 0;\n        memcpy(buf, tok, len);\n        buf[len] =     ;\n\n        char *end = NULL;                             /           \n        long a = strtol(buf, &end, 10);\n        if (end == buf || a < 0) return 0;\n        long b = a;\n        if (*end ==    ) {\n            char *end2 = NULL;\n            b = strtol(end + 1, &end2, 10);\n            if (end2 == end + 1 || b < a) return 0;\n            end = end2;\n        }\n        if (*end !=     ) return 0;\n        for (long c = a; c <= b && c < CPU_SETSIZE; c++) CPU_SET((int)c, set);\n        any = 1;\n    }\n    return any ? 1 : 0;\n",
+   "pure0": true
+  },
+  {
+   "name": "clusters_accept",
+   "start": 140,
+   "end": 174,
+   "lines": 35,
+   "static_refs": [],
+   "calls": [
+    "cpu_set_covers",
+    "cpu_set_empty",
+    "cpu_set_first",
+    "cpu_set_intersect",
+    "cpu_set_union"
+   ],
+   "io": [],
+   "body": "\n    if (n <= 0 || n > CPU_CLUSTER_MAX) return 0;\n    cpu_set_t all;\n    CPU_ZERO(&all);\n    for (int i = 0; i < n; i++) {\n        if (cpu_set_empty(&clusters[i])) return 0;               /         \n        for (int j = 0; j < i; j++) {\n            cpu_set_t overlap = clusters[i];\n            cpu_set_intersect(&overlap, &clusters[j]);\n            if (!cpu_set_empty(&overlap)) return 0;              /           \n        }\n        cpu_set_union(&all, &clusters[i]);\n    }\n    if (!cpu_set_covers(&all, present) || !cpu_set_covers(present, &all)) return 0;   /             \n    int zero = -1;\n    for (int i = 0; i < n; i++)\n        if (CPU_ISSET(0, &clusters[i])) { zero = i; break; }\n    if (zero < 0) return 0;                                      /                \n    if (zero != 0) {\n        cpu_set_t tmp = clusters[0];\n        clusters[0] = clusters[zero];\n        clusters[zero] = tmp;\n    }\n    for (int i = 1; i < n; i++) {                                /                      \n        int best = i;\n        for (int j = i + 1; j < n; j++)\n            if (cpu_set_first(&clusters[j]) < cpu_set_first(&clusters[best])) best = j;\n        if (best != i) {\n            cpu_set_t tmp = clusters[i];\n            clusters[i] = clusters[best];\n            clusters[best] = tmp;\n        }\n    }\n    return 1;\n",
+   "pure0": true
+  },
+  {
+   "name": "affinity_expand",
+   "start": 177,
+   "end": 191,
+   "lines": 15,
+   "static_refs": [],
+   "calls": [
+    "cpu_list_parse",
+    "cpu_set_union"
+   ],
+   "io": [],
+   "body": "\n    CPU_ZERO(out);\n    if (!spec || !*spec) return 0;\n    if (spec[0] ==    ) {\n        if (!spec[1]) return 0;                       /          \n        for (const char *p = spec + 1; *p; p++) {\n            if (*p <     || *p >    ) return 0;       /                       \n            int idx = *p -    ;\n            if (idx >= nclusters) return 0;           /         \n            cpu_set_union(out, &clusters[idx]);\n        }\n        return 1;\n    }\n    return cpu_list_parse(spec, out);                 /                         \n",
+   "pure0": true
+  },
+  {
+   "name": "clamp",
+   "start": 193,
+   "end": 197,
+   "lines": 5,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    if (val < lo) return lo;\n    if (val > hi) return hi;\n    return val;\n",
+   "pure0": true
+  },
+  {
+   "name": "rate_limit",
+   "start": 199,
+   "end": 206,
+   "lines": 8,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    int diff = desired - *actual;\n    int step = (diff > 0) ? up_limit : down_limit;\n    if (abs(diff) > step)\n        *actual += (diff > 0) ? step : -step;\n    else\n        *actual = desired;\n",
+   "pure0": true
+  },
+  {
+   "name": "cmp_zone_desc",
+   "start": 208,
+   "end": 212,
+   "lines": 5,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    int da = ((const ZoneReading*)a)->raw;\n    int db = ((const ZoneReading*)b)->raw;\n    return (da < db) - (da > db);\n",
+   "pure0": true
+  },
+  {
+   "name": "deadzone_band",
+   "start": 214,
+   "end": 216,
+   "lines": 3,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    return (deadzone * 3 + 1) / 2;\n",
+   "pure0": true
+  },
+  {
+   "name": "within_deadzone",
+   "start": 218,
+   "end": 220,
+   "lines": 3,
+   "static_refs": [],
+   "calls": [
+    "deadzone_band"
+   ],
+   "io": [],
+   "body": "\n    return abs(diff) < deadzone && room >= deadzone_band(deadzone);\n",
+   "pure0": true
+  },
+  {
+   "name": "wakefulness_value",
+   "start": 222,
+   "end": 239,
+   "lines": 18,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    if (outSize == 0) return 0;    /                                    \n    const char *hit = strstr(line,                );\n    if (hit == NULL || strstr(line,           ) != NULL) return 0;\n    hit += strlen(               );\n    size_t n = 0;\n    while (hit[n] !=      && hit[n] !=     && n < outSize - 1) {\n        out[n] = hit[n];\n        n++;\n    }\n    out[n] =     ;\n    size_t s = 0;\n    while (s < n && (out[s] ==     || out[s] ==      || out[s] ==     )) s++;\n    while (n > s && (out[n-1] ==     || out[n-1] ==      || out[n-1] ==     )) n--;\n    memmove(out, out + s, n - s);\n    out[n - s] =     ;\n    return 1;\n",
+   "pure0": true
+  },
+  {
+   "name": "ki_cut_tok_int",
+   "start": 241,
+   "end": 251,
+   "lines": 11,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    if (len == 0 || len >= 24) return 0;\n    char buf[24];\n    memcpy(buf, p, len);\n    buf[len] =     ;\n    char *e = NULL;\n    long v = strtol(buf, &e, 10);\n    if (e == buf || *e !=     ) return 0;\n    *out = (int)v;\n    return 1;\n",
+   "pure0": true
+  }
+ ],
+ "statics": []
+}

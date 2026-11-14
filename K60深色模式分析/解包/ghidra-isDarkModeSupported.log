@@ -1,0 +1,623 @@
+INFO  Using log config file: jar:file:/D:/tools/ghidra/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: C:\Users\14986\AppData\Roaming\ghidra\ghidra_12.1.4_PUBLIC\application.log (LoggingInitialization)  
+INFO  Loading user preferences: C:\Users\14986\AppData\Roaming\ghidra\ghidra_12.1.4_PUBLIC\preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (868 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: SHA1PRNG (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (2761 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    D:\tools\ghidra\Ghidra\Debug\Debugger\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\VersionTracking\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\BytePatterns\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\FileFormats\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\PyGhidra\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\SystemEmulation\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Processors\8051\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\GnuDemangler\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\WildcardAssembler\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\BSim\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Debug\Debugger-rmi-trace\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Processors\DATA\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Processors\JVM\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Processors\PIC\ghidra_scripts
+    D:\下载\Claude Code\杂项\K60深色模式分析\解包\ghidra-scripts
+    D:\tools\ghidra\Ghidra\Features\FunctionID\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\PDB\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\MicrosoftCodeAnalyzer\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\Decompiler\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\SwiftDemangler\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\Base\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Features\DecompilerDependent\ghidra_scripts
+    D:\tools\ghidra\Ghidra\Processors\Atmel\ghidra_scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Creating temporary project: D:\下载\Claude Code\杂项\K60深色模式分析\解包\ghidra-proj\K60Dark (HeadlessAnalyzer)  
+INFO  Creating project: D:\下载\Claude Code\杂项\K60深色模式分析\解包\ghidra-proj\K60Dark (DefaultProject)  
+INFO  REPORT: Processing input files:  (HeadlessAnalyzer)  
+INFO       project: D:\下载\Claude Code\杂项\K60深色模式分析\解包\ghidra-proj\K60Dark (HeadlessAnalyzer)  
+INFO  IMPORTING: file:///D:/%E4%B8%8B%E8%BD%BD/Claude Code/%E6%9D%82%E9%A1%B9/K60%E6%B7%B1%E8%89%B2%E6%A8%A1%E5%BC%8F%E5%88%86%E6%9E%90/%E5%88%86%E5%8C%BA/system_a/system_a/system/lib64/libandroidfw.so (HeadlessAnalyzer)  
+INFO  Using Loader: Executable and Linking Format (ELF) (ProgramLoader)  
+INFO  Using Language/Compiler: AARCH64:LE:64:v8A:default (ProgramLoader)  
+INFO  Using Library Search Path: [., C:\WINDOWS\SysWOW64, C:\Program Files\Microsoft\jdk-21.0.11.10-hotspot\bin, C:\WINDOWS\Sun\Java\bin, C:\WINDOWS\system32, C:\WINDOWS, C, C:\Program Files\Git\Users\14986\.local\bin, C:\Users\14986\bin, C:\Program Files\Git\mingw64\bin, C:\Program Files\Git\usr\local\bin, C:\Program Files\Git\usr\bin, C:\WINDOWS\System32\Wbem, C:\WINDOWS\System32\WindowsPowerShell\v1.0, C:\WINDOWS\System32\OpenSSH, C:\Program Files\dotnet, C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit, C:\Program Files\nodejs, C:\Program Files\Git\cmd, C:\Program Files\GitHub CLI, C:\Program Files\PowerShell\7, C:\Users\14986\AppData\Local\Programs\Python\Launcher, C:\Users\14986\.local\bin, C:\Users\14986\AppData\Local\Microsoft\WindowsApps, C:\Users\14986\AppData\Roaming\npm, C:\Users\14986\AppData\Local\Microsoft\WinGet\Packages\Skylot.jadx_Microsoft.Winget.Source_8wekyb3d8bbwe, C:\Users\14986\.bun\bin, C:\Users\14986\AppData\Local\Programs\Microsoft VS Code\bin, C:\Program Files\Git\usr\bin\vendor_perl, C:\Program Files\Git\usr\bin\core_perl, C:\Users\14986\AppData\Local\Python\pythoncore-3.14-64\Scripts] (ProgramLoader)  
+INFO  Additional info:
+Loading file:///D:/%E4%B8%8B%E8%BD%BD/Claude Code/%E6%9D%82%E9%A1%B9/K60%E6%B7%B1%E8%89%B2%E6%A8%A1%E5%BC%8F%E5%88%86%E6%9E%90/%E5%88%86%E5%8C%BA/system_a/system_a/system/lib64/libandroidfw.so?MD5=d8d258f06064026dd63d7993b57c7b3d...
+Found 439 symbols in .gnu_debugdata
+Unsupported Thread-Local Symbol not loaded: _ZN5incfs13SignalHandler7mJmpBufE
+ELF Relocation Warning: Type = 1031 (0x407) at 002255d8 (Symbol = _ZN5incfs13SignalHandler7mJmpBufE) - Relocation for TLS Symbol not supported
+Setting block .data.rel.ro to read-only
+Setting block .fini_array to read-only
+Setting block .init_array to read-only
+Setting block .dynamic to read-only
+------------------------------------------------
+
+Linking the External Programs of 'libandroidfw.so' to imported libraries...
+  [libbase.so] -> not found in project
+  [libbinder.so] -> not found in project
+  [liblog.so] -> not found in project
+  [libcutils.so] -> not found in project
+  [libincfs.so] -> not found in project
+  [libutils.so] -> not found in project
+  [libz.so] -> not found in project
+  [libc++.so] -> not found in project
+  [libc.so] -> not found in project
+  [libm.so] -> not found in project
+  [libdl.so] -> not found in project
+------------------------------------------------
+
+Resolving External Symbols of [/libandroidfw.so] - 287 unresolved symbols, no external libraries configured - skipping
+ (ProgramLoader)  
+INFO  IMPORTING: Loaded 0 additional files (HeadlessAnalyzer)  
+INFO  ANALYZING all memory and code: file:///D:/%E4%B8%8B%E8%BD%BD/Claude Code/%E6%9D%82%E9%A1%B9/K60%E6%B7%B1%E8%89%B2%E6%A8%A1%E5%BC%8F%E5%88%86%E6%9E%90/%E5%88%86%E5%8C%BA/system_a/system_a/system/lib64/libandroidfw.so (HeadlessAnalyzer)  
+INFO  DWARF external debug information found: ExternalDebugInfo [filename=null, crc=0, hash=0dc2eac62669dff86ed002750fb1f0c4, objectType=DEBUGINFO, extra=null] (ExternalDebugFileSectionProvider)  
+INFO  Unable to find DWARF information, skipping DWARF analysis (DWARFAnalyzer)  
+ERROR Invalid PNG data at 001260d9 (PngDataType)  
+ERROR Invalid PNG data at 0012bb84 (PngDataType)  
+INFO  Packed database cache: C:\Users\14986\AppData\Local\ghidra\packed-db-cache (PackedDatabaseCache)  
+INFO  Applied data type archive: generic_clib_64 (ApplyDataArchiveAnalyzer)  
+WARN  Unable to fully apply external demangled Address Table at 00229460: std::stringstream::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 00229468: std::stringstream::VTT (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 00229470: std::stringbuf::vtable (DemangledAddressTable)  
+INFO  -----------------------------------------------------
+    AARCH64 ELF PLT Thunks                     0.431 secs
+    ASCII Strings                              0.420 secs
+    Apply Data Archives                        0.803 secs
+    Basic Constant Reference Analyzer          5.153 secs
+    Call Convention ID                        14.755 secs
+    Call-Fixup Installer                       0.037 secs
+    Create Address Tables                      0.135 secs
+    Create Address Tables - One Time           0.048 secs
+    Create Function                            0.000 secs
+    DWARF                                      0.015 secs
+    Data Reference                             0.145 secs
+    Decompiler Switch Analysis                 2.823 secs
+    Demangler GNU                              1.709 secs
+    Disassemble Entry Points                   5.259 secs
+    Embedded Media                             0.027 secs
+    External Entry References                  0.014 secs
+    Function ID                                0.159 secs
+    Function Start Search                      0.138 secs
+    Function Start Search After Code           0.077 secs
+    Function Start Search After Data           0.039 secs
+    Function Start Search delayed - One Time   0.001 secs
+    GCC Exception Handlers                     0.689 secs
+    Non-Returning Functions - Discovered       0.495 secs
+    Non-Returning Functions - Known            0.018 secs
+    Reference                                  0.334 secs
+    Shared Return Calls                        0.292 secs
+    Stack                                      4.810 secs
+    Subroutine References                      0.188 secs
+-----------------------------------------------------
+     Total Time   39 secs
+-----------------------------------------------------
+ (AutoAnalysisManager)  
+INFO  REPORT: Analysis succeeded for file: file:///D:/%E4%B8%8B%E8%BD%BD/Claude Code/%E6%9D%82%E9%A1%B9/K60%E6%B7%B1%E8%89%B2%E6%A8%A1%E5%BC%8F%E5%88%86%E6%9E%90/%E5%88%86%E5%8C%BA/system_a/system_a/system/lib64/libandroidfw.so (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: DumpDarkMode.java  (HeadlessAnalyzer)  
+INFO  SCRIPT: D:\下载\Claude Code\杂项\K60深色模式分析\解包\ghidra-scripts\DumpDarkMode.java (HeadlessAnalyzer)  
+INFO  DumpDarkMode.java> ==== IsDarkModeSupported @ 001525f0 (GhidraScript)  
+INFO  DumpDarkMode.java> 
+/* android::AssetManager2::IsDarkModeSupported() const */
+
+undefined4 __thiscall android::AssetManager2::IsDarkModeSupported(AssetManager2 *this)
+
+{
+  long *plVar1;
+  long *plVar2;
+  long *plVar3;
+  long lVar4;
+  uint uVar5;
+  ulong uVar6;
+  long lVar7;
+  undefined4 uVar8;
+  long *plVar9;
+  
+  lVar4 = tpidr_el0;
+  lVar7 = *(long *)(lVar4 + 0x28);
+  uVar5 = atrace_get_enabled_tags();
+  if ((uVar5 >> 0xd & 1) != 0) {
+    atrace_begin_body("AssetManager::IsDarkModeSupported");
+  }
+  plVar1 = *(long **)(this + 0x18);
+  plVar2 = *(long **)(this + 0x20);
+  do {
+    if (plVar1 == plVar2) {
+      uVar8 = 0;
+LAB_0015269c:
+      std::
+      __tree<android::ResTable_config,std::less<android::ResTable_config>,std::allocator<android::ResTable_config>>
+      ::destroy((__tree_node *)0x0);
+      uVar5 = atrace_get_enabled_tags();
+      if ((uVar5 >> 0xd & 1) != 0) {
+        atrace_end_body();
+      }
+      if (*(long *)(lVar4 + 0x28) != lVar7) {
+                    /* WARNING: Subroutine does not return */
+        __stack_chk_fail();
+      }
+      return uVar8;
+    }
+    plVar9 = (long *)*plVar1;
+    plVar3 = (long *)plVar1[1];
+    if (plVar9 != plVar3) {
+      uVar5 = 0;
+      do {
+        if (((*(uint *)(*plVar9 + 0x284) & 1) == 0) &&
+           ((uVar5 & (*(uint *)(*plVar9 + 0x284) & 8) >> 3) == 0)) {
+          uVar6 = LoadedPackage::IsDarkModeSupported();
+          if ((uVar6 & 1) != 0) {
+            uVar8 = 1;
+            goto LAB_0015269c;
+          }
+        }
+        else {
+          uVar5 = 1;
+        }
+        plVar9 = plVar9 + 0x11;
+      } while (plVar9 != plVar3);
+    }
+    plVar1 = plVar1 + 0xb;
+  } while( true );
+}
+
+ (GhidraScript)  
+INFO  DumpDarkMode.java> ==== IsDarkModeSupported @ 00169b90 (GhidraScript)  
+INFO  DumpDarkMode.java> 
+/* WARNING: Type propagation algorithm not settling */
+/* android::LoadedPackage::IsDarkModeSupported() const */
+
+void android::LoadedPackage::IsDarkModeSupported(void)
+
+{
+  uint uVar1;
+  __tree_node_base *p_Var2;
+  char cVar3;
+  char cVar4;
+  char cVar5;
+  size_t sVar6;
+  __tree_node_base *p_Var7;
+  long *plVar8;
+  long lVar9;
+  uint uVar10;
+  __tree_node_base _Var11;
+  long lVar12;
+  bool bVar13;
+  int iVar14;
+  ulong in_x0;
+  ulong uVar15;
+  undefined8 uVar16;
+  long lVar17;
+  size_t sVar18;
+  __tree_node_base *p_Var19;
+  __tree_node_base *p_Var20;
+  byte extraout_w1;
+  __tree<std::string,std::less<void>,std::allocator<std::string>> *in_x2;
+  IncFsFileMap *pIVar21;
+  __tree_node_base *p_Var22;
+  ulong uVar23;
+  __tree<std::string,std::less<void>,std::allocator<std::string>> *p_Var24;
+  ulong uVar25;
+  short *psVar26;
+  __tree_node_base *p_Var27;
+  __tree_node_base *p_Var28;
+  long *plVar29;
+  long *plVar30;
+  __tree_node_base *p_Var31;
+  __tree_node_base *p_Var32;
+  __tree_end_node *p_Stack_148;
+  undefined8 uStack_140;
+  undefined8 uStack_138;
+  undefined8 uStack_130;
+  undefined8 uStack_128;
+  undefined8 uStack_120;
+  long lStack_118;
+  undefined1 *puStack_110;
+  code *pcStack_108;
+  __tree<std::string,std::less<void>,std::allocator<std::string>> *local_88;
+  __tree<std::string,std::less<void>,std::allocator<std::string>> *p_Stack_80;
+  __tree<std::string,std::less<void>,std::allocator<std::string>> *local_78;
+  IncFsFileMap *local_70;
+  __tree<std::string,std::less<void>,std::allocator<std::string>> *local_68;
+  int local_60;
+  long local_58;
+  
+  lVar12 = tpidr_el0;
+  local_58 = *(long *)(lVar12 + 0x28);
+  plVar30 = *(long **)(in_x0 + 0x298);
+  if (plVar30 != (long *)0x0) {
+    do {
+      ResStringPool::stringAt(in_x0);
+      if ((local_60 == 0) && (local_70 != (IncFsFileMap *)0x0)) {
+        if (local_68 != (__tree<std::string,std::less<void>,std::allocator<std::string>> *)0x0) {
+          if (local_68 ==
+              (__tree<std::string,std::less<void>,std::allocator<std::string>> *)0xffffffffffffffff)
+          {
+            lVar17 = std::string::__throw_out_of_range_abi_nn200000_();
+            pcStack_108 = CollectLocales;
+            lVar12 = tpidr_el0;
+            lStack_118 = *(long *)(lVar12 + 0x28);
+            plVar30 = *(long **)(lVar17 + 0x298);
+            puStack_110 = &stack0xffffffffffffffb0;
+            if (plVar30 != (long *)0x0) {
+              p_Var2 = (__tree_node_base *)(in_x2 + 8);
+              do {
+                lVar9 = plVar30[7];
+                for (lVar17 = plVar30[6]; lVar17 != lVar9; lVar17 = lVar17 + 0x58) {
+                  if (*(int *)(lVar17 + 0x20) != 0) {
+                    uStack_120 = 0;
+                    uStack_138 = 0;
+                    uStack_140 = 0;
+                    uStack_128 = 0;
+                    uStack_130 = 0;
+                    ResTable_config::getBcp47Locale
+                              ((ResTable_config *)(lVar17 + 0x18),(char *)&uStack_140,
+                               (bool)(extraout_w1 & 1));
+                    sVar18 = strlen((char *)&uStack_140);
+                    p_Var27 = *(__tree_node_base **)p_Var2;
+                    p_Var19 = p_Var2;
+                    p_Var22 = p_Var2;
+                    if (p_Var27 != (__tree_node_base *)0x0) {
+                      do {
+                        uVar23 = (ulong)((byte)p_Var27[0x20] >> 1);
+                        p_Var28 = p_Var27 + 0x21;
+                        if (((byte)p_Var27[0x20] & 1) != 0) {
+                          uVar23 = *(ulong *)(p_Var27 + 0x28);
+                          p_Var28 = *(__tree_node_base **)(p_Var27 + 0x30);
+                        }
+                        sVar6 = uVar23;
+                        if (sVar18 <= uVar23) {
+                          sVar6 = sVar18;
+                        }
+                        iVar14 = memcmp(&uStack_140,p_Var28,sVar6);
+                        cVar5 = '\x01';
+                        if (iVar14 < 0) {
+                          cVar5 = -1;
+                        }
+                        cVar3 = '\x01';
+                        if (sVar18 < uVar23) {
+                          cVar3 = -1;
+                        }
+                        cVar4 = '\0';
+                        if (sVar18 != uVar23) {
+                          cVar4 = cVar3;
+                        }
+                        if (iVar14 == 0) {
+                          cVar5 = cVar4;
+                        }
+                        if (cVar5 < '\x01') {
+                          p_Var19 = p_Var27;
+                        }
+                        p_Var27 = *(__tree_node_base **)(p_Var27 + (ulong)('\0' < cVar5) * 8);
+                      } while (p_Var27 != (__tree_node_base *)0x0);
+                      if (p_Var19 != p_Var2) {
+                        _Var11 = p_Var19[0x20];
+                        sVar6 = (ulong)((byte)_Var11 >> 1);
+                        if (((byte)_Var11 & 1) != 0) {
+                          sVar6 = *(size_t *)(p_Var19 + 0x28);
+                        }
+                        p_Var22 = p_Var19;
+                        if (sVar18 == sVar6) {
+                          p_Var27 = p_Var19 + 0x21;
+                          if (((byte)_Var11 & 1) != 0) {
+                            p_Var27 = *(__tree_node_base **)(p_Var19 + 0x30);
+                          }
+                          iVar14 = memcmp(&uStack_140,p_Var27,sVar18);
+                          if (iVar14 == 0) goto LAB_00169e40;
+                        }
+                      }
+                    }
+                    p_Var19 = operator_new(0x38);
+                    if (0xfffffffffffffff7 < sVar18) {
+                    /* WARNING: Subroutine does not return */
+                      std::string::__throw_length_error_abi_nn200000_();
+                    }
+                    if (sVar18 < 0x17) {
+                      p_Var27 = p_Var19 + 0x21;
+                      p_Var19[0x20] = SUB41((int)sVar18 << 1,0);
+                      if (sVar18 != 0) goto LAB_00169fa0;
+                    }
+                    else {
+                      uVar23 = 0x1a;
+                      if ((sVar18 | 7) != 0x17) {
+                        uVar23 = (sVar18 | 7) + 1;
+                      }
+                      p_Var27 = operator_new(uVar23);
+                      *(size_t *)(p_Var19 + 0x28) = sVar18;
+                      *(__tree_node_base **)(p_Var19 + 0x30) = p_Var27;
+                      *(ulong *)(p_Var19 + 0x20) = uVar23 | 1;
+LAB_00169fa0:
+                      memcpy(p_Var27,&uStack_140,sVar18);
+                    }
+                    p_Var27[sVar18] = (__tree_node_base)0x0;
+                    p_Stack_148 = (__tree_end_node *)0x0;
+                    p_Var27 = p_Var22;
+                    if (p_Var2 == p_Var22) {
+LAB_0016a030:
+                      p_Var28 = *(__tree_node_base **)p_Var22;
+                      if (*(__tree_node_base **)in_x2 == p_Var22) {
+LAB_0016a0d8:
+                        if (p_Var28 == (__tree_node_base *)0x0) {
+                          p_Var28 = *(__tree_node_base **)p_Var22;
+                          p_Var20 = p_Var22;
+                          p_Var27 = p_Var22;
+                        }
+                        else {
+                          p_Var20 = p_Var27 + 8;
+                          p_Var28 = *(__tree_node_base **)p_Var20;
+                        }
+                      }
+                      else {
+                        p_Var20 = p_Var22;
+                        p_Var7 = p_Var28;
+                        if (p_Var28 == (__tree_node_base *)0x0) {
+                          do {
+                            p_Var27 = *(__tree_node_base **)(p_Var20 + 0x10);
+                            bVar13 = p_Var20 == *(__tree_node_base **)p_Var27;
+                            p_Var20 = p_Var27;
+                          } while (bVar13);
+                        }
+                        else {
+                          do {
+                            p_Var27 = p_Var7;
+                            p_Var7 = *(__tree_node_base **)(p_Var27 + 8);
+                          } while (*(__tree_node_base **)(p_Var27 + 8) != (__tree_node_base *)0x0);
+                        }
+                        uVar23 = (ulong)((byte)p_Var27[0x20] >> 1);
+                        p_Var20 = p_Var27 + 0x21;
+                        if (((byte)p_Var27[0x20] & 1) != 0) {
+                          uVar23 = *(ulong *)(p_Var27 + 0x28);
+                          p_Var20 = *(__tree_node_base **)(p_Var27 + 0x30);
+                        }
+                        p_Var7 = p_Var19 + 0x21;
+                        uVar25 = (ulong)((byte)p_Var19[0x20] >> 1);
+                        if (((byte)p_Var19[0x20] & 1) != 0) {
+                          p_Var7 = *(__tree_node_base **)(p_Var19 + 0x30);
+                          uVar25 = *(ulong *)(p_Var19 + 0x28);
+                        }
+                        sVar18 = uVar25;
+                        if (uVar23 <= uVar25) {
+                          sVar18 = uVar23;
+                        }
+                        iVar14 = memcmp(p_Var20,p_Var7,sVar18);
+                        bVar13 = uVar23 < uVar25;
+                        if (iVar14 != 0) {
+                          bVar13 = iVar14 < 0;
+                        }
+                        if (bVar13) goto LAB_0016a0d8;
+LAB_0016a1c8:
+                        p_Var20 = (__tree_node_base *)
+                                  std::
+                                  __tree<std::string,std::less<void>,std::allocator<std::string>>::
+                                  __find_equal<std::string>
+                                            (in_x2,&p_Stack_148,(string *)(p_Var19 + 0x20));
+                        p_Var28 = *(__tree_node_base **)p_Var20;
+                        p_Var27 = (__tree_node_base *)p_Stack_148;
+                      }
+joined_r0x0016a1e0:
+                      p_Stack_148 = (__tree_end_node *)p_Var27;
+                      if (p_Var28 == (__tree_node_base *)0x0) {
+LAB_0016a224:
+                        *(undefined8 *)p_Var19 = 0;
+                        *(undefined8 *)(p_Var19 + 8) = 0;
+                        *(__tree_end_node **)(p_Var19 + 0x10) = p_Stack_148;
+                        *(__tree_node_base **)p_Var20 = p_Var19;
+                        if (**(long **)in_x2 != 0) {
+                          *(long *)in_x2 = **(long **)in_x2;
+                          p_Var19 = *(__tree_node_base **)p_Var20;
+                        }
+                        std::
+                        __tree_balance_after_insert_abi_nn200000_<std::__tree_node_base<void*>*>
+                                  (*(__tree_node_base **)(in_x2 + 8),p_Var19);
+                        *(long *)(in_x2 + 0x10) = *(long *)(in_x2 + 0x10) + 1;
+                        goto LAB_00169e40;
+                      }
+LAB_0016a1f4:
+                      _Var11 = p_Var19[0x20];
+                    }
+                    else {
+                      _Var11 = p_Var19[0x20];
+                      uVar23 = (ulong)((byte)_Var11 >> 1);
+                      p_Var28 = p_Var19 + 0x21;
+                      if (((byte)_Var11 & 1) != 0) {
+                        uVar23 = *(ulong *)(p_Var19 + 0x28);
+                        p_Var28 = *(__tree_node_base **)(p_Var19 + 0x30);
+                      }
+                      p_Var20 = p_Var22 + 0x21;
+                      uVar25 = (ulong)((byte)p_Var22[0x20] >> 1);
+                      if (((byte)p_Var22[0x20] & 1) != 0) {
+                        p_Var20 = *(__tree_node_base **)(p_Var22 + 0x30);
+                        uVar25 = *(ulong *)(p_Var22 + 0x28);
+                      }
+                      sVar18 = uVar25;
+                      if (uVar23 <= uVar25) {
+                        sVar18 = uVar23;
+                      }
+                      iVar14 = memcmp(p_Var28,p_Var20,sVar18);
+                      bVar13 = uVar23 < uVar25;
+                      if (iVar14 != 0) {
+                        bVar13 = iVar14 < 0;
+                      }
+                      if (bVar13) goto LAB_0016a030;
+                      iVar14 = memcmp(p_Var20,p_Var28,sVar18);
+                      bVar13 = uVar25 < uVar23;
+                      if (iVar14 != 0) {
+                        bVar13 = iVar14 < 0;
+                      }
+                      if (bVar13) {
+                        p_Var31 = p_Var22 + 8;
+                        p_Var32 = *(__tree_node_base **)p_Var31;
+                        p_Var7 = p_Var32;
+                        if (p_Var32 == (__tree_node_base *)0x0) {
+                          do {
+                            p_Var20 = *(__tree_node_base **)(p_Var22 + 0x10);
+                            bVar13 = p_Var22 != *(__tree_node_base **)p_Var20;
+                            p_Var22 = p_Var20;
+                          } while (bVar13);
+                        }
+                        else {
+                          do {
+                            p_Var20 = p_Var7;
+                            p_Var7 = *(__tree_node_base **)p_Var20;
+                          } while (*(__tree_node_base **)p_Var20 != (__tree_node_base *)0x0);
+                        }
+                        if (p_Var20 != p_Var2) {
+                          uVar25 = (ulong)((byte)p_Var20[0x20] >> 1);
+                          p_Var22 = p_Var20 + 0x21;
+                          if (((byte)p_Var20[0x20] & 1) != 0) {
+                            uVar25 = *(ulong *)(p_Var20 + 0x28);
+                            p_Var22 = *(__tree_node_base **)(p_Var20 + 0x30);
+                          }
+                          sVar18 = uVar25;
+                          if (uVar23 <= uVar25) {
+                            sVar18 = uVar23;
+                          }
+                          iVar14 = memcmp(p_Var28,p_Var22,sVar18);
+                          bVar13 = uVar23 < uVar25;
+                          if (iVar14 != 0) {
+                            bVar13 = iVar14 < 0;
+                          }
+                          if (bVar13) goto LAB_0016a1b0;
+                          goto LAB_0016a1c8;
+                        }
+LAB_0016a1b0:
+                        if (p_Var32 == (__tree_node_base *)0x0) {
+                          p_Var28 = *(__tree_node_base **)p_Var31;
+                          p_Var20 = p_Var31;
+                          goto joined_r0x0016a1e0;
+                        }
+                        p_Stack_148 = (__tree_end_node *)p_Var20;
+                        if (*(long *)p_Var20 != 0) goto LAB_0016a1f4;
+                        goto LAB_0016a224;
+                      }
+                    }
+                    if (((byte)_Var11 & 1) != 0) {
+                      operator_delete(*(void **)(p_Var19 + 0x30),
+                                      *(ulong *)(p_Var19 + 0x20) & 0xfffffffffffffffe);
+                    }
+                    operator_delete(p_Var19,0x38);
+                  }
+LAB_00169e40:
+                }
+                plVar30 = (long *)*plVar30;
+              } while (plVar30 != (long *)0x0);
+            }
+            if (*(long *)(lVar12 + 0x28) == lStack_118) {
+              return;
+            }
+                    /* WARNING: Subroutine does not return */
+            __stack_chk_fail();
+          }
+          pIVar21 = local_70;
+          p_Var24 = local_68;
+          psVar26 = &DAT_0012b73a;
+          if ((__tree<std::string,std::less<void>,std::allocator<std::string>> *)0x7 < local_68) {
+            p_Var24 = (__tree<std::string,std::less<void>,std::allocator<std::string>> *)0x8;
+          }
+          do {
+            if (*(short *)pIVar21 != *psVar26) goto LAB_00169be4;
+            p_Var24 = p_Var24 + -1;
+            pIVar21 = pIVar21 + 2;
+            psVar26 = psVar26 + 1;
+          } while (p_Var24 != (__tree<std::string,std::less<void>,std::allocator<std::string>> *)0x0
+                  );
+          if (local_68 == (__tree<std::string,std::less<void>,std::allocator<std::string>> *)0x8)
+          goto LAB_00169c10;
+        }
+      }
+      else {
+LAB_00169c10:
+        ResStringPool::string8At(in_x0);
+        if (((local_60 != 0) || (local_70 == (IncFsFileMap *)0x0)) ||
+           (in_x2 = local_68, iVar14 = strncmp((char *)local_70,"drawable",(size_t)local_68),
+           iVar14 == 0)) {
+          plVar29 = (long *)plVar30[6];
+          plVar8 = (long *)plVar30[7];
+          if (plVar29 != plVar8) {
+            uVar23 = 0;
+            do {
+              if (((*(byte *)((long)plVar29 + 0x35) & 0x30) == 0x20) &&
+                 (uVar10 = *(uint *)(*plVar29 + 0xc), uVar10 != 0)) {
+                uVar25 = 0;
+                do {
+                  local_70 = (IncFsFileMap *)plVar29[1];
+                  local_68 = (__tree<std::string,std::less<void>,std::allocator<std::string>> *)
+                             plVar29[2];
+                  local_78 = (__tree<std::string,std::less<void>,std::allocator<std::string>> *)
+                             (*plVar29 + (ulong)*(ushort *)(*plVar29 + 2) + (uVar25 & 0xffff) * 4);
+                  if ((local_70 == (IncFsFileMap *)0x0) ||
+                     (local_88 = local_78 + 4, p_Stack_80 = local_78,
+                     local_68 <= local_78 && local_88 <= local_68 + 0x1000)) {
+LAB_00169cac:
+                    if ((*(int *)local_78 != -1) && (uVar23 = uVar23 + 1, 0x14 < uVar23)) {
+                      uVar16 = 1;
+                      goto LAB_00169d8c;
+                    }
+                  }
+                  else {
+                    in_x2 = (__tree<std::string,std::less<void>,std::allocator<std::string>> *)
+                            &local_88;
+                    uVar15 = incfs::IncFsFileMap::Verify
+                                       (local_70,(uchar **)&p_Stack_80,(uchar **)in_x2,
+                                        (uchar **)&local_68);
+                    if ((uVar15 & 1) != 0) goto LAB_00169cac;
+                  }
+                  uVar1 = (int)uVar25 + 1;
+                  uVar25 = (ulong)uVar1;
+                } while ((uVar1 & 0xffff) < uVar10);
+              }
+              plVar29 = plVar29 + 0xb;
+            } while (plVar29 != plVar8);
+          }
+        }
+      }
+LAB_00169be4:
+      plVar30 = (long *)*plVar30;
+    } while (plVar30 != (long *)0x0);
+  }
+  uVar16 = 0;
+LAB_00169d8c:
+  if (*(long *)(lVar12 + 0x28) == local_58) {
+    return;
+  }
+                    /* WARNING: Subroutine does not return */
+  __stack_chk_fail(uVar16);
+}
+
+ (GhidraScript)  
+INFO  DumpDarkMode.java> ==== IsDarkModeSupported @ 0021f4a8 (GhidraScript)  
+INFO  DumpDarkMode.java> 
+void android::LoadedPackage::IsDarkModeSupported(void)
+
+{
+  (*(code *)PTR_IsDarkModeSupported_00225dc8)();
+  return;
+}
+
+ (GhidraScript)  
+INFO  DumpDarkMode.java> total matched functions: 3 (GhidraScript)  
+INFO  ANALYZING changes made by post scripts: file:///D:/%E4%B8%8B%E8%BD%BD/Claude Code/%E6%9D%82%E9%A1%B9/K60%E6%B7%B1%E8%89%B2%E6%A8%A1%E5%BC%8F%E5%88%86%E6%9E%90/%E5%88%86%E5%8C%BA/system_a/system_a/system/lib64/libandroidfw.so (HeadlessAnalyzer)  
+INFO  REPORT: Post-analysis succeeded for file: file:///D:/%E4%B8%8B%E8%BD%BD/Claude Code/%E6%9D%82%E9%A1%B9/K60%E6%B7%B1%E8%89%B2%E6%A8%A1%E5%BC%8F%E5%88%86%E6%9E%90/%E5%88%86%E5%8C%BA/system_a/system_a/system/lib64/libandroidfw.so (HeadlessAnalyzer)  
+INFO  /libandroidfw.so: file created (梦道) (LocalFileSystem)  
+INFO  REPORT: Save succeeded for: /libandroidfw.so (K60Dark:/libandroidfw.so) (HeadlessAnalyzer)  
+INFO  REPORT: Import succeeded (HeadlessAnalyzer)  

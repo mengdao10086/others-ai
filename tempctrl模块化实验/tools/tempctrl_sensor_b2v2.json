@@ -1,0 +1,258 @@
+{
+ "functions": [
+  {
+   "name": "read_single_status",
+   "start": 7,
+   "end": 37,
+   "lines": 31,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "close(",
+    "fclose",
+    "fgets",
+    "fopen",
+    "open("
+   ],
+   "body": "\n    *out_connected = 0;\n    *out_connected_at = 0;\n    if (out_model) *out_model = 0;\n    FILE *f = fopen(path,    );\n    if (!f) return;\n    char line[64];\n    while (fgets(line, sizeof(line), f)) {\n        const char *v;\n        if ((v = status_field_value(line, STF_BLE)) != NULL) {\n            int ble = atoi(v);\n            *out_connected = (ble != 0);\n            if (is_b6_file) {\n                if (ble == 1 || ble == 2) b6_owner = ble;\n                 /                                                    \n            } else if (out_model && (ble == 6 || ble == 7)) {\n                *out_model = ble;    /           \n            }\n        } else if ((v = status_field_value(line, STF_CONNECTED_AT)) != NULL) {\n            *out_connected_at = (time_t)atol(v);\n        } else if ((v = status_field_value(line, STF_BLE_OWNER_LAST)) != NULL) {\n            int owner = 0;\n            long at = 0;\n            if (sscanf(v,         , &owner, &at) == 2 && owner > 0) {\n                if (is_b6_file) { b6_last_owner = owner; b6_last_at = (time_t)at; }\n                else { b7_last_owner = owner; b7_last_at = (time_t)at; }\n            }\n        }\n    }\n    fclose(f);\n",
+   "pure0": false
+  },
+  {
+   "name": "read_status_ble_both",
+   "start": 39,
+   "end": 71,
+   "lines": 33,
+   "static_refs": [],
+   "calls": [
+    "read_single_status"
+   ],
+   "io": [],
+   "body": "\n     /                                                               \n     /                                                               \n    int b6_fresh = status_meta_valid && status_meta_seq == status_seq && status_meta_is_b6;\n    int b7_fresh = status_meta_valid && status_meta_seq == status_seq && !status_meta_is_b6;\n\n    if (b6_fresh) {\n        b6_connected = meta_connected;\n        b6_connected_at = meta_connected_at;\n        b6_model = 0;                                    /                                     \n        if (meta_owner_ble) b6_owner = meta_owner_ble;   /                        \n        if (meta_last_owner > 0) { b6_last_owner = meta_last_owner; b6_last_at = meta_last_at; }\n    } else {\n        read_single_status(status_file_path_b6, 1, &b6_connected, &b6_connected_at, &b6_model);\n    }\n\n    if (b7_fresh) {\n        b7_connected = meta_connected;\n        b7_connected_at = meta_connected_at;\n        b7_model = meta_model;                           /                  \n        if (meta_last_owner > 0) { b7_last_owner = meta_last_owner; b7_last_at = meta_last_at; }\n    } else {\n        read_single_status(status_file_path_b7, 0, &b7_connected, &b7_connected_at, &b7_model);\n    }\n     /                                                      \n    if (b6_connected && b6_model == 0) b6_model = 6;\n     /                                  \n    if (b7_connected && b7_model == 0) b7_model = 7;\n     /                                       \n     /                                                   \n    if (b7_last_at > b6_last_at) { last_owner = b7_last_owner; last_owner_at = b7_last_at; }\n    else { last_owner = b6_last_owner; last_owner_at = b6_last_at; }\n",
+   "pure0": true
+  },
+  {
+   "name": "select_active_device",
+   "start": 73,
+   "end": 84,
+   "lines": 12,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n    if (b6_connected && !b7_connected) return DEVICE_B6X;\n    if (!b6_connected && b7_connected) return DEVICE_B7X;\n    if (!b6_connected && !b7_connected) return DEVICE_NONE;\n\n     /           \n    if (b6_connected_at > 0 && b7_connected_at > 0)\n        return (b6_connected_at <= b7_connected_at) ? DEVICE_B6X : DEVICE_B7X;\n    if (b6_connected_at > 0) return DEVICE_B6X;   /             \n    if (b7_connected_at > 0) return DEVICE_B7X;   /             \n    return DEVICE_B6X;   /             \n",
+   "pure0": true
+  },
+  {
+   "name": "update_active_limits",
+   "start": 86,
+   "end": 104,
+   "lines": 19,
+   "static_refs": [],
+   "calls": [],
+   "io": [],
+   "body": "\n     /                                \n     /                                                            \n    int model = (active_device == DEVICE_B7X) ? b7_model : b6_model;\n    if (model != 6 && model != 7)\n        model = (active_device == DEVICE_B7X) ? 7 : 6;   /          \n    if (model == 7) {\n        active_fan_max  = b7_fan_rpm_max;     /                               \n        active_pid_cold_max = b7_pid_cold_max;  /                                \n    } else {\n        active_fan_max  = fan_rpm_max;         /                      \n        active_pid_cold_max = pid_cold_max;    /                      \n    }\n     /                                     \n     /                                                                     \n    hot_derate = 0;\n    hot_derate_cooldown = 0;\n    hot_recover_cooldown = 0;\n",
+   "pure0": true
+  },
+  {
+   "name": "read_cooler_params",
+   "start": 106,
+   "end": 204,
+   "lines": 99,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "close(",
+    "fclose",
+    "fgets",
+    "fopen",
+    "fstat",
+    "open(",
+    "stat("
+   ],
+   "body": "\n    const char *path = (active_device == DEVICE_B7X) ? status_file_path_b7 : status_file_path_b6;\n    const int is_b6_path = (active_device != DEVICE_B7X);\n    active_status_mtime = 0;    /                 \n    status_meta_valid = 0;      /                  \n\n     /                                             \n    meta_connected = 0; meta_connected_at = 0; meta_model = 0;\n    meta_owner_ble = 0; meta_last_owner = 0; meta_last_at = 0;\n\n    cooler_hot_temp = -1; cooler_cold_temp = -1;\n    cooler_rpm_real = -1; cooler_rpm_run = -1; cooler_cold_real = -1; cooler_cold_run = -1;\n\n    FILE *f = fopen(path,    );\n    if (!f) {    /                                  \n        invalidate_report_ok();\n        return;\n    }\n    {    /                                              \n        struct stat fst;\n        if (fstat(fileno(f), &fst) == 0) active_status_mtime = fst.st_mtime;\n    }\n    char line[64];\n    int run_mode_seen = 0;    /                                                        \n    int rpm_run_seen = 0;     /                                     \n    while (fgets(line, sizeof(line), f)) {\n        const char *v;\n        if ((v = status_field_value(line, STF_BLE)) != NULL) {\n            int ble = atoi(v);\n            app_ble_connected = (ble != 0);\n            meta_connected = (ble != 0);\n            if (is_b6_path) {\n                if (ble == 1 || ble == 2) meta_owner_ble = ble;\n            } else if (ble == 6 || ble == 7) {\n                meta_model = ble;\n            }\n        } else if ((v = status_field_value(line, STF_CONNECTED_AT)) != NULL) {\n            meta_connected_at = (time_t)atol(v);\n        } else if ((v = status_field_value(line, STF_BLE_OWNER_LAST)) != NULL) {\n            int owner = 0;\n            long at = 0;\n            if (sscanf(v,         , &owner, &at) == 2 && owner > 0) {\n                meta_last_owner = owner;\n                meta_last_at = (time_t)at;\n            }\n        } else if ((v = status_field_value(line, STF_HOT_TEMP)) != NULL) {\n            cooler_hot_temp = atoi(v);\n        } else if ((v = status_field_value(line, STF_COLD_TEMP)) != NULL) {\n            cooler_cold_temp = atoi(v);\n        } else if (status_field_value(line, STF_RUN_MODE) != NULL) {\n            run_mode_seen = 1;\n        } else if ((v = status_field_value(line, STF_RPM_REAL)) != NULL) {\n            cooler_rpm_real = atoi(v);\n        } else if ((v = status_field_value(line, STF_RPM_RUN)) != NULL) {\n             /                                          \n            rpm_run_seen = 1;\n            char *end = NULL;\n            long run_rpm = strtol(v, &end, 10);\n            while (*end ==     || *end ==      || *end ==     ) end++;\n            cooler_rpm_run = (end != v && *end ==      && run_rpm >= 0) ? (int)run_rpm : -1;\n        } else if ((v = status_field_value(line, STF_COLD_REAL)) != NULL) {\n            cooler_cold_real = atoi(v);\n        } else if ((v = status_field_value(line, STF_COLD_RUN)) != NULL) {\n             /                              \n            char *end = NULL;\n            long run = strtol(v, &end, 10);\n            while (*end ==     || *end ==      || *end ==     ) end++;\n            cooler_cold_run = (end != v && *end ==      && run >= 0) ? (int)run : -1;\n        }\n    }\n    fclose(f);\n\n     /                                                       \n    status_meta_is_b6 = is_b6_path;\n    status_meta_seq = status_seq;\n    status_meta_valid = 1;\n\n     /                                                            \n     /                           \n    if (run_mode_seen && app_ble_connected && !rpm_run_seen) {\n        if (rpm_run_missing_streak < 3) rpm_run_missing_streak++;\n        if (rpm_run_missing_streak >= 3 && !rpm_run_missing_logged) {\n            rpm_run_missing_logged = 1;\n            write_log(                                                     );\n        }\n    } else if (rpm_run_seen) {\n        rpm_run_missing_streak = 0;\n    }\n\n     /                                                   \n     /                                                            \n    int frame_ok = (run_mode_seen && cooler_cold_real >= COLD_MIN && cooler_rpm_real >= fan_rpm_min);\n    if (frame_ok) {\n        if (report_ok_streak < REPORT_OK_N) report_ok_streak++;\n        if (report_ok_streak >= REPORT_OK_N) report_ok = 1;\n    } else {\n        invalidate_report_ok();    /                        \n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "read_sysfs_int",
+   "start": 206,
+   "end": 216,
+   "lines": 11,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "close(",
+    "fclose",
+    "fopen",
+    "open("
+   ],
+   "body": "\n    FILE *f = fopen(path,    );\n    if (!f) return -1;\n    int val;\n    if (fscanf(f,     , &val) != 1) {\n        fclose(f);\n        return -1;\n    }\n    fclose(f);\n    return val;\n",
+   "pure0": false
+  },
+  {
+   "name": "read_thermal_zone_raw",
+   "start": 218,
+   "end": 224,
+   "lines": 7,
+   "static_refs": [],
+   "calls": [
+    "read_sysfs_int"
+   ],
+   "io": [
+    "printf",
+    "snprintf"
+   ],
+   "body": "\n    char path[128];\n    snprintf(path, sizeof(path), CPU_TEMP_PATH_FMT, zone_id);\n    int raw = read_sysfs_int(path);\n    if (raw <= 0 || raw > 150000) return -1;\n    return raw;\n",
+   "pure0": false
+  },
+  {
+   "name": "read_battery_temp",
+   "start": 226,
+   "end": 254,
+   "lines": 29,
+   "static_refs": [],
+   "calls": [
+    "read_sysfs_int"
+   ],
+   "io": [
+    "stat("
+   ],
+   "body": "\n     /                                                            \n    int raw = read_sysfs_int(BATT_TEMP_PATH);\n    if (raw < 0) {\n        batt_temp_updated = 0;\n        return -1;\n    }\n    int val = raw / BATT_TEMP_DIVISOR;\n    debug_log(debug_sensor,                                      ,\n              raw, BATT_TEMP_DIVISOR, val, val / 10.0);\n     /                                                           \n     /                                                          \n    int mtime_changed = 0;\n    if (val != batt_cached_temp) {\n        batt_mtime_stale = 1;\n    } else {\n        struct stat st;\n        if (stat(BATT_TEMP_PATH, &st) == 0) {\n            if (st.st_mtime != batt_temp_mtime) {\n                if (!batt_mtime_stale) mtime_changed = 1;\n                batt_temp_mtime = st.st_mtime;\n            }\n            batt_mtime_stale = 0;\n        }\n    }\n    batt_temp_updated = (val != batt_cached_temp) || mtime_changed;\n    batt_cached_temp = val;\n    return val;\n",
+   "pure0": false
+  },
+  {
+   "name": "close_cpu_zone_fds",
+   "start": 256,
+   "end": 266,
+   "lines": 11,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "close("
+   ],
+   "body": "\n    if (!cpu_zone_fd_inited) {\n        for (int i = 0; i < CPU_ZONE_MAX_CACHE; i++) cpu_zone_fd[i] = CPU_ZONE_FD_INVALID;\n        cpu_zone_fd_inited = 1;\n        return;\n    }\n    for (int i = 0; i < CPU_ZONE_MAX_CACHE; i++) {\n        if (cpu_zone_fd[i] >= 0) close(cpu_zone_fd[i]);\n        cpu_zone_fd[i] = CPU_ZONE_FD_INVALID;\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "refresh_cpu_zone_fds",
+   "start": 268,
+   "end": 275,
+   "lines": 8,
+   "static_refs": [],
+   "calls": [
+    "close_cpu_zone_fds"
+   ],
+   "io": [
+    "open(",
+    "printf",
+    "snprintf"
+   ],
+   "body": "\n    close_cpu_zone_fds();\n    for (int i = 0; i < cpu_zone_count && i < CPU_ZONE_MAX_CACHE; i++) {\n        char path[128];\n        snprintf(path, sizeof(path), CPU_TEMP_PATH_FMT, cpu_zone_cache[i]);\n        cpu_zone_fd[i] = open(path, O_RDONLY | O_CLOEXEC);    /                                                               \n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "read_kept_zone_raw",
+   "start": 277,
+   "end": 294,
+   "lines": 18,
+   "static_refs": [],
+   "calls": [
+    "read_thermal_zone_raw"
+   ],
+   "io": [
+    "close(",
+    "read("
+   ],
+   "body": "\n    if (idx >= 0 && idx < CPU_ZONE_MAX_CACHE && cpu_zone_fd[idx] >= 0) {\n        char rbuf[32];\n        if (lseek(cpu_zone_fd[idx], 0, SEEK_SET) != (off_t)-1) {\n            ssize_t n = read(cpu_zone_fd[idx], rbuf, sizeof(rbuf) - 1);\n            if (n > 0) {\n                rbuf[n] =     ;\n                int raw = atoi(rbuf);\n                if (raw <= 0 || raw > 150000) return -1;    /                            \n                return raw;\n            }\n        }\n         /                               \n        close(cpu_zone_fd[idx]);\n        cpu_zone_fd[idx] = CPU_ZONE_FD_INVALID;\n    }\n    return read_thermal_zone_raw(cpu_zone_cache[idx]);\n",
+   "pure0": false
+  },
+  {
+   "name": "close_valid_zone_fds",
+   "start": 296,
+   "end": 305,
+   "lines": 10,
+   "static_refs": [],
+   "calls": [],
+   "io": [
+    "close("
+   ],
+   "body": "\n    if (!cpu_zone_valid_fd_inited) {\n        for (int i = 0; i < CPU_ZONE_MAX_CACHE; i++) cpu_zone_valid_fd[i] = CPU_ZONE_FD_INVALID;\n        cpu_zone_valid_fd_inited = 1;\n    }\n    for (int i = 0; i < CPU_ZONE_MAX_CACHE; i++) {\n        if (cpu_zone_valid_fd[i] >= 0) close(cpu_zone_valid_fd[i]);\n        cpu_zone_valid_fd[i] = CPU_ZONE_FD_INVALID;\n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "refresh_valid_zone_fds",
+   "start": 307,
+   "end": 314,
+   "lines": 8,
+   "static_refs": [],
+   "calls": [
+    "close_valid_zone_fds"
+   ],
+   "io": [
+    "open(",
+    "printf",
+    "snprintf"
+   ],
+   "body": "\n    close_valid_zone_fds();\n    for (int i = 0; i < cpu_zone_valid_count && i < CPU_ZONE_MAX_CACHE; i++) {\n        char path[128];\n        snprintf(path, sizeof(path), CPU_TEMP_PATH_FMT, cpu_zone_valid[i]);\n        cpu_zone_valid_fd[i] = open(path, O_RDONLY | O_CLOEXEC);    /                  \n    }\n",
+   "pure0": false
+  },
+  {
+   "name": "read_valid_zone_raw",
+   "start": 316,
+   "end": 332,
+   "lines": 17,
+   "static_refs": [],
+   "calls": [
+    "read_thermal_zone_raw"
+   ],
+   "io": [
+    "close(",
+    "read("
+   ],
+   "body": "\n    if (idx >= 0 && idx < cpu_zone_valid_count && cpu_zone_valid_fd[idx] >= 0) {\n        char rbuf[32];\n        if (lseek(cpu_zone_valid_fd[idx], 0, SEEK_SET) != (off_t)-1) {\n            ssize_t n = read(cpu_zone_valid_fd[idx], rbuf, sizeof(rbuf) - 1);\n            if (n > 0) {\n                rbuf[n] =     ;\n                int raw = atoi(rbuf);\n                if (raw <= 0 || raw > 150000) return -1;    /                            \n                return raw;\n            }\n        }\n        close(cpu_zone_valid_fd[idx]);\n        cpu_zone_valid_fd[idx] = CPU_ZONE_FD_INVALID;\n    }\n    return read_thermal_zone_raw(cpu_zone_valid[idx]);\n",
+   "pure0": false
+  },
+  {
+   "name": "rescan_cpu_zones",
+   "start": 334,
+   "end": 392,
+   "lines": 59,
+   "static_refs": [],
+   "calls": [
+    "read_thermal_zone_raw",
+    "read_valid_zone_raw",
+    "refresh_cpu_zone_fds",
+    "refresh_valid_zone_fds"
+   ],
+   "io": [],
+   "body": "\n    time_t now = mono_now();    /          \n    ZoneReading readings[CPU_ZONE_MAX_CACHE];\n    int count = 0;\n\n    if (!cpu_zone_scanned || cpu_zone_list_dirty) {\n         /                                               \n        for (int i = CPU_ZONE_MIN; i <= CPU_ZONE_MAX; i++) {\n            int raw = read_thermal_zone_raw(i);\n            if (raw < 0) continue;\n            if (count < CPU_ZONE_MAX_CACHE) {\n                readings[count].id  = i;\n                readings[count].raw = raw;\n                count++;\n            }\n        }\n        cpu_zone_valid_count = count;\n        for (int i = 0; i < count; i++) cpu_zone_valid[i] = readings[i].id;\n        cpu_zone_list_dirty = 0;\n        refresh_valid_zone_fds();    /                                         \n    } else {\n         /                                     \n         /                                   \n        for (int i = 0; i < cpu_zone_valid_count; i++) {\n            int raw = read_valid_zone_raw(i);\n            if (raw < 0) continue;\n            if (count < CPU_ZONE_MAX_CACHE) {\n                readings[count].id  = cpu_zone_valid[i];\n                readings[count].raw = raw;\n                count++;\n            }\n        }\n    }\n\n     /                                \n    qsort(readings, count, sizeof(ZoneReading), cmp_zone_desc);\n    int keep = count < cpu_zone_keep ? count : cpu_zone_keep;\n     /                                                 \n     /                       \n    int keep_same = cpu_zone_fd_inited && (keep == cpu_zone_count);\n    for (int i = 0; keep_same && i < keep; i++) {\n        if (readings[i].id != cpu_zone_cache[i] || cpu_zone_fd[i] < 0) keep_same = 0;\n    }\n    for (int i = 0; i < keep; i++)\n        cpu_zone_cache[i] = readings[i].id;\n    cpu_zone_count = keep;\n    if (!keep_same)\n        refresh_cpu_zone_fds();    /                                \n    cpu_zone_scanned = 1;\n    cpu_zone_last_scan = now;\n\n    if (keep == 0) {\n        debug_log(debug_sensor,                                             ,\n                  CPU_TEMP_PATH_FMT);\n    } else {\n        debug_log(debug_sensor,                                                       ,\n                  count, keep, cpu_zone_rescan_cycles, cpu_zone_rescan_cycles * 5);\n    }\n",
+   "pure0": true
+  },
+  {
+   "name": "maybe_rescan_cpu_zones",
+   "start": 394,
+   "end": 403,
+   "lines": 10,
+   "static_refs": [],
+   "calls": [
+    "rescan_cpu_zones"
+   ],
+   "io": [],
+   "body": "\n    if (cpu_zone_list_dirty) {    /                     \n        rescan_cpu_zones();\n        return;\n    }\n    if (!cpu_zone_scanned) return;    /                             \n    time_t now = mono_now();\n    if (now - cpu_zone_last_scan < (time_t)cpu_zone_rescan_cycles * 5) return;\n    rescan_cpu_zones();\n",
+   "pure0": true
+  },
+  {
+   "name": "read_cpu_temp_max",
+   "start": 405,
+   "end": 424,
+   "lines": 20,
+   "static_refs": [],
+   "calls": [
+    "read_kept_zone_raw",
+    "rescan_cpu_zones"
+   ],
+   "io": [],
+   "body": "\n     /                         \n     /                                                     \n    if (!cpu_zone_scanned) rescan_cpu_zones();\n\n     /                                       \n    int max_temp = -1;\n    for (int j = 0; j < cpu_zone_count; j++) {\n        int raw = read_kept_zone_raw(j);\n        if (raw < 0) continue;\n\n        int decic = raw / CPU_TEMP_DIVISOR;\n        if (decic > max_temp) max_temp = decic;\n    }\n    if (max_temp >= 0) {\n        debug_log(debug_sensor,                                   ,\n                  cpu_zone_count, max_temp, max_temp / 10.0);\n    }\n    return max_temp;\n",
+   "pure0": true
+  }
+ ],
+ "statics": []
+}
