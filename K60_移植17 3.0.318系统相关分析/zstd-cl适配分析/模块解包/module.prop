@@ -1,0 +1,6 @@
+id=zstd_cl
+name=Xiaomi 18 Pro zstd-cl Injector
+version=v1.2
+versionCode=12
+author=嘟嘟ski
+description=Injects the zstd-cl compression backend into the vendor zram (6.18 zcomp architecture) via kretprobes on lookup_backend_ops/zcomp_available_show. Vendor zram untouched, qpace hardware backends preserved. algorithm_params readback+hints: cat /sys/module/zstd_cl/parameters/help (usage) and /status (live per-priority algo/level/dict). Verified: 1MB integrity OK (23.5x), huge-page OK, 326MB stress OK, 0 oops. Uninstall + reboot restores stock.
