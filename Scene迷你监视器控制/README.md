@@ -31,14 +31,14 @@ JAVA_HOME=D:/tools/jdk-17.0.2 ./gradlew :app:assembleRelease
 
 ## 日志
 
-日志统一走 `SceneLog`，`ENABLED=false` 默认关闭，release 构建由编译期常量折叠剔除日志代码与字符串。排查时改 `SceneLog.ENABLED = true` 重新编译，输出到 LSPosed 日志，tag 为 `SceneMonitor`。
+状态/触发日志经 `Logs.status` 直出，同一 key 5 分钟内最多一次（`生效` / `降级` / `不可用` 分类各自计时）；debug 日志走 `Logs.d`，`ENABLED=false` 时编译期剔除。输出 tag 为 `SceneMonitor`。
 
 ## 代码结构
 
 ```
 app/src/main/java/com/mengdao/scenemonitor/
 ├─ SceneMonitorModule.java              # 单入口，仅处理 com.omarea.vtools 主进程
-├─ SceneLog.java                        # 日志开关（ENABLED=false）
+├─ Logs.java                        # 日志开关（ENABLED=false）
 └─ hook/
    ├─ SceneHooks.java                   # 功能级 try/catch
    ├─ MiniMonitorScreenshotSkipHook.java # SKIP_SCREENSHOT 截屏排除

@@ -1,6 +1,6 @@
 package com.mengdao.scenemonitor.hook;
 
-import com.mengdao.scenemonitor.SceneLog;
+import com.mengdao.scenemonitor.Logs;
 
 /**
  * Scene（com.omarea.vtools）的 Hook 组。
@@ -16,17 +16,13 @@ public final class SceneHooks {
         try {
             MiniMonitorRefreshDelayHook.install();
         } catch (Throwable t) {
-            if (SceneLog.ENABLED) {
-                SceneLog.d("MiniMonitorRefreshDelayHook failed", t);
-            }
+            Logs.status("scene.group:refresh-install", "MiniMonitorRefreshDelayHook failed", t);
         }
 
         try {
             MiniMonitorScreenshotSkipHook.install(classLoader);
         } catch (Throwable t) {
-            if (SceneLog.ENABLED) {
-                SceneLog.d("MiniMonitorScreenshotSkipHook failed", t);
-            }
+            Logs.status("scene.group:screenshot-install", "MiniMonitorScreenshotSkipHook failed", t);
         }
     }
 }

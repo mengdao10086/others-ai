@@ -1,6 +1,6 @@
 package com.mengdao.scenemonitor.hook;
 
-import com.mengdao.scenemonitor.SceneLog;
+import com.mengdao.scenemonitor.Logs;
 
 import java.lang.reflect.Method;
 import java.util.Timer;
@@ -38,8 +38,9 @@ public final class MiniMonitorRefreshDelayHook {
         Method schedule = XposedHelpers.findMethodExactIfExists(
                 Timer.class, "schedule", TimerTask.class, long.class, long.class);
         if (schedule == null) {
-            if (SceneLog.ENABLED && sMissingLogged.compareAndSet(false, true)) {
-                SceneLog.d("Timer.schedule(TimerTask,long,long) not found, skip");
+            if (sMissingLogged.compareAndSet(false, true)) {
+                Logs.status("scene.refresh:不可用",
+                        "Timer.schedule(TimerTask,long,long) not found, skip");
             }
             return;
         }
@@ -60,13 +61,14 @@ public final class MiniMonitorRefreshDelayHook {
                         return;
                     }
                     param.args[1] = 0L;
-                    if (SceneLog.ENABLED && sAppliedLogged.compareAndSet(false, true)) {
-                        SceneLog.d("Scene mini monitor initial delay skipped");
+                    if (sAppliedLogged.compareAndSet(false, true)) {
+                        Logs.status("scene.refresh:生效",
+                                "Scene mini monitor initial delay skipped");
                     }
                 } catch (Throwable t) {
                     // 任何异常都不改变原 Timer 调用。
-                    if (SceneLog.ENABLED && sHookErrorLogged.compareAndSet(false, true)) {
-                        SceneLog.d("Timer.schedule hook error", t);
+                    if (sHookErrorLogged.compareAndSet(false, true)) {
+                        Logs.status("scene.refresh:hook-error", "Timer.schedule hook error", t);
                     }
                 }
             }

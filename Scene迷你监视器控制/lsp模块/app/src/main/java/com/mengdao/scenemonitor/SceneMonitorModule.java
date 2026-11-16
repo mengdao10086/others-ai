@@ -27,9 +27,7 @@ public final class SceneMonitorModule implements IXposedHookLoadPackage {
         try {
             SceneHooks.install(lpparam.classLoader);
         } catch (Throwable t) {
-            if (SceneLog.ENABLED) {
-                SceneLog.d("scene group failed", t);
-            }
+            Logs.status("scene.group:install", "scene group failed", t);
         }
     }
 }
