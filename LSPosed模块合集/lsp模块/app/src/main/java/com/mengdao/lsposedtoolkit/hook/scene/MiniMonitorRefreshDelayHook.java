@@ -22,7 +22,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 public final class MiniMonitorRefreshDelayHook {
 
-    private static final String TAG = "LSPosedToolkit";
     private static final long MINI_MONITOR_INITIAL_DELAY_MS = 2000L;
     private static final long MINI_MONITOR_PERIOD_MS = 1500L;
 
@@ -37,8 +36,8 @@ public final class MiniMonitorRefreshDelayHook {
         Method schedule = XposedHelpers.findMethodExactIfExists(
                 Timer.class, "schedule", TimerTask.class, long.class, long.class);
         if (schedule == null) {
-            if (sMissingLogged.compareAndSet(false, true)) {
-                XposedBridge.log(TAG + ": Timer.schedule(TimerTask,long,long) not found, skip");
+            if (SceneLog.ENABLED && sMissingLogged.compareAndSet(false, true)) {
+                SceneLog.d("Timer.schedule(TimerTask,long,long) not found, skip");
             }
             return;
         }
@@ -59,13 +58,13 @@ public final class MiniMonitorRefreshDelayHook {
                         return;
                     }
                     param.args[1] = 0L;
-                    if (sAppliedLogged.compareAndSet(false, true)) {
-                        XposedBridge.log(TAG + ": Scene mini monitor initial delay skipped");
+                    if (SceneLog.ENABLED && sAppliedLogged.compareAndSet(false, true)) {
+                        SceneLog.d("Scene mini monitor initial delay skipped");
                     }
                 } catch (Throwable t) {
                     // 任何异常都不改变原 Timer 调用。
-                    if (sHookErrorLogged.compareAndSet(false, true)) {
-                        XposedBridge.log(TAG + ": Timer.schedule hook error: " + t);
+                    if (SceneLog.ENABLED && sHookErrorLogged.compareAndSet(false, true)) {
+                        SceneLog.d("Timer.schedule hook error", t);
                     }
                 }
             }

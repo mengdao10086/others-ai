@@ -1,5 +1,9 @@
 # 变更记录
 
+## 2.3.3 — 2026-11-16
+
+- Scene 迷你监视器 hook 日志收口到 `SceneLog`，`ENABLED=false` 默认关闭；release 构建由编译期常量折叠剔除日志代码与字符串，排查包改 true 重编即可输出
+
 ## 未发布 — 2026-11-09
 
 - 新增 Scene 迷你监视器增强（作用域 `com.omarea.vtools`，未发版）：

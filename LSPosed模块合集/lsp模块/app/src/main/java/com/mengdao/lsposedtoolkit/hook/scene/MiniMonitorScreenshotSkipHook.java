@@ -30,8 +30,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 public final class MiniMonitorScreenshotSkipHook {
 
-    private static final String TAG = "LSPosedToolkit";
-
     /**
      * fw_cpu_freq 同时出现在完整监视器 fw_monitor / fw_monitor2 中；
      * fw_mini_col3_value 只属于迷你布局，用它避免误伤完整监视器。
@@ -83,8 +81,8 @@ public final class MiniMonitorScreenshotSkipHook {
             }
         }
 
-        if (sMissingApiLogged.compareAndSet(false, true)) {
-            XposedBridge.log(TAG + ": WindowManagerImpl.addView / ViewRootImpl.setView not found, skip");
+        if (SceneLog.ENABLED && sMissingApiLogged.compareAndSet(false, true)) {
+            SceneLog.d("WindowManagerImpl.addView / ViewRootImpl.setView not found, skip");
         }
     }
 
@@ -138,8 +136,8 @@ public final class MiniMonitorScreenshotSkipHook {
             return;
         }
         if (attempt >= MAX_ATTACH_RETRIES) {
-            if (sSurfaceMissingLogged.compareAndSet(false, true)) {
-                XposedBridge.log(TAG + ": Scene mini monitor surface not found, skip");
+            if (SceneLog.ENABLED && sSurfaceMissingLogged.compareAndSet(false, true)) {
+                SceneLog.d("Scene mini monitor surface not found, skip");
             }
             return;
         }
@@ -223,8 +221,8 @@ public final class MiniMonitorScreenshotSkipHook {
                 setSkipScreenshot.invoke(transaction, surfaceControl, Boolean.TRUE);
                 XposedHelpers.callMethod(transaction, "apply");
                 MARKED_SURFACES.add(surfaceControl);
-                if (sAppliedLogged.compareAndSet(false, true)) {
-                    XposedBridge.log(TAG + ": Scene mini monitor excluded from screenshots");
+                if (SceneLog.ENABLED && sAppliedLogged.compareAndSet(false, true)) {
+                    SceneLog.d("Scene mini monitor excluded from screenshots");
                 }
             } finally {
                 if (transaction != null) {
@@ -236,8 +234,8 @@ public final class MiniMonitorScreenshotSkipHook {
             }
         } catch (Throwable t) {
             MARKED_SURFACES.remove(surfaceControl);
-            if (sMissingApiLogged.compareAndSet(false, true)) {
-                XposedBridge.log(TAG + ": setSkipScreenshot failed: " + t);
+            if (SceneLog.ENABLED && sMissingApiLogged.compareAndSet(false, true)) {
+                SceneLog.d("setSkipScreenshot failed", t);
             }
         }
     }
@@ -282,14 +280,14 @@ public final class MiniMonitorScreenshotSkipHook {
     }
 
     private static void logHookErrorOnce(Throwable t) {
-        if (sHookErrorLogged.compareAndSet(false, true)) {
-            XposedBridge.log(TAG + ": mini monitor window hook error: " + t);
+        if (SceneLog.ENABLED && sHookErrorLogged.compareAndSet(false, true)) {
+            SceneLog.d("mini monitor window hook error", t);
         }
     }
 
     private static void logMissingApiOnce() {
-        if (sMissingApiLogged.compareAndSet(false, true)) {
-            XposedBridge.log(TAG + ": SurfaceControl.Transaction.setSkipScreenshot not available, skip");
+        if (SceneLog.ENABLED && sMissingApiLogged.compareAndSet(false, true)) {
+            SceneLog.d("SurfaceControl.Transaction.setSkipScreenshot not available, skip");
         }
     }
 

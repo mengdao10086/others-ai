@@ -54,6 +54,7 @@ app/src/main/java/com/mengdao/lsposedtoolkit/
 │  ├─ systemui/StatusBarClickBlockHook.java
 │  ├─ systemui/BleUnlockToastHook.java    # 屏蔽蓝牙解锁 Toast
 │  ├─ scene/                              # Scene 迷你监视器增强（作用域 com.omarea.vtools）
+│  │  ├─ SceneLog.java                       # 日志开关（默认关闭，release 编译期剔除）
 │  │  ├─ MiniMonitorScreenshotSkipHook.java  # SKIP_SCREENSHOT 截屏排除
 │  │  └─ MiniMonitorRefreshDelayHook.java    # 跳过重开 2 秒占位
 │  └─ systemserver/                       # 最近任务上滑杀后台（作用域 android）
