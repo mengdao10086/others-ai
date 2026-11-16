@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.hook.systemui;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import java.lang.reflect.Method;
 
 import de.robv.android.xposed.XC_MethodHook;
@@ -18,7 +19,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 public final class StatusBarClickBlockHook {
 
-    private static final String TAG = "StatusBarClickBlock";
 
     private static final String CLICK_TOOL_CLASS =
             "com.miui.systemui.statusbar.StatusBarClickTool";
@@ -82,6 +82,6 @@ public final class StatusBarClickBlockHook {
     }
 
     private static void log(String message) {
-        XposedBridge.log(TAG + ": " + message);
+                Logs.status("StatusBarClickBlockHook:85", "" + "" + message);
     }
 }

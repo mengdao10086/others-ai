@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.gallery.aicr;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -10,7 +11,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -23,7 +23,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 final class AisearchTriggerReceiverHook {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final String PENDING_RESULT_KEY = "mengdao_pending_result";
     private static final String SOURCE = "broadcast";
 
@@ -36,7 +35,7 @@ final class AisearchTriggerReceiverHook {
         Class<?> receiverClass = XposedHelpers.findClassIfExists(
                 AicrProtocol.RECEIVER_CLASS, classLoader);
         if (receiverClass == null) {
-            XposedBridge.log(TAG + ": AISearchStaticReceiver not found, skip");
+                        Logs.status("aicr.receiver:不可用", "" + "AISearchStaticReceiver not found, skip");
             return;
         }
         AicrTriggerDispatcher.init(classLoader);
@@ -72,10 +71,10 @@ final class AisearchTriggerReceiverHook {
             if (pending != null) {
                 param.setObjectExtra(PENDING_RESULT_KEY, pending);
             } else {
-                XposedBridge.log(TAG + ": goAsync returned null, dispatch without holding process");
+                                Logs.status("AisearchTriggerReceiverHook:75", "" + "goAsync returned null, dispatch without holding process");
             }
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": goAsync failed, dispatch without holding process: " + t);
+                        Logs.status("AisearchTriggerReceiverHook:78", "" + "goAsync failed, dispatch without holding process: " + t);
         }
     }
 
@@ -93,13 +92,13 @@ final class AisearchTriggerReceiverHook {
                 try {
                     AicrTriggerDispatcher.dispatch(fallback, action, SOURCE);
                 } catch (Throwable t) {
-                    XposedBridge.log(TAG + ": aicr broadcast dispatch failed: " + t);
+                                        Logs.status("AisearchTriggerReceiverHook:96", "" + "aicr broadcast dispatch failed: " + t);
                 } finally {
                     finish(pending);
                 }
             });
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": aicr broadcast enqueue failed: " + t);
+                        Logs.status("AisearchTriggerReceiverHook:102", "" + "aicr broadcast enqueue failed: " + t);
             finish(pending);
         }
     }
@@ -119,7 +118,7 @@ final class AisearchTriggerReceiverHook {
         try {
             pending.finish();
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": pending result finish failed: " + t);
+                        Logs.status("AisearchTriggerReceiverHook:122", "" + "pending result finish failed: " + t);
         }
     }
 }

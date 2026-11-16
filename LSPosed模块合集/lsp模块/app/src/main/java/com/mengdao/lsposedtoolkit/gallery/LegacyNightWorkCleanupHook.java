@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.gallery;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 
 import java.lang.reflect.Method;
@@ -9,7 +10,6 @@ import java.util.UUID;
 import java.util.concurrent.Executor;
 
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -24,7 +24,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 final class LegacyNightWorkCleanupHook {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final String SCHEDULER_CLASS = "com.miui.gallery.job.GalleryJobScheduler";
     private static final String WORK_MANAGER_CLASS = "androidx.work.WorkManager";
     private static final String WORK_QUERY_BUILDER_CLASS = "androidx.work.WorkQuery$Builder";
@@ -49,7 +48,7 @@ final class LegacyNightWorkCleanupHook {
                                 cancelLegacyWork(context);
                             }
                         } catch (Throwable t) {
-                            XposedBridge.log(TAG + ": legacy work cleanup failed: " + t);
+                                                        Logs.status("LegacyNightWorkCleanupHook:52", "" + "legacy work cleanup failed: " + t);
                         }
                     }
                 });
@@ -98,10 +97,10 @@ final class LegacyNightWorkCleanupHook {
             }
             sCleaned = true;
             if (count > 0) {
-                XposedBridge.log(TAG + ": legacy night work cancelled, count=" + count);
+                                Logs.status("gallery.legacywork:生效", "" + "legacy night work cancelled, count=" + count);
             }
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": cancel legacy night work failed: " + t);
+                        Logs.status("LegacyNightWorkCleanupHook:104", "" + "cancel legacy night work failed: " + t);
         }
     }
 }

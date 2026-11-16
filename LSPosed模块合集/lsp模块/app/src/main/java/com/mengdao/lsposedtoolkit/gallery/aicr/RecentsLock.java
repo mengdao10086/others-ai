@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.gallery.aicr;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.SystemClock;
@@ -12,7 +13,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 
-import de.robv.android.xposed.XposedBridge;
 
 /**
  * 分析期间把 aicr 加入/移出最近任务锁定。
@@ -26,7 +26,6 @@ public final class RecentsLock {
 
     public static final String EXTRA_WHITELIST_FAILED = "mengdao_whitelist_failed";
 
-    private static final String TAG = "GalleryAnalyze";
     private static final String PKG = "com.xiaomi.aicr";
     private static final String MANAGER_CLASS = "miui.process.ProcessManager";
     private static final String PREFS = "mengdao_aicr_whitelist";
@@ -362,7 +361,7 @@ public final class RecentsLock {
         String key = what + "|" + (t == null ? "" : t.getClass().getName());
         if (!key.equals(sLoggedFailure)) {
             sLoggedFailure = key;
-            XposedBridge.log(TAG + ": " + what + ": " + t);
+                        Logs.status("RecentsLock:365", "" + "" + what + ": " + t);
         }
     }
 

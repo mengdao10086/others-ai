@@ -9,7 +9,6 @@ import com.mengdao.lsposedtoolkit.hook.systemserver.NoSwipeToKillHook;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 /**
@@ -20,7 +19,6 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
  */
 public final class ModuleEntry implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
-    private static final String TAG = "LSPosedToolkit";
 
     /** 模块 APK 绝对路径；用于在宿主进程里加载模块自带的原生库。 */
     private static volatile String sModulePath;
@@ -45,13 +43,13 @@ public final class ModuleEntry implements IXposedHookLoadPackage, IXposedHookZyg
             try {
                 ContentExtensionHooks.install(lpparam.classLoader);
             } catch (Throwable t) {
-                XposedBridge.log(TAG + ": contentextension group failed: " + t);
+                                Logs.status("ModuleEntry:48", "" + "contentextension group failed: " + t);
             }
         } else if (PKG_SYSTEM_UI.equals(pkg)) {
             try {
                 SystemUiHooks.install(lpparam.classLoader);
             } catch (Throwable t) {
-                XposedBridge.log(TAG + ": systemui group failed: " + t);
+                                Logs.status("ModuleEntry:54", "" + "systemui group failed: " + t);
             }
         } else if (PKG_GALLERY.equals(pkg)) {
             // 只在相册主进程安装：其它进程不承载设置页、WorkManager 任务或前台广播
@@ -59,7 +57,7 @@ public final class ModuleEntry implements IXposedHookLoadPackage, IXposedHookZyg
                 try {
                     GalleryHooks.install(lpparam.classLoader);
                 } catch (Throwable t) {
-                    XposedBridge.log(TAG + ": gallery group failed: " + t);
+                                        Logs.status("ModuleEntry:62", "" + "gallery group failed: " + t);
                 }
             }
         } else if (PKG_AICR.equals(pkg)) {
@@ -67,7 +65,7 @@ public final class ModuleEntry implements IXposedHookLoadPackage, IXposedHookZyg
                 AicrHooks.install(lpparam.packageName, lpparam.processName,
                         lpparam.classLoader, sModulePath);
             } catch (Throwable t) {
-                XposedBridge.log(TAG + ": aicr group failed: " + t);
+                                Logs.status("ModuleEntry:70", "" + "aicr group failed: " + t);
             }
         } else if (PKG_SCENE.equals(pkg)) {
             // Scene 的浮窗都在主进程；其它进程不安装，避免重复 hook。
@@ -75,14 +73,14 @@ public final class ModuleEntry implements IXposedHookLoadPackage, IXposedHookZyg
                 try {
                     SceneHooks.install(lpparam.classLoader);
                 } catch (Throwable t) {
-                    XposedBridge.log(TAG + ": scene group failed: " + t);
+                                        Logs.status("ModuleEntry:78", "" + "scene group failed: " + t);
                 }
             }
         } else if (PKG_ANDROID.equals(pkg)) {
             try {
                 NoSwipeToKillHook.install(lpparam.classLoader);
             } catch (Throwable t) {
-                XposedBridge.log(TAG + ": noswipetokill group failed: " + t);
+                                Logs.status("ModuleEntry:85", "" + "noswipetokill group failed: " + t);
             }
         }
     }

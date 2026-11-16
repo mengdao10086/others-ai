@@ -1,8 +1,8 @@
 package com.mengdao.lsposedtoolkit.gallery.aicr;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import com.mengdao.lsposedtoolkit.gallery.AicrProtocol;
 
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -16,7 +16,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 public final class AicrHooks {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final String SERVICE_PROCESS_SUFFIX = ":searchDataService";
     private static final String DIAGNOSTICS_BOOTSTRAP =
             "com.mengdao.lsposedtoolkit.gallery.aicr.DiagnosticsBootstrap";
@@ -53,37 +52,37 @@ public final class AicrHooks {
         try {
             PendingQueryTrimHook.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": PendingQueryTrimHook failed: " + t);
+                        Logs.status("AicrHooks:56", "" + "PendingQueryTrimHook failed: " + t);
         }
 
         try {
             AiCrSearchDataBaseServiceHook.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": AiCrSearchDataBaseServiceHook failed: " + t);
+                        Logs.status("AicrHooks:62", "" + "AiCrSearchDataBaseServiceHook failed: " + t);
         }
 
         try {
             AisearchTriggerReceiverHook.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": AisearchTriggerReceiverHook failed: " + t);
+                        Logs.status("AicrHooks:68", "" + "AisearchTriggerReceiverHook failed: " + t);
         }
 
         try {
             AicrStateReporter.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": AicrStateReporter failed: " + t);
+                        Logs.status("AicrHooks:74", "" + "AicrStateReporter failed: " + t);
         }
 
         try {
             AicrWindowEndGuard.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": AicrWindowEndGuard failed: " + t);
+                        Logs.status("AicrHooks:80", "" + "AicrWindowEndGuard failed: " + t);
         }
 
         try {
             RecentsLock.recoverOnProcessStart(null);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": RecentsLock failed: " + t);
+                        Logs.status("AicrHooks:86", "" + "RecentsLock failed: " + t);
         }
     }
 
@@ -97,7 +96,7 @@ public final class AicrHooks {
             }
             XposedHelpers.callStaticMethod(bootstrap, "install", hostClassLoader, processName);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": diagnostics bootstrap failed: " + t);
+                        Logs.status("AicrHooks:100", "" + "diagnostics bootstrap failed: " + t);
         }
     }
 }

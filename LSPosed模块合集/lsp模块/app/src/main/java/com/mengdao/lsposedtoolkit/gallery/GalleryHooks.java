@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.gallery;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 
 import de.robv.android.xposed.XC_MethodHook;
@@ -12,7 +13,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 public final class GalleryHooks {
 
-    private static final String TAG = "GalleryAnalyze";
 
     private GalleryHooks() {
     }
@@ -23,25 +23,25 @@ public final class GalleryHooks {
         try {
             hookAppCreate(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": GalleryApp.onCreate hook failed: " + t);
+                        Logs.status("GalleryHooks:26", "" + "GalleryApp.onCreate hook failed: " + t);
         }
 
         try {
             SettingsHook.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": SettingsHook failed: " + t);
+                        Logs.status("GalleryHooks:32", "" + "SettingsHook failed: " + t);
         }
 
         try {
             SearchProgressPinHook.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": SearchProgressPinHook failed: " + t);
+                        Logs.status("GalleryHooks:38", "" + "SearchProgressPinHook failed: " + t);
         }
 
         try {
             WriteBackProbe.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": WriteBackProbe failed: " + t);
+                        Logs.status("GalleryHooks:44", "" + "WriteBackProbe failed: " + t);
         }
 
         // 必须在 WriteBackProbe 之后注册：Xposed 的 after hook 后注册先执行，
@@ -49,25 +49,25 @@ public final class GalleryHooks {
         try {
             WriteBackPathAliasHook.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": WriteBackPathAliasHook failed: " + t);
+                        Logs.status("GalleryHooks:52", "" + "WriteBackPathAliasHook failed: " + t);
         }
 
         try {
             ExecDirectlyLogHook.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": ExecDirectlyLogHook failed: " + t);
+                        Logs.status("GalleryHooks:58", "" + "ExecDirectlyLogHook failed: " + t);
         }
 
         try {
             PowerGateHook.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": PowerGateHook failed: " + t);
+                        Logs.status("GalleryHooks:64", "" + "PowerGateHook failed: " + t);
         }
 
         try {
             LegacyNightWorkCleanupHook.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": LegacyNightWorkCleanupHook failed: " + t);
+                        Logs.status("GalleryHooks:70", "" + "LegacyNightWorkCleanupHook failed: " + t);
         }
     }
 
@@ -83,7 +83,7 @@ public final class GalleryHooks {
                         DozeWhitelist.init((Context) param.thisObject);
                     }
                 } catch (Throwable t) {
-                    XposedBridge.log(TAG + ": aicr state init failed: " + t);
+                                        Logs.status("GalleryHooks:86", "" + "aicr state init failed: " + t);
                 }
             }
         });

@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.gallery.aicr;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -14,7 +15,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -31,7 +31,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 final class AicrStateReporter {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final String RUNNING_STATUS_CLASS =
             "com.xiaomi.aicr.searchpro.monitor.RunningStatus";
     private static final String PROGRESS_MONITOR_CLASS =
@@ -96,11 +95,11 @@ final class AicrStateReporter {
         sClassLoader = classLoader;
         Class<?> statusClass = XposedHelpers.findClassIfExists(RUNNING_STATUS_CLASS, classLoader);
         if (statusClass == null) {
-            XposedBridge.log(TAG + ": RunningStatus not found, skip state reporting");
+                        Logs.status("aicr.reporter:不可用", "" + "RunningStatus not found, skip state reporting");
             return;
         }
         if (handler() == null) {
-            XposedBridge.log(TAG + ": progress thread unavailable, status-only mode");
+                        Logs.status("aicr.reporter:降级", "" + "progress thread unavailable, status-only mode");
         }
         XposedHelpers.findAndHookMethod(statusClass, "setRunningStatus", int.class,
                 new XC_MethodHook() {
@@ -117,7 +116,9 @@ final class AicrStateReporter {
             int normalized = status > 0 ? status : STATUS_IDLE;
             sStatus = normalized;
             if (normalized != previous) {
-                XposedBridge.log(TAG + ": aicr runningStatus=" + status);
+                if (Logs.ENABLED) {
+                    Logs.d("" + "aicr runningStatus=" + status);
+                }
             }
             Handler handler = handler();
             if (normalized == STATUS_IDLE) {
@@ -157,7 +158,7 @@ final class AicrStateReporter {
             handler.post(IMMEDIATE_BROADCAST);
             startLoop(handler);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": state report failed: " + t);
+                        Logs.status("AicrStateReporter:160", "" + "state report failed: " + t);
         }
     }
 
@@ -187,7 +188,7 @@ final class AicrStateReporter {
             report(sStatus, sCachedProgress, sCachedDetail);
             sLastBroadcastAt = SystemClock.elapsedRealtime();
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": immediate report failed: " + t);
+                        Logs.status("AicrStateReporter:190", "" + "immediate report failed: " + t);
         }
     }
 
@@ -206,7 +207,9 @@ final class AicrStateReporter {
                 clearCache();
                 if (detail.length() > 0 && !sSnapshotReplayLogged) {
                     sSnapshotReplayLogged = true;
-                    XposedBridge.log(TAG + ": aicr idle replay detail");
+                    if (Logs.ENABLED) {
+                        Logs.d("" + "aicr idle replay detail");
+                    }
                 }
                 report(status, progress, detail);
                 return;
@@ -247,7 +250,7 @@ final class AicrStateReporter {
                 refreshProgress(true);
                 report(STATUS_IDLE, sCachedProgress, sCachedDetail);
             } catch (Throwable t) {
-                XposedBridge.log(TAG + ": idle report failed: " + t);
+                                Logs.status("AicrStateReporter:250", "" + "idle report failed: " + t);
             } finally {
                 persistSnapshot(sCachedProgress, sCachedDetail);
                 clearCache();
@@ -379,7 +382,7 @@ final class AicrStateReporter {
                     sLastBroadcastAt = now;
                 }
             } catch (Throwable t) {
-                XposedBridge.log(TAG + ": progress report failed: " + t);
+                                Logs.status("AicrStateReporter:382", "" + "progress report failed: " + t);
             }
             Handler handler = sHandler;
             if (sLooping && handler != null) {
@@ -400,7 +403,7 @@ final class AicrStateReporter {
             sThread = thread;
             sHandler = new Handler(thread.getLooper());
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": progress thread start failed: " + t);
+                        Logs.status("AicrStateReporter:403", "" + "progress thread start failed: " + t);
             sThread = null;
             sHandler = null;
         }
@@ -427,7 +430,7 @@ final class AicrStateReporter {
                     RecentsLock.whitelistFailed() ? 1 : 0);
             context.sendBroadcast(intent);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": state broadcast failed: " + t);
+                        Logs.status("AicrStateReporter:430", "" + "state broadcast failed: " + t);
         }
     }
 
@@ -467,7 +470,7 @@ final class AicrStateReporter {
         } catch (Throwable t) {
             if (!sProgressFailureLogged) {
                 sProgressFailureLogged = true;
-                XposedBridge.log(TAG + ": progress lookup failed: " + t);
+                                Logs.status("AicrStateReporter:470", "" + "progress lookup failed: " + t);
             }
         }
         return -1;
@@ -587,7 +590,9 @@ final class AicrStateReporter {
                 // 极端情况：所有阶段都不适用，退回旧口径，避免三段全是 0。
                 if (!sAllExcludedLogged) {
                     sAllExcludedLogged = true;
-                    XposedBridge.log(TAG + ": detail all stages excluded, fallback to legacy counts");
+                    if (Logs.ENABLED) {
+                        Logs.d("" + "detail all stages excluded, fallback to legacy counts");
+                    }
                 }
                 faceExcluded = false;
                 ocrExcluded = false;
@@ -633,8 +638,10 @@ final class AicrStateReporter {
             int rawFailed = Math.min(picFailed, totalPic)
                     + Math.min(clipVidFailedCount, totalVid);
             if (rawCompleted + rawFailed > total) {
-                XposedBridge.log(TAG + ": detail counts overflow completed=" + rawCompleted
+                if (Logs.ENABLED) {
+                    Logs.d("" + "detail counts overflow completed=" + rawCompleted
                         + " failed=" + rawFailed + " total=" + total + " stage=" + doneStage);
+                }
             }
             int completed = Math.min(Math.max(0, rawCompleted), total);
             int failed = Math.min(Math.max(0, rawFailed), total - completed);
@@ -645,7 +652,7 @@ final class AicrStateReporter {
         } catch (Throwable t) {
             if (!sDetailFailureLogged) {
                 sDetailFailureLogged = true;
-                XposedBridge.log(TAG + ": detail lookup failed: " + t);
+                                Logs.status("AicrStateReporter:648", "" + "detail lookup failed: " + t);
             }
             return "";
         }
@@ -687,8 +694,10 @@ final class AicrStateReporter {
             return false;
         }
         if (sExcludedStagesLogged.add(stage) && AicrHooks.isDiagBuild()) {
-            XposedBridge.log(TAG + ": detail stage " + stage + " excluded (failed="
+            if (Logs.ENABLED) {
+                Logs.d("" + "detail stage " + stage + " excluded (failed="
                     + failed + " total=" + total + ")");
+            }
         }
         return true;
     }
@@ -704,12 +713,16 @@ final class AicrStateReporter {
         if (elapsedMs > DETAIL_SLOW_MS) {
             if (!sSkipFailureCounts) {
                 sSkipFailureCounts = true;
-                XposedBridge.log(TAG + ": detail query slow " + elapsedMs
+                if (Logs.ENABLED) {
+                    Logs.d("" + "detail query slow " + elapsedMs
                         + "ms, fallback to legacy detail");
+                }
             }
         } else if (!sDetailTimingLogged && AicrHooks.isDiagBuild()) {
             sDetailTimingLogged = true;
-            XposedBridge.log(TAG + ": detail query took " + elapsedMs + "ms");
+            if (Logs.ENABLED) {
+                Logs.d("" + "detail query took " + elapsedMs + "ms");
+            }
         }
     }
 
@@ -718,9 +731,11 @@ final class AicrStateReporter {
             return;
         }
         sClipMismatchLogged = true;
-        XposedBridge.log(TAG + ": clip count mismatch all=" + picAll + "/" + vidAll
+        if (Logs.ENABLED) {
+            Logs.d("" + "clip count mismatch all=" + picAll + "/" + vidAll
                 + " failed=" + picFailed + "/" + vidFailed
                 + " (failed query lacks store_state filter)");
+        }
     }
 
     private static boolean isPetSupported() {

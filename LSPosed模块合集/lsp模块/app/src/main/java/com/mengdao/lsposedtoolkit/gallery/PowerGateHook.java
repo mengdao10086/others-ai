@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.gallery;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -7,7 +8,6 @@ import android.os.BatteryManager;
 import android.os.PowerManager;
 
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -24,7 +24,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 final class PowerGateHook {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final String WORKER_CLASS =
             "com.miui.gallery.job.workers.CardUpdateWorkerProvider$CardUpdateWorker";
     private static final String SYNC_PREFS_CLASS = "com.miui.gallery.preference.GalleryPreferences$Sync";
@@ -75,7 +74,7 @@ final class PowerGateHook {
                                 FORCE_PLUGGED.set(true);
                             }
                         } catch (Throwable t) {
-                            XposedBridge.log(TAG + ": power gate before failed: " + t);
+                                                        Logs.status("PowerGateHook:78", "" + "power gate before failed: " + t);
                         }
                     }
 
@@ -111,7 +110,7 @@ final class PowerGateHook {
             }
         }
         if (receiverClass == null) {
-            XposedBridge.log(TAG + ": battery receiver class not found, skip");
+                        Logs.status("gallery.powergate:不可用", "" + "battery receiver class not found, skip");
             return;
         }
         XposedHelpers.findAndHookMethod(receiverClass, "onReceive",
@@ -143,7 +142,7 @@ final class PowerGateHook {
                             Class<?> monitorClass = XposedHelpers.findClass(BATTERY_MONITOR_CLASS, classLoader);
                             XposedHelpers.callStaticMethod(monitorClass, "tryTriggerCalc", false);
                         } catch (Throwable t) {
-                            XposedBridge.log(TAG + ": battery trigger failed: " + t);
+                                                        Logs.status("PowerGateHook:146", "" + "battery trigger failed: " + t);
                         }
                     }
                 });

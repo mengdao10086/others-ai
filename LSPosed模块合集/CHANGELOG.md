@@ -2,7 +2,7 @@
 
 ## 2.3.3 — 2026-11-16
 
-- Scene 迷你监视器 hook 日志收口到 `SceneLog`，`ENABLED=false` 默认关闭；release 构建由编译期常量折叠剔除日志代码与字符串，排查包改 true 重编即可输出
+- 日志分级：debug 类（循环中间态、计数/参数快照、诊断明细）收口到 `Logs.d`，`ENABLED=false` 编译期剔除；状态/触发提示经 `Logs.status` 直出，同一 key 5 分钟限频（生效/降级/不可用分类独立计时）；`ExecDirectlyLogHook`、`SaveEventLog` 属功能实现保持不变
 
 ## 未发布 — 2026-11-09
 

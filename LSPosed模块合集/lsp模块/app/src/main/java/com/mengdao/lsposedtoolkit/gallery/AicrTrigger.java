@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.gallery;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -8,7 +9,6 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.SystemClock;
 
-import de.robv.android.xposed.XposedBridge;
 
 /**
  * 相册进程 → aicr 的触发出口。
@@ -19,7 +19,6 @@ import de.robv.android.xposed.XposedBridge;
  */
 final class AicrTrigger {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final long QUERY_INTERVAL_MS = 3000L;
     private static volatile boolean sEnvironmentLogged;
     private static volatile long sLastQueryAt;
@@ -57,13 +56,13 @@ final class AicrTrigger {
             intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             context.sendBroadcast(intent);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": aicr state query failed: " + t);
+                        Logs.status("AicrTrigger:60", "" + "aicr state query failed: " + t);
         }
     }
 
     private static void send(Context context, String action) {
         if (context == null) {
-            XposedBridge.log(TAG + ": aicr trigger skipped (no context): " + action);
+                        Logs.status("gallery.trigger:降级", "" + "aicr trigger skipped (no context): " + action);
             return;
         }
         logEnvironmentOnce(context);
@@ -81,13 +80,13 @@ final class AicrTrigger {
             context.startForegroundService(intent);
             return true;
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": startForegroundService failed: " + t);
+                        Logs.status("AicrTrigger:84", "" + "startForegroundService failed: " + t);
         }
         try {
             context.startService(intent);
             return true;
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": startService failed: " + t);
+                        Logs.status("AicrTrigger:90", "" + "startService failed: " + t);
             return false;
         }
     }
@@ -100,7 +99,7 @@ final class AicrTrigger {
             intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             context.sendBroadcast(intent);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": aicr broadcast failed (" + action + "): " + t);
+                        Logs.status("AicrTrigger:103", "" + "aicr broadcast failed (" + action + "): " + t);
         }
     }
 
@@ -121,10 +120,10 @@ final class AicrTrigger {
                     AicrProtocol.PACKAGE, AicrProtocol.SERVICE_CLASS));
             String receiver = componentState(pm, new ComponentName(
                     AicrProtocol.PACKAGE, AicrProtocol.RECEIVER_CLASS));
-            XposedBridge.log(TAG + ": aicr env version=" + version
+                        Logs.status("AicrTrigger:124", "" + "aicr env version=" + version
                     + " service=[" + service + "] receiver=[" + receiver + "]");
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": aicr env lookup failed: " + t);
+                        Logs.status("AicrTrigger:127", "" + "aicr env lookup failed: " + t);
         }
     }
 

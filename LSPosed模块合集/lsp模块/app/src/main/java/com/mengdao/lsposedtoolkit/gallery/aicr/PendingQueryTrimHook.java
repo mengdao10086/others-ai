@@ -1,7 +1,7 @@
 package com.mengdao.lsposedtoolkit.gallery.aicr;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -19,7 +19,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 final class PendingQueryTrimHook {
 
-    private static final String TAG = "GalleryAnalyze";
 
     private static final String MANAGER_DAO_IMPL_CLASS =
             "com.xiaomi.aicr.aisearch.database.managerdb.dao.ManagerDao_Impl";
@@ -41,7 +40,7 @@ final class PendingQueryTrimHook {
 
     static void install(ClassLoader classLoader) {
         if (!ENABLE_PENDING_TRIM) {
-            XposedBridge.log(TAG + ": pending trim disabled");
+                        Logs.status("aicr.pendingtrim:降级", "" + "pending trim disabled");
             return;
         }
         if (sInstalled) {
@@ -51,7 +50,7 @@ final class PendingQueryTrimHook {
         try {
             Class<?> cls = XposedHelpers.findClassIfExists(MANAGER_DAO_IMPL_CLASS, classLoader);
             if (cls == null) {
-                XposedBridge.log(TAG + ": pending trim hook failed: class not found");
+                                Logs.status("aicr.pendingtrim:不可用", "" + "pending trim hook failed: class not found");
                 return;
             }
             XposedHelpers.findAndHookMethod(cls, "calculate", String.class, int.class,
@@ -74,7 +73,7 @@ final class PendingQueryTrimHook {
                         }
                     });
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": pending trim hook failed: " + t);
+                        Logs.status("PendingQueryTrimHook:77", "" + "pending trim hook failed: " + t);
         }
     }
 
@@ -97,8 +96,12 @@ final class PendingQueryTrimHook {
             return;
         }
         sLogged = true;
-        XposedBridge.log(TAG + ": pending trim on (removed pet/iaa/crop=-1)");
-        XposedBridge.log(TAG + ": pending trim sql="
+        if (Logs.ENABLED) {
+            Logs.d("" + "pending trim on (removed pet/iaa/crop=-1)");
+        }
+        if (Logs.ENABLED) {
+            Logs.d("" + "pending trim sql="
                 + (sql.length() > SQL_LOG_LIMIT ? sql.substring(0, SQL_LOG_LIMIT) : sql));
+        }
     }
 }

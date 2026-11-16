@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.gallery.aicr;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Handler;
@@ -11,7 +12,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -24,7 +24,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 final class AiCrSearchDataBaseServiceHook {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final String SOURCE = "service";
     private static final long START_KEEP_ALIVE_MS = 90_000L;
     private static final long STOP_SETTLE_MS = 15_000L;
@@ -40,7 +39,7 @@ final class AiCrSearchDataBaseServiceHook {
         Class<?> serviceClass = XposedHelpers.findClassIfExists(
                 AicrProtocol.SERVICE_CLASS, classLoader);
         if (serviceClass == null) {
-            XposedBridge.log(TAG + ": AiCrSearchDataBaseService not found, skip");
+                        Logs.status("aicr.service:不可用", "" + "AiCrSearchDataBaseService not found, skip");
             return;
         }
         AicrTriggerDispatcher.init(classLoader);
@@ -67,12 +66,12 @@ final class AiCrSearchDataBaseServiceHook {
             }
             Object service = param.thisObject;
             Context context = contextOf(service);
-            XposedBridge.log(TAG + ": aicr service received " + action);
+                        Logs.status("AiCrSearchDataBaseServiceHook:70", "" + "aicr service received " + action);
             sExecutor.execute(() -> {
                 try {
                     AicrTriggerDispatcher.dispatch(context, action, SOURCE);
                 } catch (Throwable t) {
-                    XposedBridge.log(TAG + ": aicr service dispatch failed: " + t);
+                                        Logs.status("AiCrSearchDataBaseServiceHook:75", "" + "aicr service dispatch failed: " + t);
                 }
             });
             long delay = AicrProtocol.ACTION_START.equals(action)
@@ -80,7 +79,7 @@ final class AiCrSearchDataBaseServiceHook {
                     : STOP_SETTLE_MS;
             scheduleStopCheck(service, delay);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": aicr service hook failed: " + t);
+                        Logs.status("AiCrSearchDataBaseServiceHook:83", "" + "aicr service hook failed: " + t);
         }
     }
 
@@ -106,20 +105,20 @@ final class AiCrSearchDataBaseServiceHook {
                     if (AicrStateReporter.isRunningNow()) {
                         if (!sKeepLogged) {
                             sKeepLogged = true;
-                            XposedBridge.log(TAG + ": analysis running, keep-alive service kept");
+                                                        Logs.status("aicr.service:生效", "" + "analysis running, keep-alive service kept");
                         }
                         scheduleStopCheck(service, RUNNING_RECHECK_MS);
                         return;
                     }
                     sKeepLogged = false;
                     XposedHelpers.callMethod(service, "stopSelf");
-                    XposedBridge.log(TAG + ": aicr keep-alive service stopped");
+                                        Logs.status("AiCrSearchDataBaseServiceHook:116", "" + "aicr keep-alive service stopped");
                 } catch (Throwable t) {
-                    XposedBridge.log(TAG + ": stopSelf failed: " + t);
+                                        Logs.status("AiCrSearchDataBaseServiceHook:118", "" + "stopSelf failed: " + t);
                 }
             }, delayMs);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": schedule stop check failed: " + t);
+                        Logs.status("AiCrSearchDataBaseServiceHook:122", "" + "schedule stop check failed: " + t);
         }
     }
 }

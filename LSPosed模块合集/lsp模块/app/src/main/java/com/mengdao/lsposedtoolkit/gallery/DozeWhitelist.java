@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.gallery;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Handler;
@@ -14,7 +15,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 
-import de.robv.android.xposed.XposedBridge;
 
 /**
  * 分析期间给 aicr 加/撤 Doze 白名单。
@@ -25,7 +25,6 @@ import de.robv.android.xposed.XposedBridge;
  */
 final class DozeWhitelist {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final String PKG = "com.xiaomi.aicr";
     private static final String PREFS = "mengdao_gallery_whitelist";
     private static final String KEY_ACTIVE = "doze_active";
@@ -339,7 +338,7 @@ final class DozeWhitelist {
         String key = what + "|" + (t == null ? "" : t.getClass().getName());
         if (!key.equals(sLoggedFailure)) {
             sLoggedFailure = key;
-            XposedBridge.log(TAG + ": " + what + ": " + t);
+                        Logs.status("DozeWhitelist:342", "" + "" + what + ": " + t);
         }
     }
 

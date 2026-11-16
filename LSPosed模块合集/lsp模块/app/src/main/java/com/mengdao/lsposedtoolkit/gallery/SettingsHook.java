@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.gallery;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
@@ -59,7 +60,7 @@ final class SettingsHook {
             try {
                 refreshStatus();
             } catch (Throwable t) {
-                XposedBridge.log(TAG + ": poll refresh failed: " + t);
+                                Logs.status("SettingsHook:62", "" + "poll refresh failed: " + t);
             }
             Handler handler = sHandler;
             if (sPolling && handler != null) {
@@ -92,12 +93,12 @@ final class SettingsHook {
                             try {
                                 addRow(param.thisObject);
                             } catch (Throwable t) {
-                                XposedBridge.log(TAG + ": add settings row failed: " + t);
+                                                                Logs.status("SettingsHook:95", "" + "add settings row failed: " + t);
                             }
                         }
                     });
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": onCreatePreferences hook failed: " + t);
+                        Logs.status("SettingsHook:100", "" + "onCreatePreferences hook failed: " + t);
         }
     }
 
@@ -111,7 +112,7 @@ final class SettingsHook {
                 fragment.getClass(), "findPreference", CharSequence.class);
         Object category = findPreference.invoke(fragment, "others");
         if (category == null) {
-            XposedBridge.log(TAG + ": category 'others' not found, skip");
+                        Logs.status("gallery.settings:不可用", "" + "category 'others' not found, skip");
             return;
         }
 
@@ -133,7 +134,7 @@ final class SettingsHook {
             }
         }
         if (context == null) {
-            XposedBridge.log(TAG + ": no context, skip settings row");
+                        Logs.status("gallery.settings:降级", "" + "no context, skip settings row");
             return;
         }
 
@@ -184,12 +185,12 @@ final class SettingsHook {
                             try {
                                 onPreferenceBound(param.thisObject, param.args[0]);
                             } catch (Throwable t) {
-                                XposedBridge.log(TAG + ": preference bind failed: " + t);
+                                                                Logs.status("SettingsHook:187", "" + "preference bind failed: " + t);
                             }
                         }
                     });
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": onBindViewHolder hook failed: " + t);
+                        Logs.status("SettingsHook:192", "" + "onBindViewHolder hook failed: " + t);
         }
     }
 
@@ -377,7 +378,7 @@ final class SettingsHook {
                     "setOnPreferenceClickListener", listenerClass)
                     .invoke(preference, new Object[]{listener});
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": set row click listener failed: " + t);
+                        Logs.status("SettingsHook:380", "" + "set row click listener failed: " + t);
         }
     }
 
@@ -399,7 +400,7 @@ final class SettingsHook {
             hookLifecycle(fragmentClass, "onResume", true);
             hookLifecycle(fragmentClass, "onPause", false);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": resume/pause hook failed: " + t);
+                        Logs.status("SettingsHook:402", "" + "resume/pause hook failed: " + t);
         }
     }
 
@@ -501,7 +502,7 @@ final class SettingsHook {
             Reflect.findMethod(preference.getClass(), "setTitle", CharSequence.class)
                     .invoke(preference, text);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": setTitle failed: " + t);
+                        Logs.status("SettingsHook:504", "" + "setTitle failed: " + t);
         }
     }
 
@@ -526,7 +527,7 @@ final class SettingsHook {
             Reflect.findMethod(preference.getClass(), "setSummary", CharSequence.class)
                     .invoke(preference, text);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": setSummary failed: " + t);
+                        Logs.status("SettingsHook:529", "" + "setSummary failed: " + t);
         }
     }
 
@@ -536,7 +537,7 @@ final class SettingsHook {
                     .invoke(preference, selectable);
         } catch (Throwable t) {
             Throwable cause = t.getCause() != null ? t.getCause() : t;
-            XposedBridge.log(TAG + ": setSelectable failed: " + cause);
+                        Logs.status("SettingsHook:539", "" + "setSelectable failed: " + cause);
         }
     }
 }

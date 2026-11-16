@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.hook.systemserver;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.database.Cursor;
@@ -9,7 +10,6 @@ import android.os.SystemClock;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -20,7 +20,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 public final class PowerPolicyReader {
 
-    private static final String TAG = "NoSwipeToKill";
     private static final Uri USER_TABLE =
             Uri.parse("content://com.miui.powerkeeper.configure/userTable");
     private static final long CACHE_TTL_MS = 30_000L;
@@ -151,7 +150,7 @@ public final class PowerPolicyReader {
 
     private static void logOnce(Throwable t) {
         if (sErrorLogged.compareAndSet(false, true)) {
-            XposedBridge.log(TAG + ": power policy query failed: " + t);
+                        Logs.status("PowerPolicyReader:154", "" + "power policy query failed: " + t);
         }
     }
 

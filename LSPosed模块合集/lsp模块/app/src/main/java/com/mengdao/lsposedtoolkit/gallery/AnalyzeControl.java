@@ -1,11 +1,11 @@
 package com.mengdao.lsposedtoolkit.gallery;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -16,7 +16,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 final class AnalyzeControl {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final String WORKER_CLASS =
             "com.miui.gallery.job.workers.CardUpdateWorkerProvider$CardUpdateWorker";
 
@@ -141,9 +140,9 @@ final class AnalyzeControl {
             Object companion = getCompanion();
             XposedHelpers.findMethodExact(companion.getClass(), "cancel", String.class)
                     .invoke(companion, "user_stop");
-            XposedBridge.log(TAG + ": stop requested (cancel user_stop)");
+                        Logs.status("AnalyzeControl:144", "" + "stop requested (cancel user_stop)");
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": stop failed: " + t);
+                        Logs.status("AnalyzeControl:146", "" + "stop failed: " + t);
         }
         AicrTrigger.sendStop(appContext());
     }
@@ -158,14 +157,14 @@ final class AnalyzeControl {
                         XposedHelpers.findMethodExact(companion.getClass(), "execDirectly",
                                         boolean.class, boolean.class, int.class)
                                 .invoke(companion, false, false, 4);
-                        XposedBridge.log(TAG + ": start requested (execDirectly false,false,4)");
+                                                Logs.status("AnalyzeControl:161", "" + "start requested (execDirectly false,false,4)");
                     } catch (Throwable t) {
-                        XposedBridge.log(TAG + ": start failed: " + t);
+                                                Logs.status("AnalyzeControl:163", "" + "start failed: " + t);
                     }
                 }
             });
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": start enqueue failed: " + t);
+                        Logs.status("AnalyzeControl:168", "" + "start enqueue failed: " + t);
         }
     }
 

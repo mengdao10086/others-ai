@@ -1,5 +1,7 @@
 package com.mengdao.lsposedtoolkit.gallery.aicr;
 
+
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.os.Handler;
@@ -8,7 +10,6 @@ import android.os.SystemClock;
 
 import java.io.File;
 
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -20,7 +21,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 final class AicrCpuAffinity {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final String MODULE_PACKAGE = "com.mengdao.lsposedtoolkit";
     private static final String LIB_NAME = "libmengdao_cpuaff.so";
     private static final String ABI = "arm64-v8a";
@@ -126,21 +126,29 @@ final class AicrCpuAffinity {
         try {
             rc = nativeThreadState(TARGET_THREAD, state);
         } catch (Throwable t) {
-            logOnce("thread state failed: " + t);
+            if (Logs.ENABLED) {
+                logOnce("thread state failed: " + t);
+            }
             return;
         }
         if (rc == -ENOENT) {
             if (sLastTid >= 0) {
-                XposedBridge.log(TAG + ": affinity target thread gone");
+                if (Logs.ENABLED) {
+                    Logs.d("" + "affinity target thread gone");
+                }
                 sLastTid = -1;
             } else if (sLastTid == -2) {
-                logOnce("cpu affinity waiting for " + TARGET_THREAD + " thread");
+                if (Logs.ENABLED) {
+                    logOnce("cpu affinity waiting for " + TARGET_THREAD + " thread");
+                }
                 sLastTid = -1;
             }
             return;
         }
         if (rc < 0) {
-            logOnce("thread state failed (errno=" + (-rc) + ")");
+            if (Logs.ENABLED) {
+                logOnce("thread state failed (errno=" + (-rc) + ")");
+            }
             return;
         }
         int tid = state[0];
@@ -157,9 +165,11 @@ final class AicrCpuAffinity {
         }
         if (after != MASK_BIG) {
             int errno = applied < 0 ? -applied : EINVAL;
-            logOnce(errno == EINVAL
-                    ? "cpu affinity blocked by cpuset (errno=22)"
-                    : "cpu affinity rebind failed (errno=" + errno + ")");
+            if (Logs.ENABLED) {
+                logOnce(errno == EINVAL
+                        ? "cpu affinity blocked by cpuset (errno=22)"
+                        : "cpu affinity rebind failed (errno=" + errno + ")");
+            }
         }
     }
 
@@ -184,17 +194,25 @@ final class AicrCpuAffinity {
         try {
             int result = nativeBindThread(mask, TARGET_THREAD);
             if (result == -ENOENT) {
-                logOnce("cpu affinity waiting for " + TARGET_THREAD + " thread");
+                if (Logs.ENABLED) {
+                    logOnce("cpu affinity waiting for " + TARGET_THREAD + " thread");
+                }
                 return;
             }
             if (result < 0) {
-                logOnce("cpu affinity mask=0x" + Integer.toHexString(mask)
-                        + " skipped (errno=" + (-result) + ")");
+                if (Logs.ENABLED) {
+                    logOnce("cpu affinity mask=0x" + Integer.toHexString(mask)
+                            + " skipped (errno=" + (-result) + ")");
+                }
                 return;
             }
-            logOnce("cpu affinity applied mask=0x" + Integer.toHexString(result));
+            if (Logs.ENABLED) {
+                logOnce("cpu affinity applied mask=0x" + Integer.toHexString(result));
+            }
         } catch (Throwable t) {
-            logOnce("cpu affinity failed: " + t);
+            if (Logs.ENABLED) {
+                logOnce("cpu affinity failed: " + t);
+            }
         }
     }
 
@@ -205,7 +223,9 @@ final class AicrCpuAffinity {
             return;
         }
         sLastResult = hash;
-        XposedBridge.log(TAG + ": " + message);
+        if (Logs.ENABLED) {
+            Logs.d("" + "" + message);
+        }
     }
 
     private static synchronized Handler handler() {
@@ -220,7 +240,9 @@ final class AicrCpuAffinity {
             sThread = thread;
             sHandler = new Handler(thread.getLooper());
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": affinity thread start failed: " + t);
+            if (Logs.ENABLED) {
+                Logs.d("" + "affinity thread start failed: " + t);
+            }
             sThread = null;
             sHandler = null;
         }
@@ -237,7 +259,9 @@ final class AicrCpuAffinity {
             apk = resolveModuleApk();
         }
         if (apk == null) {
-            XposedBridge.log(TAG + ": cpu affinity skipped, module apk unknown");
+            if (Logs.ENABLED) {
+                Logs.d("" + "cpu affinity skipped, module apk unknown");
+            }
             return false;
         }
         String zipPath = apk + "!/lib/" + ABI + "/" + LIB_NAME;
@@ -246,7 +270,9 @@ final class AicrCpuAffinity {
             sAvailable = true;
             return true;
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": cpu affinity lib load from apk failed: " + t);
+            if (Logs.ENABLED) {
+                Logs.d("" + "cpu affinity lib load from apk failed: " + t);
+            }
         }
         try {
             File lib = new File(new File(apk).getParentFile(), "lib/" + ABI + "/" + LIB_NAME);
@@ -254,7 +280,9 @@ final class AicrCpuAffinity {
             sAvailable = true;
             return true;
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": cpu affinity lib unavailable: " + t);
+            if (Logs.ENABLED) {
+                Logs.d("" + "cpu affinity lib unavailable: " + t);
+            }
         }
         return false;
     }
@@ -270,7 +298,9 @@ final class AicrCpuAffinity {
                     .getApplicationInfo(MODULE_PACKAGE, 0);
             return info == null ? null : info.sourceDir;
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": module apk lookup failed: " + t);
+            if (Logs.ENABLED) {
+                Logs.d("" + "module apk lookup failed: " + t);
+            }
             return null;
         }
     }

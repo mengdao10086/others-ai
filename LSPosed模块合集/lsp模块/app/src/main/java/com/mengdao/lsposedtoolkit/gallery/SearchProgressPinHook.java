@@ -1,12 +1,12 @@
 package com.mengdao.lsposedtoolkit.gallery;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 import android.view.View;
 
 import java.text.NumberFormat;
 
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -24,7 +24,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 final class SearchProgressPinHook {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final String ALGO_PROGRESS_CLASS =
             "com.miui.gallery.assistant.manager.AlgoProgressManager";
     private static final String ALGO_TYPE_CLASS =
@@ -156,7 +155,7 @@ final class SearchProgressPinHook {
                                 param.args[2] = text;
                                 if (!sPinnedLogged) {
                                     sPinnedLogged = true;
-                                    XposedBridge.log(TAG + ": search tip pinned at 100%");
+                                                                        Logs.status("gallery.searchpin:生效", "" + "search tip pinned at 100%");
                                 }
                             } catch (Throwable t) {
                                 logRecordFailure("tip", t);
@@ -204,10 +203,10 @@ final class SearchProgressPinHook {
             return;
         }
         sRecordFailureLogged = true;
-        XposedBridge.log(TAG + ": search progress pin " + stage + " record failed: " + t);
+                Logs.status("SearchProgressPinHook:207", "" + "search progress pin " + stage + " record failed: " + t);
     }
 
     private static void logFailure(String stage, Throwable t) {
-        XposedBridge.log(TAG + ": search progress pin " + stage + " hook failed: " + t);
+                Logs.status("SearchProgressPinHook:211", "" + "search progress pin " + stage + " hook failed: " + t);
     }
 }

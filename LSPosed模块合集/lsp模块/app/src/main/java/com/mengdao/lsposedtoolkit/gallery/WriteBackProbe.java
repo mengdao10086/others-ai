@@ -1,5 +1,7 @@
 package com.mengdao.lsposedtoolkit.gallery;
 
+
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
@@ -14,7 +16,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -40,7 +41,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 final class WriteBackProbe {
 
-    private static final String TAG = "GalleryAnalyze";
 
     /** 诊断总开关；false 时不安装任何 hook，也不输出日志。 */
     static final boolean ENABLED = false;
@@ -117,8 +117,10 @@ final class WriteBackProbe {
             logHookFailure("AlgoUtils$1.handle");
         }
 
-        XposedBridge.log(TAG + ": writeback probe install pid=" + Process.myPid()
+        if (Logs.ENABLED) {
+            Logs.d("" + "writeback probe install pid=" + Process.myPid()
                 + " hooked=" + ((sMediaFeatureHooked ? 1 : 0) + (sHandlerHooked ? 1 : 0)) + "/2");
+        }
     }
 
     private static boolean hookMediaFeatureQuery(ClassLoader classLoader) {
@@ -188,7 +190,7 @@ final class WriteBackProbe {
         Object result = param.getResult();
         Map<?, ?> map = result instanceof Map ? (Map<?, ?>) result : null;
         StringBuilder sb = new StringBuilder(320);
-        sb.append(TAG).append(": writeback probe pid=").append(Process.myPid())
+        sb.append("writeback probe pid=").append(Process.myPid())
                 .append(" req=").append(req)
                 .append(" rows=").append(rows < 0 ? "?" : String.valueOf(rows))
                 .append(" map=").append(map == null ? "-" : String.valueOf(map.size()));
@@ -203,7 +205,9 @@ final class WriteBackProbe {
             sb.append(" paths=[").append(formatPaths(call.paths, 100)).append("]")
                     .append(" diag=").append(diagnose(call.paths));
         }
-        XposedBridge.log(sb.toString());
+        if (Logs.ENABLED) {
+            Logs.d(sb.toString());
+        }
     }
 
     private static boolean shouldLog() {
@@ -440,7 +444,9 @@ final class WriteBackProbe {
     private static void logHookFailure(String name) {
         try {
             if (FAIL_LOGGED_NAMES.add(name)) {
-                XposedBridge.log(TAG + ": writeback probe hook failed: " + name);
+                if (Logs.ENABLED) {
+                    Logs.d("" + "writeback probe hook failed: " + name);
+                }
             }
         } catch (Throwable ignored) {
         }

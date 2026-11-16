@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.gallery.aicr;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.BatteryManager;
@@ -14,7 +15,6 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
 
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -25,7 +25,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 final class AicrWindowEndGuard {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final String RUNNING_STATUS_CLASS =
             "com.xiaomi.aicr.searchpro.monitor.RunningStatus";
     private static final String OPERATION_CLASS =
@@ -79,7 +78,7 @@ final class AicrWindowEndGuard {
             Context context = context();
             if (context != null) {
                 if (markHandled(context, today)) {
-                    XposedBridge.log(TAG + ": window-end: installed inside window, marked "
+                                        Logs.status("aicr.windowend:生效", "" + "window-end: installed inside window, marked "
                             + today + " handled at install, stop suppressed");
                 } else {
                     logMarkFailure(today);
@@ -96,7 +95,7 @@ final class AicrWindowEndGuard {
             try {
                 delay = tickOnce();
             } catch (Throwable t) {
-                XposedBridge.log(TAG + ": window-end tick failed: " + t);
+                                Logs.status("AicrWindowEndGuard:99", "" + "window-end tick failed: " + t);
             } finally {
                 handler().postDelayed(TICK, delay);
             }
@@ -129,7 +128,7 @@ final class AicrWindowEndGuard {
         if (sSuppressStopToday) {
             if (markHandled(context, today)) {
                 sSuppressStopToday = false;
-                XposedBridge.log(TAG + ": window-end: marked " + today
+                                Logs.status("aicr.windowend:生效", "" + "window-end: marked " + today
                         + " handled after install, stop suppressed");
                 return TICK_IDLE_MS;
             }
@@ -145,7 +144,7 @@ final class AicrWindowEndGuard {
             logMarkFailure(today);
             return activeDelay();
         }
-        XposedBridge.log(TAG + ": window-end: marked " + today + " handled");
+                Logs.status("aicr.windowend:生效", "" + "window-end: marked " + today + " handled");
         stopIfRunning(reason);
         return TICK_IDLE_MS;
     }
@@ -183,24 +182,24 @@ final class AicrWindowEndGuard {
     private static void stopIfRunning(String reason) {
         int status = runStatus();
         if (status < 0) {
-            XposedBridge.log(TAG + ": window-end: RunningStatus unavailable, stop skipped, reason="
+                        Logs.status("aicr.windowend:不可用", "" + "window-end: RunningStatus unavailable, stop skipped, reason="
                     + reason);
             return;
         }
         if (status == 0) {
-            XposedBridge.log(TAG + ": window-end: aicr already idle, nothing to stop, reason="
+                        Logs.status("aicr.windowend:降级", "" + "window-end: aicr already idle, nothing to stop, reason="
                     + reason);
             return;
         }
         Class<?> operationClass = operationClass();
         if (operationClass == null) {
-            XposedBridge.log(TAG + ": window-end: AISearchOperation not found, stop skipped, reason="
+                        Logs.status("aicr.windowend:不可用", "" + "window-end: AISearchOperation not found, stop skipped, reason="
                     + reason);
             return;
         }
         Object operation = operationInstance(operationClass);
         XposedHelpers.callMethod(operation, "unlimitedStop", AicrProtocol.SCOPE_GALLERY);
-        XposedBridge.log(TAG + ": window-end: stopped aicr, reason=" + reason
+                Logs.status("AicrWindowEndGuard:203", "" + "window-end: stopped aicr, reason=" + reason
                 + ", status=" + status);
     }
 
@@ -276,7 +275,7 @@ final class AicrWindowEndGuard {
             return;
         }
         sMarkFailureLogged = true;
-        XposedBridge.log(TAG + ": window-end: cannot persist handled date " + today
+                Logs.status("aicr.windowend:降级", "" + "window-end: cannot persist handled date " + today
                 + ", stop deferred");
     }
 
@@ -286,7 +285,7 @@ final class AicrWindowEndGuard {
             return;
         }
         sContextMissLogged = true;
-        XposedBridge.log(TAG + ": window-end: context unavailable for "
+                Logs.status("aicr.windowend:不可用", "" + "window-end: context unavailable for "
                 + sContextMissTicks + " consecutive ticks, will retry");
     }
 

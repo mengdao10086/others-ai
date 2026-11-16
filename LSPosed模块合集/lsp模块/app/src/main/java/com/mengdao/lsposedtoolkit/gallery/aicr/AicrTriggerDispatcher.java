@@ -1,12 +1,12 @@
 package com.mengdao.lsposedtoolkit.gallery.aicr;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 import android.net.Uri;
 import android.os.Bundle;
 
 import com.mengdao.lsposedtoolkit.gallery.AicrProtocol;
 
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -18,7 +18,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 final class AicrTriggerDispatcher {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final String CONTEXT_UTIL_CLASS = "com.xiaomi.aicr.common.ContextUtil";
     private static final String PERMISSION_UTILS_CLASS =
             "com.xiaomi.aicr.common.permission.CommonPermissionUtils";
@@ -57,12 +56,12 @@ final class AicrTriggerDispatcher {
         try {
             Context context = appContext(fallback);
             if (context == null) {
-                XposedBridge.log(TAG + ": aicr context unavailable, skip " + action
+                                Logs.status("aicr.dispatch:不可用", "" + "aicr context unavailable, skip " + action
                         + " from " + source);
                 return;
             }
             if (start && !checkCta()) {
-                XposedBridge.log(TAG + ": CTA switch is off, skip aicr start (" + source + ")");
+                                Logs.status("aicr.dispatch:降级", "" + "CTA switch is off, skip aicr start (" + source + ")");
                 return;
             }
             if (start) {
@@ -87,7 +86,7 @@ final class AicrTriggerDispatcher {
             if (start) {
                 RecentsLock.clearManualRequested();
             }
-            XposedBridge.log(TAG + ": aicr provider call failed (" + action
+                        Logs.status("AicrTriggerDispatcher:90", "" + "aicr provider call failed (" + action
                     + " from " + source + "): " + t);
         } finally {
             if (!start) {
@@ -101,16 +100,16 @@ final class AicrTriggerDispatcher {
     private static void bindBigCore(String source) {
         try {
             if (!AicrStateReporter.isRunningNow()) {
-                XposedBridge.log(TAG + ": bind big cores ignored, analysis not running ("
+                                Logs.status("aicr.dispatch:降级", "" + "bind big cores ignored, analysis not running ("
                         + source + ")");
                 return;
             }
             AicrCpuAffinity.startManual();
-            XposedBridge.log(TAG + ": aicr bound to big cores 4-6 (" + source + ")");
+                        Logs.status("aicr.dispatch:生效", "" + "aicr bound to big cores 4-6 (" + source + ")");
             // 绑定状态是进程内静态值，立即回报一次，设置页不必等 10 秒心跳
             AicrStateReporter.reportCurrentNow();
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": bind big cores failed (" + source + "): " + t);
+                        Logs.status("AicrTriggerDispatcher:113", "" + "bind big cores failed (" + source + "): " + t);
         }
     }
 
@@ -125,7 +124,7 @@ final class AicrTriggerDispatcher {
                     utils, CTA_METHOD, AicrProtocol.CTA_CAPABILITY);
             return Boolean.TRUE.equals(allowed);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": CTA check failed: " + t);
+                        Logs.status("AicrTriggerDispatcher:128", "" + "CTA check failed: " + t);
             return false;
         }
     }
@@ -140,7 +139,7 @@ final class AicrTriggerDispatcher {
                 }
             }
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": app context lookup failed: " + t);
+                        Logs.status("AicrTriggerDispatcher:143", "" + "app context lookup failed: " + t);
         }
         return fallback;
     }

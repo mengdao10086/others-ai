@@ -1,9 +1,9 @@
 package com.mengdao.lsposedtoolkit.hook;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import com.mengdao.lsposedtoolkit.hook.taplus.TaplusRaceFixHook;
 import com.mengdao.lsposedtoolkit.hook.taplus.TaplusSaveFormatHook;
 
-import de.robv.android.xposed.XposedBridge;
 
 /**
  * 小米传送门（com.miui.contentextension）的 Hook 组。
@@ -11,7 +11,6 @@ import de.robv.android.xposed.XposedBridge;
  */
 public final class ContentExtensionHooks {
 
-    private static final String TAG = "LSPosedToolkit";
 
     private ContentExtensionHooks() {
     }
@@ -20,13 +19,13 @@ public final class ContentExtensionHooks {
         try {
             TaplusSaveFormatHook.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": TaplusSaveFormatHook failed: " + t);
+                        Logs.status("ContentExtensionHooks:23", "" + "TaplusSaveFormatHook failed: " + t);
         }
 
         try {
             TaplusRaceFixHook.install(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": TaplusRaceFixHook failed: " + t);
+                        Logs.status("ContentExtensionHooks:29", "" + "TaplusRaceFixHook failed: " + t);
         }
     }
 }

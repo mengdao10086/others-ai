@@ -35,7 +35,7 @@ JAVA_HOME=D:/tools/jdk-17.0.2 ./gradlew :app:assembleRelease
 1. 合集已包含原独立模块的全部功能；`com.mengdao.galleryanalyze` 等旧独立模块仅作存档，若曾安装请卸载，避免同功能重复 hook。
 2. 安装 `D:\下载\Edge` 中的最新模块 APK，在 LSPosed 启用模块。
 3. 作用域勾选 `com.miui.contentextension`、`com.android.systemui`、`com.miui.gallery`、`com.xiaomi.aicr`、`android`、`com.omarea.vtools`，重启对应进程或手机。
-4. 日志：`adb logcat -s TaplusFix StatusBarClickBlock LSPosedToolkit GalleryAnalyze`
+4. 日志：`adb logcat -s TaplusFix StatusBarClickBlock LSPosedToolkit GalleryAnalyze`；状态/触发日志同一 key 5 分钟最多一条，debug 日志默认关闭（`Logs.ENABLED=false`）
 
 ## 回滚
 
@@ -46,6 +46,7 @@ JAVA_HOME=D:/tools/jdk-17.0.2 ./gradlew :app:assembleRelease
 ```
 app/src/main/java/com/mengdao/lsposedtoolkit/
 ├─ ModuleEntry.java                       # 单入口，按包名分发
+├─ Logs.java                              # 统一日志出口（debug 开关 + 状态限频）
 ├─ hook/
 │  ├─ ContentExtensionHooks.java          # 传送门 Hook 组（功能级 try/catch）
 │  ├─ SystemUiHooks.java                  # 系统界面 Hook 组
@@ -54,7 +55,6 @@ app/src/main/java/com/mengdao/lsposedtoolkit/
 │  ├─ systemui/StatusBarClickBlockHook.java
 │  ├─ systemui/BleUnlockToastHook.java    # 屏蔽蓝牙解锁 Toast
 │  ├─ scene/                              # Scene 迷你监视器增强（作用域 com.omarea.vtools）
-│  │  ├─ SceneLog.java                       # 日志开关（默认关闭，release 编译期剔除）
 │  │  ├─ MiniMonitorScreenshotSkipHook.java  # SKIP_SCREENSHOT 截屏排除
 │  │  └─ MiniMonitorRefreshDelayHook.java    # 跳过重开 2 秒占位
 │  └─ systemserver/                       # 最近任务上滑杀后台（作用域 android）

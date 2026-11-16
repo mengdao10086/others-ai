@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.hook.systemui;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.Context;
 import android.widget.Toast;
 
@@ -21,7 +22,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 public final class BleUnlockToastHook {
 
-    private static final String TAG = "LSPosedToolkit";
     private static final String BLE_TOAST_RES_SUFFIX = ":string/miui_keyguard_ble_unlock_succeed_msg";
 
     /** 已判定为蓝牙解锁提示的 Toast；show 时吞掉。弱引用，避免长期持有。 */
@@ -39,7 +39,7 @@ public final class BleUnlockToastHook {
         Method makeText = XposedHelpers.findMethodExactIfExists(
                 Toast.class, "makeText", Context.class, int.class, int.class);
         if (makeText == null) {
-            XposedBridge.log(TAG + ": Toast.makeText(Context,int,int) not found, skip");
+                        Logs.status("systemui.bletoast:不可用", "" + "Toast.makeText(Context,int,int) not found, skip");
             return;
         }
         XposedBridge.hookMethod(makeText, new XC_MethodHook() {
@@ -54,7 +54,7 @@ public final class BleUnlockToastHook {
 
         Method show = XposedHelpers.findMethodExactIfExists(Toast.class, "show");
         if (show == null) {
-            XposedBridge.log(TAG + ": Toast.show() not found, skip");
+                        Logs.status("systemui.bletoast:不可用", "" + "Toast.show() not found, skip");
             return;
         }
         XposedBridge.hookMethod(show, new XC_MethodHook() {

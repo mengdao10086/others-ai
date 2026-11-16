@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.gallery;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.os.Process;
 import android.os.SystemClock;
 
@@ -10,7 +11,6 @@ import java.util.Locale;
 import java.util.Map;
 
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -27,7 +27,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 final class WriteBackPathAliasHook {
 
-    private static final String TAG = "GalleryAnalyze";
 
     private static final String ALGO_UTILS_CLASS =
             "com.miui.gallery.assistant.utils.AlgoUtils";
@@ -181,13 +180,15 @@ final class WriteBackPathAliasHook {
             totalHit = sTotalHit;
             totalAliased = sTotalAliased;
         }
-        XposedBridge.log(TAG + ": writeback alias pid=" + Process.myPid()
+        if (Logs.ENABLED) {
+            Logs.d("" + "writeback alias pid=" + Process.myPid()
                 + " req=" + totalReq
                 + " hit=" + totalHit
                 + " aliased=" + totalAliased);
+        }
     }
 
     private static void logHookFailure() {
-        XposedBridge.log(TAG + ": writeback alias hook failed: getMediaFeatureListByPath");
+                Logs.status("WriteBackPathAliasHook:191", "" + "writeback alias hook failed: getMediaFeatureListByPath");
     }
 }

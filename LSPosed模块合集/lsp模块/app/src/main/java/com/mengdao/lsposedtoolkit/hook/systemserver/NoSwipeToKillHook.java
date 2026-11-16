@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.hook.systemserver;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.pm.ApplicationInfo;
 
 import java.lang.reflect.Method;
@@ -16,7 +17,6 @@ import de.robv.android.xposed.XposedHelpers;
  */
 public final class NoSwipeToKillHook {
 
-    private static final String TAG = "NoSwipeToKill";
     private static final AtomicBoolean sErrorLogged = new AtomicBoolean();
 
     private NoSwipeToKillHook() {
@@ -73,7 +73,7 @@ public final class NoSwipeToKillHook {
 
     private static void logOnce(String message, Throwable t) {
         if (sErrorLogged.compareAndSet(false, true)) {
-            XposedBridge.log(TAG + ": " + message + ": " + t);
+                        Logs.status("NoSwipeToKillHook:76", "" + "" + message + ": " + t);
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.mengdao.lsposedtoolkit.hook.scene;
 
+import com.mengdao.lsposedtoolkit.Logs;
+
 /**
  * Scene（com.omarea.vtools）的 Hook 组。
  *
@@ -14,17 +16,13 @@ public final class SceneHooks {
         try {
             MiniMonitorRefreshDelayHook.install();
         } catch (Throwable t) {
-            if (SceneLog.ENABLED) {
-                SceneLog.d("MiniMonitorRefreshDelayHook failed", t);
-            }
+            Logs.status("SceneHooks:18", "MiniMonitorRefreshDelayHook failed", t);
         }
 
         try {
             MiniMonitorScreenshotSkipHook.install(classLoader);
         } catch (Throwable t) {
-            if (SceneLog.ENABLED) {
-                SceneLog.d("MiniMonitorScreenshotSkipHook failed", t);
-            }
+            Logs.status("SceneHooks:26", "MiniMonitorScreenshotSkipHook failed", t);
         }
     }
 }

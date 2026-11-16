@@ -1,5 +1,6 @@
 package com.mengdao.lsposedtoolkit.gallery;
 
+import com.mengdao.lsposedtoolkit.Logs;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -9,7 +10,6 @@ import android.os.Build;
 
 import com.mengdao.lsposedtoolkit.gallery.aicr.RecentsLock;
 
-import de.robv.android.xposed.XposedBridge;
 
 /**
  * 接收 aicr 回传的真实运行状态。
@@ -21,7 +21,6 @@ import de.robv.android.xposed.XposedBridge;
  */
 final class AicrStateReceiver extends BroadcastReceiver {
 
-    private static final String TAG = "GalleryAnalyze";
     private static final long FRESH_MS = 20_000L;
     /** 状态无变化时的最小落盘间隔。 */
     private static final long PERSIST_INTERVAL_MS = 30_000L;
@@ -78,7 +77,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
             }
             sRegistered = true;
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": register state receiver failed: " + t);
+                        Logs.status("AicrStateReceiver:81", "" + "register state receiver failed: " + t);
         }
     }
 
@@ -155,7 +154,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
             sPersistedStartedAt = sStartedAt;
             sPersistedBigBound = sBigBound;
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": state persist failed: " + t);
+                        Logs.status("AicrStateReceiver:158", "" + "state persist failed: " + t);
         }
     }
 
@@ -192,7 +191,7 @@ final class AicrStateReceiver extends BroadcastReceiver {
             sBigBound = sStatus > 0 && preferences.getBoolean(KEY_BIG_BOUND, false);
             sUpdatedAt = savedAt;
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": state restore failed: " + t);
+                        Logs.status("AicrStateReceiver:195", "" + "state restore failed: " + t);
         }
     }
 
