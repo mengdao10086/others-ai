@@ -1,0 +1,14 @@
+## Android build
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+
+## 构建产物
+*.apk
+
+## OS
+.DS_Store
+Thumbs.db

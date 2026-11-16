@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LSPosed 推荐作用域：Scene -->
+    <string-array name="xposed_scope">
+        <item>com.omarea.vtools</item>
+    </string-array>
+</resources>
