@@ -4,6 +4,7 @@ import com.mengdao.lsposedtoolkit.gallery.GalleryHooks;
 import com.mengdao.lsposedtoolkit.gallery.aicr.AicrHooks;
 import com.mengdao.lsposedtoolkit.hook.ContentExtensionHooks;
 import com.mengdao.lsposedtoolkit.hook.SystemUiHooks;
+import com.mengdao.lsposedtoolkit.hook.scene.SceneHooks;
 import com.mengdao.lsposedtoolkit.hook.systemserver.NoSwipeToKillHook;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -34,6 +35,7 @@ public final class ModuleEntry implements IXposedHookLoadPackage, IXposedHookZyg
     static final String PKG_SYSTEM_UI = "com.android.systemui";
     static final String PKG_GALLERY = "com.miui.gallery";
     static final String PKG_AICR = "com.xiaomi.aicr";
+    static final String PKG_SCENE = "com.omarea.vtools";
     static final String PKG_ANDROID = "android";
 
     @Override
@@ -66,6 +68,15 @@ public final class ModuleEntry implements IXposedHookLoadPackage, IXposedHookZyg
                         lpparam.classLoader, sModulePath);
             } catch (Throwable t) {
                 XposedBridge.log(TAG + ": aicr group failed: " + t);
+            }
+        } else if (PKG_SCENE.equals(pkg)) {
+            // Scene 的浮窗都在主进程；其它进程不安装，避免重复 hook。
+            if (lpparam.processName == null || PKG_SCENE.equals(lpparam.processName)) {
+                try {
+                    SceneHooks.install(lpparam.classLoader);
+                } catch (Throwable t) {
+                    XposedBridge.log(TAG + ": scene group failed: " + t);
+                }
             }
         } else if (PKG_ANDROID.equals(pkg)) {
             try {

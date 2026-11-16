@@ -1,6 +1,6 @@
 # MIUI 模块合集（LSPosed）
 
-单 APK 合并多个原有模块，包含五项功能：
+单 APK 合并多个原有模块，包含六项功能：
 
 | 功能 | 作用域 | 说明 |
 |------|--------|------|
@@ -9,6 +9,7 @@
 | 屏蔽蓝牙解锁 Toast | `com.android.systemui` | 吞掉「已通过蓝牙设备解锁」提示；不改 HyperCeiler 的注册链路 |
 | 相册内容分析控制 | `com.miui.gallery` + `com.xiaomi.aicr` | 相册设置页「其他设置」里加一行，可手动启停内容分析；包含分析进度展示与写回路径兼容修复；触发转交 aicr，回传真实状态；手动启动只把 aicr 分析线程绑 4-6 并每 3 秒重绑，其它与停止后绑 0-3；自动触发的分析运行中「启动」仍可点，点击把线程绑 4-6 后按钮显示「已加速」并置灰 |
 | 最近任务上滑杀后台 | `android`（system_server） | 省电策略为无限制的应用在 `killOnce` 处跳过；默认启用，无模块级开关 |
+| Scene 迷你监视器增强 | `com.omarea.vtools` | 截屏时通过 `SurfaceControl` 的 `SKIP_SCREENSHOT` 标志把迷你监视器排除出系统截屏；重开时跳过 2 秒占位，立即刷新；默认启用，无模块级开关 |
 
 各功能默认启用，无模块级开关；是否生效由 LSPosed 中勾选的作用域决定。
 
@@ -33,7 +34,7 @@ JAVA_HOME=D:/tools/jdk-17.0.2 ./gradlew :app:assembleRelease
 
 1. 合集已包含原独立模块的全部功能；`com.mengdao.galleryanalyze` 等旧独立模块仅作存档，若曾安装请卸载，避免同功能重复 hook。
 2. 安装 `D:\下载\Edge` 中的最新模块 APK，在 LSPosed 启用模块。
-3. 作用域勾选 `com.miui.contentextension`、`com.android.systemui`、`com.miui.gallery`、`com.xiaomi.aicr`、`android`，重启对应进程或手机。
+3. 作用域勾选 `com.miui.contentextension`、`com.android.systemui`、`com.miui.gallery`、`com.xiaomi.aicr`、`android`、`com.omarea.vtools`，重启对应进程或手机。
 4. 日志：`adb logcat -s TaplusFix StatusBarClickBlock LSPosedToolkit GalleryAnalyze`
 
 ## 回滚
@@ -52,6 +53,9 @@ app/src/main/java/com/mengdao/lsposedtoolkit/
 │  ├─ taplus/TaplusRaceFixHook.java       # setBitmap(null) 竞态修复
 │  ├─ systemui/StatusBarClickBlockHook.java
 │  ├─ systemui/BleUnlockToastHook.java    # 屏蔽蓝牙解锁 Toast
+│  ├─ scene/                              # Scene 迷你监视器增强（作用域 com.omarea.vtools）
+│  │  ├─ MiniMonitorScreenshotSkipHook.java  # SKIP_SCREENSHOT 截屏排除
+│  │  └─ MiniMonitorRefreshDelayHook.java    # 跳过重开 2 秒占位
 │  └─ systemserver/                       # 最近任务上滑杀后台（作用域 android）
 │     ├─ NoSwipeToKillHook.java
 │     └─ PowerPolicyReader.java
